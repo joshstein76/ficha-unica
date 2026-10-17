@@ -5,7 +5,7 @@ import json
 from .. import db, geo, lead_watch, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS)
-from .styles import FONTS, PANEL
+from .styles import FONTS, PANEL, PRECONNECT
 
 ICONS = {
     'inicio': '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -33,18 +33,19 @@ def layout(title, body, ctx=None, tab=None, flash=''):
     nav = ''
     top_right = '<a class="btn ghost small" href="/entrar">Entrar</a>'
     if ctx:
-        nav = '<nav class="tabs">%s</nav>' % ''.join(
-            '<a href="%s" class="%s">%s<span>%s</span></a>' % (href, ('on ' if k == tab else '') + ('desk' if k in DESKTOP_ONLY else ''), _icon(k), lab)
+        nav = '<nav class="tabs" aria-label="Secciones">%s</nav>' % ''.join(
+            '<a href="%s" class="%s"%s>%s<span>%s</span></a>' % (href, ('on ' if k == tab else '') + ('desk' if k in DESKTOP_ONLY else ''),
+                                                                 ' aria-current="page"' if k == tab else '', _icon(k), lab)
             for k, lab, href in TABS)
         top_right = ('<span class="row small"><a href="%s" target="_blank" rel="noopener">Ver mi sitio ↗</a>'
                      '<form method="post" action="/salir" style="margin:0">%s<button class="btn ghost small">Salir</button></form></span>'
                      % (e(db.site_url(ctx['agency'])), csrf_field(ctx)))
     return ('<!doctype html><html lang="es-MX"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
-            '<title>%s · Ficha Única</title><link rel="stylesheet" href="%s"><style>%s</style></head><body>'
-            '<header class="top"><a class="logo" href="/">Ficha <span>Única</span></a>%s</header>%s'
-            '<main class="wrap">%s%s</main><footer class="wrap small muted" style="padding-top:0;display:block">Ficha Única es un servicio de %s · <a href="/terminos">Términos</a> · <a href="/privacidad">Privacidad</a></footer></body></html>') % (
-        e(title), FONTS, PANEL, top_right, nav, flash, body, e(db.OWNER))
+            '<title>%s · Ficha Única</title>%s<link rel="stylesheet" href="%s"><style>%s</style></head><body>'
+            '<a class="skip" href="#main">Saltar al contenido</a><header class="top"><a class="logo" href="/">Ficha <span>Única</span></a>%s</header>%s'
+            '<main id="main" class="wrap">%s%s</main><footer class="wrap small muted" style="padding-top:0;display:block">Ficha Única es un servicio de %s · <a href="/terminos">Términos</a> · <a href="/privacidad">Privacidad</a></footer></body></html>') % (
+        e(title), PRECONNECT, FONTS, PANEL, top_right, nav, flash, body, e(db.OWNER))
 
 
 def csrf_field(ctx):
@@ -52,7 +53,7 @@ def csrf_field(ctx):
 
 
 def notice(msg, kind=''):
-    return ('<div class="notice %s" role="status">%s</div>' % (kind, e(msg))) if msg else ''
+    return ('<div class="notice %s" role="%s">%s</div>' % (kind, 'alert' if kind == 'err' else 'status', e(msg))) if msg else ''
 
 
 # ---------- auth ----------
@@ -323,8 +324,8 @@ def stats_page(ctx, st):
             '<div class="stat"><b>%s</b><small>Tiempo de respuesta (mediana)</small></div>'
             '<div class="stat"><b>%s</b><small>Respondidos en ≤5 min</small></div></div>'
             '%s<section class="card"><h2>Clientes por semana</h2><div class="bars">%s</div></section>'
-            '<section class="card"><h2>Tus propiedades</h2><div class="tbl"><table><thead><tr><th>Propiedad</th><th>Visitas</th>'
-            '<th>Clientes</th></tr></thead><tbody>%s</tbody></table></div></section>'
+            '<section class="card"><h2>Tus propiedades</h2><div class="tbl" tabindex="0" role="region" aria-label="Visitas y clientes por propiedad"><table><thead><tr><th scope="col">Propiedad</th><th scope="col">Visitas</th>'
+            '<th scope="col">Clientes</th></tr></thead><tbody>%s</tbody></table></div></section>'
             '<section class="card"><h2>De dónde llegan</h2><p class="small">%s</p><h2>Colonias con más interés</h2><p class="small">%s</p></section>') % (
         st['views_total'], st['leads_total'], ('%g min' % med) if med is not None else '—',
         ('%g%%' % st['pct_answered_5min']) if st['pct_answered_5min'] is not None else '—',
@@ -342,7 +343,7 @@ def portals(con, ctx, flash=''):
     rows = con.execute("SELECT * FROM listings WHERE agency_id=? AND status IN ('activa','apartada') ORDER BY title", (a['id'],)).fetchall()
     base = db.site_url(a)
     open_keys = [k for k, p in registry.PORTALS.items() if p['status'] in ('open', 'api')]
-    head = ''.join('<th>%s</th>' % e(registry.PORTALS[k]['name']) for k in open_keys)
+    head = ''.join('<th scope="col">%s</th>' % e(registry.PORTALS[k]['name']) for k in open_keys)
     trs = []
     for r in rows:
         pubs = {p['portal']: p for p in con.execute('SELECT * FROM portal_publications WHERE listing_id=?', (r['id'],))}
@@ -360,7 +361,7 @@ def portals(con, ctx, flash=''):
                    for p in registry.PORTALS.values() if p['status'] == 'needs_agreement')
     body = ('%s<h1>Portales</h1><p class="muted">Activa cada propiedad una vez. Cuando cambies precio o fotos, '
             'los portales se actualizan solos.</p>'
-            '<section class="card"><div class="tbl"><table><thead><tr><th>Propiedad</th>%s</tr></thead><tbody>%s</tbody></table></div>'
+            '<section class="card"><div class="tbl" tabindex="0" role="region" aria-label="Publicaciones por portal"><table><thead><tr><th scope="col">Propiedad</th>%s</tr></thead><tbody>%s</tbody></table></div>'
             '<p class="small muted">Mercado Libre: por ahora generamos la publicación en modo prueba; '
             'para publicar de verdad conectarás tu propia cuenta.</p></section>'
             '%s<section class="card"><h2>Tus feeds</h2><ul class="small">%s</ul></section>'
@@ -524,7 +525,7 @@ def import_page(ctx, preview=None, csv_text='', error='', done=None):
             'ok' if r['action'] == 'crear' else 'error', 'se crea' if r['action'] == 'crear' else 'se omite',
             e('; '.join(r['problems']))) for r in preview['rows'][:300])
         body.append('<section class="card"><h2>Vista previa: %d de %d filas se crean</h2>%s<p class="small muted">Columnas reconocidas: %s</p>'
-                    '<div class="tbl"><table><thead><tr><th>Fila</th><th>Título</th><th>Precio</th><th></th></tr></thead><tbody>%s</tbody></table></div>'
+                    '<div class="tbl" tabindex="0" role="region" aria-label="Vista previa de la importación"><table><thead><tr><th scope="col">Fila</th><th scope="col">Título</th><th scope="col">Precio</th><th scope="col"></th></tr></thead><tbody>%s</tbody></table></div>'
                     '<form method="post" action="/propiedades/importar">%s<input type="hidden" name="step" value="commit">'
                     '<textarea name="csv" hidden>%s</textarea><button class="btn"%s>Importar %d propiedades</button></form>'
                     '<p class="small muted">Si tu archivo trae enlaces de fotos, las bajamos solas (máximo 20 por propiedad).</p></section>' % (
@@ -609,10 +610,10 @@ def wizard_1(ctx, welcome=False, error=''):
             '<form class="stack card" method="post" action="/nueva" enctype="multipart/form-data">%s'
             '<label class="bigpick"><input type="file" name="fotos" accept="image/*" multiple required '
             'onchange="var n=this.files.length;this.nextElementSibling.textContent=n?(n+(n==1?\' foto elegida\':\' fotos elegidas\')):\'📷 Elegir fotos\'">'
-            '<span>📷 Elegir fotos</span><small class="muted">Del celular o la computadora · mínimo 600 px</small></label>'
-            '<div class="seg"><label><input type="radio" name="operation" value="venta" checked><span>Venta</span></label>'
-            '<label><input type="radio" name="operation" value="renta"><span>Renta</span></label></div>'
-            '<div class="chips">%s</div><button class="btn">Siguiente</button></form>'
+            '<span aria-live="polite">📷 Elegir fotos</span><small class="muted">Del celular o la computadora · mínimo 600 px</small></label>'
+            '<fieldset><legend class="vh">Operación</legend><div class="seg"><label><input type="radio" name="operation" value="venta" checked><span>Venta</span></label>'
+            '<label><input type="radio" name="operation" value="renta"><span>Renta</span></label></div></fieldset>'
+            '<fieldset><legend class="vh">Tipo de propiedad</legend><div class="chips">%s</div></fieldset><button class="btn">Siguiente</button></form>'
             '<p class="small muted">¿Prefieres el formulario completo? <a href="/propiedades/nueva">Ábrelo aquí</a> · '
             '¿Vienes de otro sistema? <a href="/propiedades/importar">Importa tu CSV</a></p>') % (
         notice('¡Listo! Tu sitio ya existe. Sube tu primera propiedad: son 3 pasos.') if welcome else '',
@@ -699,20 +700,21 @@ DRAFT_TITLE = 'Propiedad nueva (borrador)'
 
 
 LEAFLET = ('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">'
-           '<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>')
+           '<script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>')
 
 
 def map_block(pins, height=280):
     """Leaflet + OpenStreetMap tiles. Pins are already snapped to a ~250 m grid unless the agent chose exact."""
     if not pins:
         return ''
-    return ('%s<div id="map" class="map" style="height:%dpx" role="img" aria-label="Mapa de propiedades (aproximado)"></div>'
-            '<script>(function(){var P=%s;if(!window.L)return;var m=L.map("map",{scrollWheelZoom:false});'
+    return ('%s<div id="map" class="map" style="height:%dpx" role="region" aria-label="Mapa de ubicación aproximada"></div>'
+            '<noscript><p class="muted small">El mapa necesita JavaScript. Las ubicaciones son aproximadas.</p></noscript>'
+            '<script>document.addEventListener("DOMContentLoaded",function(){var P=%s;if(!window.L)return;var m=L.map("map",{scrollWheelZoom:false});'
             'L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18,attribution:"© OpenStreetMap"}).addTo(m);'
             'var g=[];P.forEach(function(p){var c=L.circleMarker([p.lat,p.lng],{radius:9,weight:2,color:"#0f5c4c",fillOpacity:.6}).addTo(m);'
             'var d=document.createElement("div");var b=document.createElement("b");b.textContent=p.t;d.appendChild(b);'
             'd.appendChild(document.createElement("br"));d.appendChild(document.createTextNode(p.p+" · "+p.a));c.bindPopup(d);g.push([p.lat,p.lng]);});'
-            'm.fitBounds(g,{padding:[30,30],maxZoom:15});})();</script>') % (LEAFLET, height, json.dumps(pins, ensure_ascii=False).replace('</', '<\\/'))
+            'm.fitBounds(g,{padding:[30,30],maxZoom:15});});</script>') % (LEAFLET, height, json.dumps(pins, ensure_ascii=False).replace('</', '<\\/'))
 
 
 # ---------- prices: one-tap confirm ----------

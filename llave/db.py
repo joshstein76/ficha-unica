@@ -64,6 +64,18 @@ def photo_urls(agency, photo_row, size='1600'):
     return '%s/media/%s' % (site_url(agency), rel)
 
 
+def photo_set(agency, photo_row):
+    """jpg + webp URLs for 400/800/1600 (webp falls back to the jpg for photos stored before webp existed)."""
+    sizes = json.loads(photo_row['sizes'])
+    base = site_url(agency)
+    out = {}
+    for s in ('400', '800', '1600'):
+        jpg = sizes.get(s) or sizes.get('1600')
+        out['jpg_' + s] = '%s/media/%s' % (base, jpg)
+        out['webp_' + s] = '%s/media/%s' % (base, sizes.get(s + 'w') or jpg)
+    return out
+
+
 def canonical(con, listing_id):
     """THE contract. A plain dict describing one listing, used by the site, every feed adapter and GHL.
     Keys (stable): id, ref, slug, url, status, operation, property_type, title, description,
@@ -94,7 +106,9 @@ def canonical(con, listing_id):
                     'municipio': l['municipio'], 'estado': l['estado'], 'cp': l['cp'], 'country': 'MX',
                     'lat': l['lat'], 'lng': l['lng'], 'show_exact': bool(l['show_exact_location'])},
         'photos': [{'url': photo_urls(a, p, '1600'), 'url_800': photo_urls(a, p, '800'),
-                    'url_400': photo_urls(a, p, '400'), 'width': p['width'], 'height': p['height'],
+                    'url_400': photo_urls(a, p, '400'),
+                    'webp_400': photo_set(a, p)['webp_400'], 'webp_800': photo_set(a, p)['webp_800'],
+                    'webp_1600': photo_set(a, p)['webp_1600'], 'width': p['width'], 'height': p['height'],
                     'alt': p['alt'] or l['title']} for p in ph],
         'agency': {'id': a['id'], 'slug': a['slug'], 'name': a['name'], 'whatsapp': a['whatsapp'],
                    'email': a['email'], 'site_url': site_url(a)},

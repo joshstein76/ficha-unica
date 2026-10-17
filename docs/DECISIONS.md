@@ -37,3 +37,9 @@ Each line: the call, why, how to undo.
 27. **5-minute reminder:** `tools/lead_watch_run.py` (meant to run every minute once production exists; nothing is scheduled) queues one WhatsApp reminder per unanswered client to the receiving agency, as a dry run. It never messages the client.
 28. **Stats page** (`/estadisticas`): listing views (bots skipped, daily count, no personal data), clients per week, median response time, % answered in ≤5 min, sources and top colonias.
 29. **Academia lesson 1 script** is in the lane (`work/2026-10-17-ACADEMIA-LECCION-1-GUION.md`). Josh approves the script and the cut before anything is recorded or published.
+30. **Agent public profile** (`/asesor/<slug>`, set up in Mi perfil): photo (square, 400 px, metadata stripped), zones, bio, WhatsApp, the agent's listings, and RealEstateAgent JSON-LD. It's opt-in ("Mostrar mi perfil"). Own listings show the agent and link to the profile; shared Bolsa listings always show the sharing agency. Team logins ("Equipo …") show the agency name.
+31. **Plan screens in TEST MODE** (`/plan`, `/plan/<key>`): Gratis / Pro MXN 299 / Agencia MXN 799, IVA included. Changing plan needs no payment and every change is audited as `plan_change_test_mode`. A downgrade is blocked if the agency has more listings than the new plan allows. Stripe (Ciao Bella Marketing) replaces the confirm step in production.
+32. **Accessibility + speed pass** (from an audit of 25 findings, all applied):
+    - Skip links, labelled forms, error association, contrast-safe accent and brand text (computed per accent), darker field borders, 20 px checkboxes, aria-current and labelled navs, accessible map region, fieldsets in the wizard.
+    - WebP `<picture>` with srcset/sizes and width/height; the LCP image is fetchpriority high and the rest lazy.
+    - gzip (home 13.4→4.7 KB, listing 20.4→6.8 KB), HTTP/1.1 keep-alive, immutable media caching with ETag/304, one display font per design.

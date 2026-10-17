@@ -4,6 +4,8 @@
 Run: python3 -m llave.web.server   (then open http://app.fichaunica.localhost:8640)"""
 import cgi
 import datetime
+import gzip
+import hashlib
 import json
 import mimetypes
 import os
@@ -33,6 +35,8 @@ class Ctx(dict):
 
 class Handler(BaseHTTPRequestHandler):
     server_version = 'FichaUnica/0.1'
+    protocol_version = 'HTTP/1.1'
+    _body_read = False
 
     # ---------- plumbing ----------
     def log_message(self, fmt, *args):
@@ -40,12 +44,26 @@ class Handler(BaseHTTPRequestHandler):
 
     def send(self, body, status=200, ctype='text/html; charset=utf-8', headers=None):
         data = body.encode('utf-8') if isinstance(body, str) else body
+        headers = dict(headers or {})
+        base_type = ctype.split(';')[0].strip().lower()
+        compressible = base_type in ('text/html', 'text/plain', 'text/xml', 'application/xml', 'application/json') \
+            or base_type.endswith(('+xml', '+json'))
+        if compressible:
+            headers['Vary'] = 'Accept-Encoding'
+            if len(data) > 1024 and 'gzip' in (self.headers.get('Accept-Encoding') or '').lower():
+                data = gzip.compress(data, 6, mtime=0)
+                headers['Content-Encoding'] = 'gzip'
+        if base_type == 'text/html' and 'Cache-Control' not in headers:
+            headers['Cache-Control'] = 'private, no-store' if self.host() == 'app.' + db.BASE_DOMAIN else 'no-cache'
+        if self.command == 'POST' and not self._body_read:
+            headers['Connection'] = 'close'  # unread request body would corrupt the next keep-alive request
+            self.close_connection = True
         self.send_response(status)
         self.send_header('Content-Type', ctype)
         self.send_header('Content-Length', str(len(data)))
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
-        for k, v in (headers or {}).items():
+        for k, v in headers.items():
             self.send_header(k, v)
         self.end_headers()
         if self.command != 'HEAD':
@@ -67,6 +85,7 @@ class Handler(BaseHTTPRequestHandler):
         return None
 
     def form(self):
+        self._body_read = True
         ctype = self.headers.get('Content-Type', '')
         length = int(self.headers.get('Content-Length') or 0)
         if length > MAX_UPLOAD:
@@ -93,9 +112,31 @@ class Handler(BaseHTTPRequestHandler):
         path = os.path.join(db.MEDIA_DIR, rel)
         if not os.path.isfile(path):
             return self.send('No encontrado', 404, 'text/plain; charset=utf-8')
-        with open(path, 'rb') as f:
-            self.send(f.read(), ctype=mimetypes.guess_type(path)[0] or 'application/octet-stream',
-                      headers={'Cache-Control': 'public, max-age=86400'})
+        etag = '"%s"' % hashlib.sha1(rel.encode('utf-8')).hexdigest()
+        cache = 'public, max-age=31536000, immutable'
+        inm = [x.strip() for x in (self.headers.get('If-None-Match') or '').split(',')]
+        if etag in inm or '*' in inm:
+            self.send_response(304)
+            self.send_header('ETag', etag)
+            self.send_header('Cache-Control', cache)
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
+        size = os.path.getsize(path)
+        self.send_response(200)
+        self.send_header('Content-Type', mimetypes.guess_type(path)[0] or 'application/octet-stream')
+        self.send_header('Content-Length', str(size))
+        self.send_header('Cache-Control', cache)
+        self.send_header('ETag', etag)
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.end_headers()
+        if self.command != 'HEAD':
+            with open(path, 'rb') as f:
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
 
     # ---------- dispatch ----------
     def do_HEAD(self):
@@ -108,6 +149,7 @@ class Handler(BaseHTTPRequestHandler):
         self.route('POST')
 
     def route(self, method):
+        self._body_read = False
         con = db.connect()
         global _SCHEMA_OK
         if not _SCHEMA_OK:

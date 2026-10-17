@@ -6,9 +6,37 @@ import json
 from .. import db, geo, whatsapp
 from ..leads import rentapoliza_offer
 from .common import e, money, nice_date, facts_line, label, TYPES
-from .styles import FONTS, site_css
+from .styles import FONTS, PRECONNECT, fonts_url, site_css
 
 WA_ICON = ('<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-3.3-.9-2.8-1.2-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.4.6-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></svg>')
+
+
+CARD_SIZES = '(min-width:1120px) 360px, (min-width:600px) 33vw, 100vw'
+
+
+def _scaled(p, s):
+    """Dimensions of the s-px version, from the stored 1600 dimensions (longest side)."""
+    w, h = p.get('width'), p.get('height')
+    if not w or not h:
+        return None
+    k = min(1.0, s / float(max(w, h)))
+    return max(1, round(w * k)), max(1, round(h * k))
+
+
+def picture(p, alt, sizes, base=800, loading='lazy', priority=False):
+    """<picture> with webp srcset (400/800/1600) and a jpg fallback; width/height set to avoid layout shift."""
+    webp = ', '.join('%s %dw' % (e(p['webp_%d' % s]), (_scaled(p, s) or (s, 0))[0]) for s in (400, 800, 1600))
+    jpg = ', '.join('%s %dw' % (e(p[k]), (_scaled(p, s) or (s, 0))[0])
+                    for k, s in (('url_400', 400), ('url_800', 800), ('url', 1600)))
+    d = _scaled(p, base)
+    attrs = ' width="%d" height="%d"' % d if d else ''
+    if priority:
+        attrs += ' fetchpriority="high"'
+    else:
+        attrs += (' loading="lazy"' if loading == 'lazy' else '') + ' decoding="async"'
+    return ('<picture><source type="image/webp" srcset="%s" sizes="%s">'
+            '<img src="%s" srcset="%s" sizes="%s" alt="%s"%s></picture>') % (
+        webp, sizes, e(p['url'] if base == 1600 else p['url_800']), jpg, sizes, e(alt), attrs)
 
 
 def _page(agency, title, body, head_extra='', canonical=None, description=''):
@@ -19,16 +47,16 @@ def _page(agency, title, body, head_extra='', canonical=None, description=''):
     return ('<!doctype html><html lang="es-MX"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
             '<title>%s</title><meta name="description" content="%s">%s'
-            '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="%s">'
-            '<style>%s</style>%s</head><body>'
+            '%s<link rel="stylesheet" href="%s">'
+            '<style>%s</style>%s</head><body><a class="skip" href="#main">Saltar al contenido</a>'
             '<header class="sh"><div class="in"><a class="brand" href="/">%s</a>%s</div></header>'
             '%s'
             '<footer class="sf"><div class="in"><span>© %s · %s</span><span><a href="/aviso-de-privacidad">Aviso de privacidad</a></span>'
             '<span class="muted">Sitio creado con <a href="%s" rel="nofollow">Ficha Única</a></span></div></footer></body></html>') % (
         e(title), e(description[:160]),
         ('<link rel="canonical" href="%s">' % e(canonical)) if canonical else '',
-        FONTS, site_css(a['design'], a['accent']), head_extra, brand,
-        ('<a class="wa" href="%s" rel="nofollow">%s WhatsApp</a>' % (e(wa), WA_ICON)) if wa else '',
+        PRECONNECT, fonts_url(a['design']), site_css(a['design'], a['accent']), head_extra, brand,
+        ('<a class="wa" href="%s" rel="nofollow" aria-label="WhatsApp de %s">%s WhatsApp</a>' % (e(wa), e(a['name']), WA_ICON)) if wa else '',
         body, e(a['name']), e(a['city'] or 'México'), e(brand_url('sitio-' + a['slug'])))
 
 
@@ -38,12 +66,12 @@ def brand_url(source):
 
 
 def _card(c):
-    img = c['photos'][0]['url_800'] if c['photos'] else ''
+    img = picture(c['photos'][0], '', CARD_SIZES) if c['photos'] else ''
     op = 'En venta' if c['operation'] == 'venta' else 'En renta'
     where = ', '.join(x for x in (c['address']['colonia'], c['address']['municipio']) if x)
     return ('<a class="lc" href="/propiedad/%s">%s<div class="t"><span class="tag">%s · %s</span>'
             '<h3>%s</h3><span class="p">%s</span><span class="f">%s</span><span class="f">%s</span></div></a>') % (
-        e(c['slug']), ('<img src="%s" alt="%s" loading="lazy">' % (e(img), e(c['title']))) if img else '',
+        e(c['slug']), img,
         op, e(label(TYPES, c['property_type'])), e(c['title']), e(money(c['price'], c['currency'])),
         e(facts_line(c)), e(where))
 
@@ -51,14 +79,14 @@ def _card(c):
 def home(con, agency):
     ids = db.public_listing_ids(con, agency['id'])
     cards = [db.canonical(con, i) for i in ids]
-    hero_img = next((c['photos'][0]['url'] for c in cards if c['photos']), '')
+    hero_img = next((picture(c['photos'][0], '', '100vw', base=1600, priority=True) for c in cards if c['photos']), '')
     org = {'@context': 'https://schema.org', '@type': 'RealEstateAgent', 'name': agency['name'],
            'url': db.site_url(agency), 'telephone': agency['whatsapp'],
            'areaServed': agency['city'] or 'México', 'description': agency['about'] or ''}
-    body = ('<section class="hero">%s<div class="cap"><div class="in"><h1>%s</h1><p>%s</p></div></div></section>'
-            '<main class="in"><section class="sec"><h2>Propiedades</h2>%s</section>'
-            '<section class="sec"><h2>Sobre nosotros</h2><p class="desc">%s</p>%s</section></main>') % (
-        ('<img src="%s" alt="">' % e(hero_img)) if hero_img else '',
+    body = ('<main id="main"><section class="hero">%s<div class="cap"><div class="in"><h1>%s</h1><p>%s</p></div></div></section>'
+            '<div class="in"><section class="sec"><h2>Propiedades</h2>%s</section>'
+            '<section class="sec"><h2>Sobre nosotros</h2><p class="desc">%s</p>%s</section></div></main>') % (
+        hero_img,
         e(agency['name']), e(agency['tagline'] or ''),
         ('<div class="cards">%s</div>' % ''.join(_card(c) for c in cards)) if cards
         else '<p class="muted">Pronto publicaremos propiedades aquí.</p>',
@@ -98,10 +126,18 @@ def listing(con, agency, c, shared_split=None, error=''):
     page_url = '%s/propiedad/%s' % (db.site_url(agency), c['slug'])
     canon = page_url if own else c['url']
     photos = c['photos']
-    gal = ''.join('<img src="%s" alt="%s"%s>' % (e(p['url'] if i == 0 else p['url_800']), e(p['alt']),
-                                                 '' if i == 0 else ' loading="lazy"')
-                  for i, p in enumerate(photos[:3]))
-    strip = ''.join('<img src="%s" alt="%s" loading="lazy">' % (e(p['url_800']), e(p['alt'])) for p in photos[3:])
+    total = len(photos)
+
+    def galt(i, p):
+        return '%s – foto %d de %d' % (c['title'], i + 1, total)
+    gal = ''.join(picture(p, galt(i, p), '(min-width:701px) 66vw, 100vw', base=1600 if i == 0 else 800,
+                          priority=(i == 0)) for i, p in enumerate(photos[:3]))
+
+    def strip_img(i, p):
+        d = _scaled(p, 800)
+        return '<img src="%s" alt="%s" loading="lazy" decoding="async"%s>' % (
+            e(p['url_800']), e(galt(i, p)), (' width="%d" height="%d"' % d) if d else '')
+    strip = ''.join(strip_img(i, p) for i, p in enumerate(photos) if i >= 3)
     facts = []
     for val, lab in ((money(c['price'], c['currency']), 'Precio'),
                      (('%g m²' % c['m2_built']) if c['m2_built'] else None, 'Construcción'),
@@ -129,21 +165,22 @@ def listing(con, agency, c, shared_split=None, error=''):
     profile_link = ('<br><a class="small" href="/asesor/%s">Ver perfil</a>' % e(ag['slug'])) if ag and ag.get('slug') else ''
     if ag and ag.get('whatsapp') and agency['whatsapp']:
         wa = whatsapp.wa_link(ag['whatsapp'], whatsapp.listing_message(c))
-    swipe = ''.join('<img src="%s" alt="%s"%s>' % (e(p['url_800']), e(p['alt']), '' if i == 0 else ' loading="lazy"')
-                    for i, p in enumerate(photos))
-    body = ('<main class="in sec"><div><span class="tag">%s · %s · folio %s</span><h1>%s</h1>'
+    inv = ' aria-invalid="true" aria-describedby="err"' if error else ''
+    swipe = ''.join(picture(p, '', '88vw') for p in photos)
+    body = ('<main id="main" class="in sec"><div><span class="tag">%s · %s · folio %s</span><h1>%s</h1>'
             '<p class="muted">%s</p><p class="lp-price">%s <span class="muted">%s</span></p></div>'
-            '<div class="gal">%s</div>%s<div class="swipe" aria-label="Fotos (desliza)">%s</div><p class="swipe-hint muted small">%d fotos · desliza →</p>'
+            '<div class="gal">%s</div>%s<div class="swipe" aria-hidden="true">%s</div><p class="swipe-hint muted small">%d fotos · desliza →</p>'
             '<div class="lp"><div class="sec" style="padding:0"><div class="facts">%s</div>'
             '%s<div><h2>Descripción</h2><p class="desc">%s</p></div>%s%s</div>'
-            '<aside class="box" id="contacto"><div class="agent">%s<div><b>%s</b>%s<br>'
+            '<aside class="box" id="contacto"><h2 class="vh">Contacto</h2><div class="agent">%s<div><b>%s</b>%s<br>'
             '<span class="muted">Te responde por WhatsApp</span></div></div>'
             '%s'
             '<form method="post" action="/contacto"><input type="hidden" name="listing" value="%d">'
-            '<input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px"><input name="name" placeholder="Tu nombre" autocomplete="name" required>'
-            '<input name="phone" placeholder="Tu WhatsApp (10 dígitos)" inputmode="tel" autocomplete="tel">'
-            '<input name="email" type="email" placeholder="Correo (opcional)" autocomplete="email">'
-            '<textarea name="message" rows="3">Hola, me interesa esta propiedad (folio %s).</textarea>'
+            '<input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">'
+            '<label class="vh" for="f-name">Tu nombre</label><input id="f-name" name="name" placeholder="Tu nombre" autocomplete="name" required%s>'
+            '<label class="vh" for="f-phone">Tu WhatsApp (10 dígitos)</label><input id="f-phone" name="phone" placeholder="Tu WhatsApp (10 dígitos)" inputmode="tel" autocomplete="tel" maxlength="20"%s>'
+            '<label class="vh" for="f-email">Correo (opcional)</label><input id="f-email" name="email" type="email" placeholder="Correo (opcional)" autocomplete="email"%s>'
+            '<label class="vh" for="f-msg">Mensaje</label><textarea id="f-msg" name="message" rows="3"%s>Hola, me interesa esta propiedad (folio %s).</textarea>'
             '<label class="check"><input type="checkbox" name="consent" value="1" required> Acepto el '
             '<a href="/aviso-de-privacidad">aviso de privacidad</a>.</label>%s'
             '<button type="submit">Quiero más información</button></form></aside></div></main>%s') % (
@@ -156,10 +193,10 @@ def listing(con, agency, c, shared_split=None, error=''):
         e(c['description']), ('<div><h2>Amenidades</h2><ul class="am">%s</ul></div>' % am) if am else '',
         (('<p class="notice">%s</p>' % e(rp)) if rp else '') + map_html,
         avatar, e(contact_name), profile_link,
-        ('<a class="wa" href="%s" rel="nofollow">%s Escribir por WhatsApp</a>' % (e(wa), WA_ICON)) if wa else '',
-        c['id'], e(c['ref']), ('<p class="muted small" role="alert">%s</p>' % e(error)) if error else '',
-        ('<a class="wa float" href="%s" rel="nofollow" aria-label="WhatsApp">%s</a>'
-         '<nav class="mbar"><a class="wa" href="%s" rel="nofollow">%s WhatsApp</a><a class="ask" href="#contacto">Me interesa</a></nav>'
+        ('<a class="wa" href="%s" rel="nofollow" aria-label="Escribir por WhatsApp a %s sobre esta propiedad">%s Escribir por WhatsApp</a>' % (e(wa), e(contact_name), WA_ICON)) if wa else '',
+        c['id'], inv, inv, inv, inv, e(c['ref']), ('<p class="muted small" id="err" role="alert">%s</p>' % e(error)) if error else '',
+        ('<a class="wa float" href="%s" rel="nofollow" aria-label="WhatsApp flotante: preguntar por esta propiedad">%s</a>'
+         '<nav class="mbar" aria-label="Contacto rápido"><a class="wa" href="%s" rel="nofollow" aria-label="WhatsApp: contacto rápido">%s WhatsApp</a><a class="ask" href="#contacto">Me interesa</a></nav>'
          % (e(wa), WA_ICON, e(wa), WA_ICON)) if wa else '')
     og = ''.join('<meta property="%s" content="%s">' % (k, e(v)) for k, v in (
         ('og:title', c['title']), ('og:type', 'website'), ('og:url', canon),
@@ -205,7 +242,7 @@ def ficha(agency, c):
             '%s<div class="row3">%s</div><div class="facts">%s</div><p class="desc">%s</p>'
             '<div class="ft"><span><b>%s</b><br>WhatsApp %s</span><span style="text-align:right">%s<br>%s</span></div></div>'
             '</body></html>') % (
-        e(c['ref']), e(agency['name']), FONTS, e(agency['accent'] if (agency['accent'] or '').startswith('#') else '#1b1b1b'),
+        e(c['ref']), e(agency['name']), fonts_url('residencia'), e(agency['accent'] if (agency['accent'] or '').startswith('#') else '#1b1b1b'),
         FICHA_CSS, e(agency['name']), e(c['ref']), 'Venta' if c['operation'] == 'venta' else 'Renta', e(c['title']), e(where),
         ('<img class="main" src="%s" alt="">' % e(p[0]['url'])) if p else '',
         ''.join('<img src="%s" alt="">' % e(x['url_800']) for x in p[1:4]), facts_html, e(c['description'][:1200]),
@@ -213,14 +250,14 @@ def ficha(agency, c):
 
 
 def thanks(agency, wa_link=''):
-    body = ('<main class="in sec" style="min-height:50vh"><h1>¡Gracias! Ya recibimos tu mensaje.</h1>'
+    body = ('<main id="main" class="in sec" style="min-height:50vh"><h1>¡Gracias! Ya recibimos tu mensaje.</h1>'
             '<p>Te escribimos por WhatsApp en breve.</p>%s<p><a href="/">Ver más propiedades</a></p></main>') % (
         ('<p><a class="wa" href="%s">%s Escribir ahora por WhatsApp</a></p>' % (e(wa_link), WA_ICON)) if wa_link else '')
     return _page(agency, 'Gracias · ' + agency['name'], body)
 
 
 def privacy(agency):
-    body = ('<main class="in sec"><h1>Aviso de privacidad simplificado</h1><div class="desc">'
+    body = ('<main id="main" class="in sec"><h1>Aviso de privacidad simplificado</h1><div class="desc">'
             '%s es responsable de los datos personales que nos compartes en este sitio (nombre, teléfono, correo y tu mensaje). '
             'Los usamos para responder tu solicitud sobre propiedades y darte seguimiento por WhatsApp, teléfono o correo. '
             'No vendemos tus datos. Puedes pedir acceso, corrección, cancelación u oposición (derechos ARCO) escribiendo a %s.\n\n'
@@ -232,7 +269,7 @@ def privacy(agency):
 
 
 def not_found(agency):
-    return _page(agency, 'No encontrada', '<main class="in sec"><h1>Esta propiedad ya no está disponible.</h1>'
+    return _page(agency, 'No encontrada · ' + agency['name'], '<main id="main" class="in sec"><h1>Esta propiedad ya no está disponible.</h1>'
                  '<p><a href="/">Ver propiedades disponibles</a></p></main>')
 
 
@@ -291,7 +328,7 @@ def agent_profile(con, agency, u):
           'description': u['bio'] or ''}
     if u['photo_path']:
         ld['image'] = '%s/media/%s' % (db.site_url(agency), u['photo_path'])
-    body = ('<main class="in sec"><div class="agent big">%s<div><h1>%s</h1><p class="muted">%s · %s</p></div></div>'
+    body = ('<main id="main" class="in sec"><div class="agent big">%s<div><h1>%s</h1><p class="muted">%s · %s</p></div></div>'
             '%s%s<section class="sec" style="padding:0"><h2>Propiedades de %s</h2>%s</section></main>') % (
         ('<img class="av" src="%s/media/%s" alt="Foto de %s" width="120" height="120">' % (e(db.site_url(agency)), e(u['photo_path']), e(u['name'])))
         if u['photo_path'] else '<div class="av" aria-hidden="true">%s</div>' % e(u['name'][:1].upper()),
