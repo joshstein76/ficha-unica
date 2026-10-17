@@ -219,6 +219,8 @@ def main():
              json.dumps(RITZ_AMEN_5203 if unit == '5203' else [], ensure_ascii=False),
              addr[0], addr[1], addr[2], addr[3], r['live_url'], 1 if her else 0,
              ' | '.join(notes) or None)).lastrowid
+        # map pins (OpenStreetMap Nominatim, 10-17; Heráclito = street-level). Public maps snap to a ~250 m grid.
+        con.execute('UPDATE listings SET lat=?, lng=? WHERE id=?', ((19.4328220, -99.1903221) if her else (19.4241618, -99.1757815)) + (lid,))
         if cleared:
             for p in PORTALS:
                 con.execute('INSERT INTO portal_publications(listing_id,portal,enabled) VALUES(?,?,1)', (lid, p))

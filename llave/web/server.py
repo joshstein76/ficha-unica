@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import threading
 
-from .. import auth, db, importer, ml_oauth, photo_fetch, photos, replies, whatsapp
+from .. import auth, db, geo, importer, ml_oauth, photo_fetch, photos, price_check, replies, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import panel, site
@@ -207,7 +207,7 @@ class Handler(BaseHTTPRequestHandler):
                     uid = signup(con, f)
                 except ValueError as ex:
                     return self.send(panel.signup(str(ex), f), 400)
-                return self.start_session(con, uid, '/?bienvenida=1')
+                return self.start_session(con, uid, '/nueva?bienvenida=1')
             return self.send(panel.signup())
         if path == '/entrar':
             if method == 'POST':
@@ -240,6 +240,66 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(panel.dashboard(con, ctx, welcome=query.get('bienvenida') == '1'))
         if path == '/propiedades':
             return self.send(panel.listings(con, ctx))
+        if path == '/nueva':
+            if method != 'POST':
+                if over_limit(con, a):
+                    return self.send(panel.listings(con, ctx, panel.notice('Llegaste al límite de tu plan. Marca alguna como vendida o cambia de plan.', 'warn')))
+                return self.send(panel.wizard_1(ctx, welcome=query.get('bienvenida') == '1'))
+            if over_limit(con, a):
+                return self.redirect('/propiedades')
+            imgs = files.get('fotos', [])
+            if not imgs:
+                return self.send(panel.wizard_1(ctx, error='Elige al menos una foto.'), 400)
+            lid = create_draft(con, a, uid, f.get('operation'), f.get('property_type'))
+            ok, bad = 0, []
+            for data in imgs:
+                try:
+                    photos.ingest(con, lid, data)
+                    ok += 1
+                except ValueError as ex:
+                    bad.append(str(ex))
+            con.commit()
+            if not ok:
+                con.execute('DELETE FROM listings WHERE id=?', (lid,))
+                con.commit()
+                return self.send(panel.wizard_1(ctx, error='Ninguna foto sirvió: %s' % (bad[0] if bad else '')), 400)
+            return self.redirect('/nueva/%d/2' % lid)
+        m = re.match(r'^/nueva/(\d+)/(2|3|lista)$', path)
+        if m:
+            l = con.execute('SELECT * FROM listings WHERE id=? AND agency_id=?', (int(m.group(1)), a['id'])).fetchone()
+            if not l:
+                return self.redirect('/nueva')
+            step = m.group(2)
+            if step == '2':
+                if method == 'POST':
+                    try:
+                        wizard_save_2(con, l, f)
+                    except ValueError as ex:
+                        return self.send(panel.wizard_2(con, ctx, l, str(ex)), 400)
+                    return self.redirect('/nueva/%d/3' % l['id'])
+                return self.send(panel.wizard_2(con, ctx, l))
+            if step == '3':
+                if method == 'POST':
+                    title = (f.get('title') or '').strip()
+                    if len(title) < 8:
+                        return self.send(panel.wizard_3(ctx, l, 'Escribe un título de al menos 8 letras.'), 400)
+                    con.execute("UPDATE listings SET title=?, description=?, status='activa', updated_at=datetime('now') WHERE id=?",
+                                (title[:100], (f.get('description') or '').strip()[:8000], l['id']))
+                    if f.get('portales') == '1':
+                        for p in ('trovit', 'mitula'):
+                            con.execute('INSERT OR IGNORE INTO portal_publications(listing_id, portal, enabled) VALUES (?,?,1)', (l['id'], p))
+                    db.audit(con, actor, 'wizard_publish', 'listing:%d' % l['id'])
+                    con.commit()
+                    return self.redirect('/nueva/%d/lista' % l['id'])
+                return self.send(panel.wizard_3(ctx, l))
+            return self.send(panel.wizard_done(ctx, l))
+        if path == '/precios':
+            return self.send(panel.prices(con, ctx))
+        m = re.match(r'^/precios/(\d+)$', path)
+        if m and method == 'POST':
+            ok = price_check.confirm(con, int(m.group(1)), a['id'])
+            con.commit()
+            return self.send(panel.prices(con, ctx, panel.notice('Precio confirmado.' if ok else 'No encontramos esa propiedad.', '' if ok else 'err')))
         if path == '/servicios':
             return self.send(panel.services(ctx))
         if path == '/academia':
@@ -453,6 +513,46 @@ def signup(con, f):
     return uid
 
 
+def over_limit(con, a):
+    n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
+    return n >= db.PLAN_LIMITS.get(a['plan'], 10)
+
+
+def create_draft(con, a, uid, op, ptype):
+    """Wizard step 1: an empty draft that only has operation + type; the rest comes in steps 2-3."""
+    op = op if op in ('venta', 'renta') else 'venta'
+    ptype = ptype if ptype in ('departamento', 'casa', 'terreno', 'oficina', 'local', 'bodega') else 'departamento'
+    prefix = re.sub(r'[^A-Z]', '', a['slug'].upper())[:4] or 'LLV'
+    n = con.execute('SELECT COUNT(*) FROM listings WHERE agency_id=?', (a['id'],)).fetchone()[0] + 1
+    ref = '%s-%04d' % (prefix, n)
+    while con.execute('SELECT 1 FROM listings WHERE agency_id=? AND ref=?', (a['id'], ref)).fetchone():
+        n += 1
+        ref = '%s-%04d' % (prefix, n)
+    slug = 'borrador-%s' % ref.lower()
+    lid = con.execute('INSERT INTO listings(agency_id, agent_id, ref, slug, status, operation, property_type, title, price_date) '
+                      "VALUES (?,?,?,?, 'borrador', ?,?,?, date('now'))",
+                      (a['id'], uid, ref, slug, op, ptype, panel.DRAFT_TITLE)).lastrowid
+    db.audit(con, 'user:%d' % uid, 'wizard_draft', 'listing:%d' % lid)
+    return lid
+
+
+def wizard_save_2(con, l, f):
+    for k in ('colonia', 'municipio', 'estado'):
+        if not (f.get(k) or '').strip():
+            raise ValueError('Falta la colonia, el municipio o el estado.')
+    vals = (to_cents(f.get('price')), 'USD' if f.get('currency') == 'USD' else 'MXN', f['colonia'].strip(), f['municipio'].strip(),
+            f['estado'].strip(), to_num(f.get('m2_built')), to_num(f.get('bedrooms'), int), to_num(f.get('bathrooms')))
+    con.execute("UPDATE listings SET price_cents=?, currency=?, colonia=?, municipio=?, estado=?, m2_built=?, bedrooms=?, bathrooms=?, "
+                "price_date=date('now'), updated_at=datetime('now') WHERE id=?", vals + (l['id'],))
+    l2 = con.execute('SELECT * FROM listings WHERE id=?', (l['id'],)).fetchone()
+    base, k = db.slugify(panel.suggested_title(l2)), 2
+    slug = base
+    while con.execute('SELECT 1 FROM listings WHERE agency_id=? AND slug=? AND id!=?', (l['agency_id'], slug, l['id'])).fetchone():
+        slug, k = '%s-%d' % (base, k), k + 1
+    con.execute('UPDATE listings SET slug=? WHERE id=?', (slug, l['id']))
+    con.commit()
+
+
 def touch(con, lid):
     con.execute("UPDATE listings SET updated_at=datetime('now') WHERE id=?", (lid,))
 
@@ -487,6 +587,14 @@ def save_listing(con, a, uid, f, existing=None):
         share_in_bolsa=int(f.get('share_in_bolsa') == '1'), share_split_pct=split if split is not None else 50,
         commission_pct=to_num(f.get('commission_pct')), rentapoliza_offer=int(f.get('rentapoliza_offer') == '1' and op == 'renta'),
         internal_note=(f.get('internal_note') or '').strip()[:2000])
+    raw_maps = (f.get('maps') or '').strip()
+    if raw_maps:
+        pt = geo.parse_maps_link(raw_maps)
+        if not pt:
+            raise ValueError('No pudimos leer ese enlace del mapa. Copia el enlace largo de Google Maps (con @latitud,longitud) o escribe "19.43, -99.19".')
+        vals.update(lat=pt[0], lng=pt[1])
+    elif existing is not None and 'maps' in f:
+        vals.update(lat=None, lng=None)
     if existing:
         sets = ', '.join('%s=?' % k for k in vals)
         con.execute("UPDATE listings SET %s, updated_at=datetime('now') WHERE id=?" % sets, list(vals.values()) + [existing['id']])

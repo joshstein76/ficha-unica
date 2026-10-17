@@ -2,7 +2,7 @@
 Pages are plain functions returning HTML; server.py handles routing, sessions and POSTs."""
 import json
 
-from .. import db, ml_oauth, replies, whatsapp
+from .. import db, geo, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS)
 from .styles import FONTS, PANEL
@@ -92,7 +92,7 @@ def dashboard(con, ctx, welcome=False):
                          "WHERE l.agency_id=? AND p.enabled=1", (a['id'],)).fetchone()[0]
     limit = db.PLAN_LIMITS.get(a['plan'], 10)
     steps = [
-        (n_all > 0, 'Sube tu primera propiedad', '/propiedades/nueva'),
+        (n_all > 0, 'Sube tu primera propiedad', '/nueva'),
         (con.execute('SELECT COUNT(*) FROM photos p JOIN listings l ON l.id=p.listing_id WHERE l.agency_id=?', (a['id'],)).fetchone()[0] >= 5,
          'Agrega al menos 5 fotos', '/propiedades'),
         (n_list > 0, 'Publícala (estado: Activa)', '/propiedades'),
@@ -101,7 +101,9 @@ def dashboard(con, ctx, welcome=False):
     ]
     done = sum(1 for s in steps if s[0])
     leads = con.execute('SELECT * FROM leads WHERE agency_id=? ORDER BY id DESC LIMIT 5', (a['id'],)).fetchall()
-    body = ('%s<div><h1>Hola, %s</h1><p class="muted">Tu sitio: <a href="%s" target="_blank" rel="noopener">%s</a></p></div>'
+    n_stale = len(price_check.stale_listings(con, a['id']))
+    body = (('<div class="notice warn">%d precio%s sin confirmar en 30 días. <a href="/precios">Confírmalos con un toque</a></div>'
+             % (n_stale, '' if n_stale == 1 else 's')) if n_stale else '') + ('%s<div><h1>Hola, %s</h1><p class="muted">Tu sitio: <a href="%s" target="_blank" rel="noopener">%s</a></p></div>'
             '<div class="stats"><div class="stat"><b>%d</b><small>Propiedades publicadas</small></div>'
             '<div class="stat"><b>%d/%d</b><small>Usadas en plan %s</small></div>'
             '<div class="stat"><b>%d</b><small>Clientes nuevos</small></div>'
@@ -120,7 +122,7 @@ def dashboard(con, ctx, welcome=False):
         ('<section class="card"><h2>Tu sitio listo en 5 pasos (%d/5)</h2><div class="list">%s</div></section>' % (done, ''.join(
             '<a class="row" href="%s" style="text-decoration:none;color:inherit"><span class="pill %s">%s</span>%s</a>'
             % (href, 'ok' if ok else 'pendiente', '✓' if ok else '•', e(t)) for ok, t, href in steps)))
-        if done < 5 else '<div class="notice">✓ Tu sitio está completo. <a href="/propiedades/nueva">Sube otra propiedad</a></div>',
+        if done < 5 else '<div class="notice">✓ Tu sitio está completo. <a href="/nueva">Sube otra propiedad</a></div>',
         _leads_list(con, leads) if leads else '<p class="muted">Aún no tienes clientes. Cuando alguien escriba desde tu sitio, aparece aquí y en WhatsApp.</p>')
     return layout('Inicio', body, ctx, 'inicio')
 
@@ -145,8 +147,8 @@ def listings(con, ctx, flash=''):
         for r in rows)
     body = ('%s<div class="row" style="justify-content:space-between"><h1>Propiedades</h1>'
             '<span class="row"><a class="btn ghost small" href="/propiedades/importar">Importar CSV</a>'
-            '<a class="btn" href="/propiedades/nueva">+ Nueva</a></span></div><div class="list">%s</div>'
-            '<a class="btn fab" href="/propiedades/nueva" aria-label="Nueva propiedad">+</a>') % (
+            '<a class="btn" href="/nueva">+ Nueva</a></span></div><div class="list">%s</div>'
+            '<a class="btn fab" href="/nueva" aria-label="Nueva propiedad">+</a>') % (
         flash, items or '<p class="muted">Aún no hay propiedades. Sube la primera: tarda 2 minutos.</p>')
     return layout('Propiedades', body, ctx, 'propiedades')
 
@@ -211,7 +213,8 @@ def listing_form(con, ctx, l=None, error='', ok=''):
             '<label>Calle<input name="street" value="%s"></label><label>Número<input name="ext_number" value="%s"></label>'
             '<label>Colonia<input name="colonia" value="%s" required></label><label>Alcaldía o municipio<input name="municipio" value="%s" required></label>'
             '<label>Estado<input name="estado" value="%s" required></label><label>C.P.<input name="cp" value="%s" inputmode="numeric"></label></div>'
-            '<label class="check"><input type="checkbox" name="show_exact_location" value="1"%s> Mostrar la dirección exacta (si no, solo la colonia)</label></section>'
+            '<label>Ubicación en el mapa: pega el enlace de Google Maps<input name="maps" value="%s" placeholder="https://www.google.com/maps/@19.43,-99.19,17z"></label>'
+            '<label class="check"><input type="checkbox" name="show_exact_location" value="1"%s> Mostrar la dirección exacta (si no, solo la colonia y un punto aproximado)</label></section>'
             '<section class="card"><h2>Compartir y extras</h2>'
             '<label class="check"><input type="checkbox" name="share_in_bolsa" value="1"%s> Compartir en la Bolsa con otros asesores</label>'
             '<label>Tu parte si otro asesor la vende (%%)<input name="share_split_pct" value="%s" inputmode="numeric"></label>'
@@ -230,6 +233,7 @@ def listing_form(con, ctx, l=None, error='', ok=''):
         ' checked' if v.get('furnished') else '', ' checked' if v.get('pets') else '',
         e(v.get('street')), e(v.get('ext_number')), e(v.get('colonia')), e(v.get('municipio')),
         e(v.get('estado') or ('Ciudad de México' if not lid else '')), e(v.get('cp')),
+        ('%s, %s' % (v['lat'], v['lng'])) if v.get('lat') is not None else '',
         ' checked' if v.get('show_exact_location') else '',
         ' checked' if v.get('share_in_bolsa') else '', e(v.get('share_split_pct', 50)), num('commission_pct'),
         rp_box, e(v.get('internal_note')), 'Guardar' if lid else 'Crear y subir fotos', photos_html)
@@ -327,13 +331,31 @@ def bolsa(con, ctx, q=None, flash=''):
     if q.get('operation') in ('venta', 'renta'):
         sql += ' AND l.operation=?'
         args.append(q['operation'])
+    if q.get('property_type') in dict(TYPES):
+        sql += ' AND l.property_type=?'
+        args.append(q['property_type'])
+    if q.get('currency') in ('MXN', 'USD'):
+        sql += ' AND l.currency=?'
+        args.append(q['currency'])
+    for key, op in (('min', '>='), ('max', '<=')):
+        raw = (q.get(key) or '').replace(',', '').replace('$', '').strip()
+        if raw.replace('.', '', 1).isdigit():
+            sql += ' AND l.price_cents %s ?' % op
+            args.append(int(float(raw) * 100))
+    if (q.get('beds') or '').isdigit():
+        sql += ' AND l.bedrooms >= ?'
+        args.append(int(q['beds']))
     rows = con.execute(sql + ' ORDER BY l.updated_at DESC LIMIT 100', args).fetchall()
+    pins = []
     mine = {r['listing_id']: r for r in con.execute("SELECT * FROM shares WHERE sharing_agency_id=? AND status='activa'", (a['id'],))}
     items = []
     for r in rows:
         c = db.canonical(con, r['id'])
         img = c['photos'][0]['url_400'] if c['photos'] else ''
         shared = r['id'] in mine
+        if r['lat'] is not None and r['lng'] is not None:
+            la, ln = geo.approx(r['lat'], r['lng'], exact=bool(r['show_exact_location']))
+            pins.append({'lat': la, 'lng': ln, 't': c['title'], 'p': money(c['price'], c['currency']), 'a': r['agency_name']})
         items.append('<div class="item" style="grid-template-columns:84px 1fr">%s<div style="min-width:0"><b>%s</b>'
                      '<span class="small muted">%s · %s · de %s</span><br><span class="small">Comisión compartida: '
                      'tú recibes %d%%</span><form method="post" action="/bolsa/%d/%s" style="margin-top:6px">%s'
@@ -344,10 +366,19 @@ def bolsa(con, ctx, q=None, flash=''):
                          'ghost' if shared else '', 'En mi sitio ✓ (quitar)' if shared else 'Mostrar en mi sitio'))
     body = ('%s<h1>Bolsa</h1><p class="muted">Propiedades que otros asesores comparten. Muéstralas en tu sitio: '
             'si tu cliente compra, la comisión se divide como indica cada una.</p>'
-            '<form class="row card" method="get" action="/bolsa"><input name="colonia" placeholder="Colonia" value="%s" style="flex:2">'
-            '<select name="operation" style="flex:1"><option value="">Venta y renta</option>%s</select>'
-            '<button class="btn small">Buscar</button></form><div class="list">%s</div>') % (
+            '<form class="card filters" method="get" action="/bolsa"><input name="colonia" placeholder="Colonia" value="%s">'
+            '<select name="operation"><option value="">Venta y renta</option>%s</select>'
+            '<select name="property_type"><option value="">Cualquier tipo</option>%s</select>'
+            '<select name="beds"><option value="">Recámaras</option>%s</select>'
+            '<input name="min" inputmode="numeric" placeholder="Precio mín." value="%s">'
+            '<input name="max" inputmode="numeric" placeholder="Precio máx." value="%s">'
+            '<select name="currency"><option value="">MXN o USD</option>%s</select>'
+            '<button class="btn small">Buscar</button></form>'
+            '<p class="small muted">%d resultado%s · ubicaciones aproximadas</p>%s<div class="list">%s</div>') % (
         flash, e(q.get('colonia')), _opt([('venta', 'Venta'), ('renta', 'Renta')], q.get('operation')),
+        _opt(TYPES, q.get('property_type')), _opt([(str(n), '%d+' % n) for n in (1, 2, 3, 4)], q.get('beds')),
+        e(q.get('min')), e(q.get('max')), _opt([('MXN', 'MXN'), ('USD', 'USD')], q.get('currency')),
+        len(rows), '' if len(rows) == 1 else 's', map_block(pins),
         ''.join(items) or '<p class="muted">No hay propiedades compartidas con ese filtro.</p>')
     return layout('Bolsa', body, ctx, 'bolsa')
 
@@ -492,3 +523,140 @@ def legal(kind):
             'lo revisa un abogado (Ley Federal de Protección de Datos Personales en Posesión de los Particulares, 2025) antes de publicarse.</p></div>') % (
         e(title), e(text))
     return layout(title, body)
+
+
+# ---------- first-listing wizard (3 taps) ----------
+def _steps(n):
+    labels = ['Fotos', 'Dónde y cuánto', 'Publicar']
+    return '<div class="wsteps">%s</div>' % ''.join(
+        '<span class="%s">%d · %s</span>' % ('on' if i + 1 == n else ('done' if i + 1 < n else ''), i + 1, l)
+        for i, l in enumerate(labels))
+
+
+def wizard_1(ctx, welcome=False, error=''):
+    chips = ''.join('<label class="chip"><input type="radio" name="property_type" value="%s"%s><span>%s</span></label>'
+                    % (k, ' checked' if k == 'departamento' else '', e(v)) for k, v in TYPES)
+    body = ('%s%s<h1>%s</h1><p class="muted">Empieza con las fotos. Las ajustamos solas.</p>%s'
+            '<form class="stack card" method="post" action="/nueva" enctype="multipart/form-data">%s'
+            '<label class="bigpick"><input type="file" name="fotos" accept="image/*" multiple required '
+            'onchange="var n=this.files.length;this.nextElementSibling.textContent=n?(n+(n==1?\' foto elegida\':\' fotos elegidas\')):\'📷 Elegir fotos\'">'
+            '<span>📷 Elegir fotos</span><small class="muted">Del celular o la computadora · mínimo 600 px</small></label>'
+            '<div class="seg"><label><input type="radio" name="operation" value="venta" checked><span>Venta</span></label>'
+            '<label><input type="radio" name="operation" value="renta"><span>Renta</span></label></div>'
+            '<div class="chips">%s</div><button class="btn">Siguiente</button></form>'
+            '<p class="small muted">¿Prefieres el formulario completo? <a href="/propiedades/nueva">Ábrelo aquí</a> · '
+            '¿Vienes de otro sistema? <a href="/propiedades/importar">Importa tu CSV</a></p>') % (
+        notice('¡Listo! Tu sitio ya existe. Sube tu primera propiedad: son 3 pasos.') if welcome else '',
+        _steps(1), 'Tu primera propiedad' if welcome else 'Nueva propiedad', notice(error, 'err'), csrf_field(ctx), chips)
+    return layout('Nueva propiedad', body, ctx, 'propiedades')
+
+
+def wizard_2(con, ctx, l, error=''):
+    n = con.execute('SELECT COUNT(*) FROM photos WHERE listing_id=?', (l['id'],)).fetchone()[0]
+    v = dict(l)
+    num = lambda k: '' if v.get(k) is None else ('%g' % v[k])
+    body = ('%s<h1>Dónde y cuánto</h1><p class="muted">%d fotos listas.</p>%s'
+            '<form class="stack card" method="post" action="/nueva/%d/2">%s'
+            '<div class="grid2"><label>Precio<input name="price" inputmode="numeric" value="%s" placeholder="4500000" autofocus></label>'
+            '<label>Moneda<select name="currency">%s</select></label>'
+            '<label>Colonia<input name="colonia" value="%s" required placeholder="Roma Norte"></label>'
+            '<label>Alcaldía o municipio<input name="municipio" value="%s" required placeholder="Cuauhtémoc"></label>'
+            '<label>Estado<input name="estado" value="%s" required></label>'
+            '<label>m² construcción<input name="m2_built" inputmode="decimal" value="%s"></label>'
+            '<label>Recámaras<input name="bedrooms" inputmode="numeric" value="%s"></label>'
+            '<label>Baños<input name="bathrooms" inputmode="decimal" value="%s"></label></div>'
+            '<button class="btn">Siguiente</button></form>') % (
+        _steps(2), n, notice(error, 'err'), l['id'], csrf_field(ctx),
+        '' if v.get('price_cents') is None else '%d' % (v['price_cents'] // 100),
+        _opt([('MXN', 'MXN (pesos)'), ('USD', 'USD (dólares)')], v.get('currency') or 'MXN'),
+        e(v.get('colonia')), e(v.get('municipio')), e(v.get('estado') or 'Ciudad de México'),
+        num('m2_built'), num('bedrooms'), num('bathrooms'))
+    return layout('Nueva propiedad', body, ctx, 'propiedades')
+
+
+def suggested_title(l):
+    v = dict(l)
+    t = label(TYPES, v.get('property_type') or 'departamento')
+    bits = ['%s en %s en %s' % (t, v.get('operation') or 'venta', v.get('colonia') or '')]
+    if v.get('m2_built'):
+        bits.append('%g m²' % v['m2_built'])
+    if v.get('bedrooms'):
+        bits.append('%d recámara%s' % (v['bedrooms'], '' if v['bedrooms'] == 1 else 's'))
+    return ', '.join(bits)[:100]
+
+
+def suggested_description(l):
+    v = dict(l)
+    parts = ['%s en %s en %s, %s.' % (label(TYPES, v.get('property_type')), v.get('operation'), v.get('colonia') or '',
+                                     v.get('municipio') or '')]
+    facts = []
+    if v.get('m2_built'):
+        facts.append('%g m² de construcción' % v['m2_built'])
+    if v.get('bedrooms'):
+        facts.append('%d recámara%s' % (v['bedrooms'], '' if v['bedrooms'] == 1 else 's'))
+    if v.get('bathrooms'):
+        facts.append('%g baño%s' % (v['bathrooms'], '' if v['bathrooms'] == 1 else 's'))
+    if facts:
+        parts.append(', '.join(facts).capitalize() + '.')
+    parts.append('Escríbenos por WhatsApp para más información o para agendar una visita.')
+    return ' '.join(parts)
+
+
+def wizard_3(ctx, l, error=''):
+    body = ('%s<h1>Revisa y publica</h1>%s<form class="stack card" method="post" action="/nueva/%d/3">%s'
+            '<label>Título<input name="title" value="%s" maxlength="100" required></label>'
+            '<label>Descripción<textarea name="description">%s</textarea></label>'
+            '<label class="check"><input type="checkbox" name="portales" value="1" checked> También en portales y buscadores gratuitos</label>'
+            '<button class="btn">Publicar en mi sitio</button></form>'
+            '<p class="small muted">Podrás cambiar todo después en Propiedades.</p>') % (
+        _steps(3), notice(error, 'err'), l['id'], csrf_field(ctx),
+        e(l['title'] if l['title'] != DRAFT_TITLE else suggested_title(l)),
+        e(l['description'] or suggested_description(l)))
+    return layout('Nueva propiedad', body, ctx, 'propiedades')
+
+
+def wizard_done(ctx, l):
+    url = db.listing_url(ctx['agency'], l)
+    share = whatsapp.wa_link('', 'Mira esta propiedad: %s %s' % (l['title'], url))
+    body = ('<div class="auth" style="text-align:center"><div style="font-size:48px">🎉</div><h1>¡Publicada!</h1>'
+            '<p class="muted">Ya está en tu sitio. Compártela con tus clientes.</p>'
+            '<a class="btn" href="%s" target="_blank" rel="noopener">Ver en mi sitio</a>'
+            '<a class="btn wa" href="%s" target="_blank" rel="noopener">Compartir por WhatsApp</a>'
+            '<a class="btn ghost" href="/nueva">Subir otra</a></div>') % (e(url), e(share))
+    return layout('¡Publicada!', body, ctx, 'propiedades')
+
+
+DRAFT_TITLE = 'Propiedad nueva (borrador)'
+
+
+LEAFLET = ('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">'
+           '<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>')
+
+
+def map_block(pins, height=280):
+    """Leaflet + OpenStreetMap tiles. Pins are already snapped to a ~250 m grid unless the agent chose exact."""
+    if not pins:
+        return ''
+    return ('%s<div id="map" class="map" style="height:%dpx" role="img" aria-label="Mapa de propiedades (aproximado)"></div>'
+            '<script>(function(){var P=%s;if(!window.L)return;var m=L.map("map",{scrollWheelZoom:false});'
+            'L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18,attribution:"© OpenStreetMap"}).addTo(m);'
+            'var g=[];P.forEach(function(p){var c=L.circleMarker([p.lat,p.lng],{radius:9,weight:2,color:"#0f5c4c",fillOpacity:.6}).addTo(m);'
+            'var d=document.createElement("div");var b=document.createElement("b");b.textContent=p.t;d.appendChild(b);'
+            'd.appendChild(document.createElement("br"));d.appendChild(document.createTextNode(p.p+" · "+p.a));c.bindPopup(d);g.push([p.lat,p.lng]);});'
+            'm.fitBounds(g,{padding:[30,30],maxZoom:15});})();</script>') % (LEAFLET, height, json.dumps(pins, ensure_ascii=False).replace('</', '<\\/'))
+
+
+# ---------- prices: one-tap confirm ----------
+def prices(con, ctx, flash=''):
+    stale = price_check.stale_listings(con, ctx['agency']['id'])
+    rows = ''.join('<div class="card" style="gap:6px"><b>%s</b><span class="small muted">%s · %s</span>'
+                   '<span>%s <span class="muted small">%s</span></span><div class="row">'
+                   '<form method="post" action="/precios/%d">%s<button class="btn small">Sigue igual</button></form>'
+                   '<a class="btn ghost small" href="/propiedades/%d">Cambiar precio</a></div></div>' % (
+                       e(s['title']), e(s['ref']), 'sin fecha' if not s['price_date'] else 'desde ' + nice_date(s['price_date']),
+                       e(money(s['price'], s['currency'])), '(%s días)' % s['days'] if s.get('days') is not None else '',
+                       s['listing_id'], csrf_field(ctx), s['listing_id']) for s in stale)
+    body = ('%s<h1>Confirma tus precios</h1><p class="muted">Los portales y tus clientes confían más en precios recientes. '
+            'Cada 30 días te pedimos confirmarlos: un toque y listo.</p>%s') % (
+        flash, rows or notice('✓ Todos tus precios están al día.'))
+    return layout('Precios', body, ctx, 'propiedades')

@@ -220,6 +220,49 @@ class WebFlow(unittest.TestCase):
         s, page, _ = req('app.fichaunica.localhost', '/oauth/mercadolibre/callback?state=nope&code=x', cookie=cookie)
         self.assertEqual(s, 400)
 
+    def test_wizard_bolsa_filters_prices(self):
+        cookie, csrf = self.signup('Tres Pasos', 'tres@ejemplo.test')
+        s, page, _ = req('app.fichaunica.localhost', '/nueva?bienvenida=1', cookie=cookie)
+        self.assertIn('son 3 pasos', page)
+        body, ct = multipart({'csrf': csrf, 'operation': 'renta', 'property_type': 'casa'},
+                             [('fotos', ('f%d.jpg' % i, jpeg(color=(10 * i, 90, 120)))) for i in range(3)])
+        s, _, h = req('app.fichaunica.localhost', '/nueva', body, cookie, ct)
+        self.assertEqual(s, 303)
+        lid = int(re.search(r'/nueva/(\d+)/2', h['Location']).group(1))
+        s, _, h = req('app.fichaunica.localhost', '/nueva/%d/2' % lid, {'csrf': csrf, 'price': '35000', 'currency': 'MXN',
+                      'colonia': 'Del Valle', 'municipio': 'Benito Juárez', 'estado': 'Ciudad de México', 'm2_built': '180', 'bedrooms': '3'}, cookie)
+        self.assertEqual(s, 303)
+        s, page, _ = req('app.fichaunica.localhost', '/nueva/%d/3' % lid, cookie=cookie)
+        self.assertIn('Casa en renta en Del Valle, 180 m², 3 recámaras', page)
+        s, _, h = req('app.fichaunica.localhost', '/nueva/%d/3' % lid, {'csrf': csrf, 'title': 'Casa en renta en Del Valle, 180 m², 3 recámaras',
+                      'description': 'Casa amplia.', 'portales': '1'}, cookie)
+        self.assertEqual(s, 303)
+        con = db.connect()
+        l = con.execute('SELECT * FROM listings WHERE id=?', (lid,)).fetchone()
+        self.assertEqual((l['status'], l['slug']), ('activa', 'casa-en-renta-en-del-valle-180-m2-3-recamaras'))
+        self.assertEqual(con.execute('SELECT COUNT(*) FROM photos WHERE listing_id=?', (lid,)).fetchone()[0], 3)
+        self.assertEqual(con.execute('SELECT COUNT(*) FROM portal_publications WHERE listing_id=? AND enabled=1', (lid,)).fetchone()[0], 2)
+        s, page, _ = req('app.fichaunica.localhost', '/nueva/%d/lista' % lid, cookie=cookie)
+        self.assertIn('¡Publicada!', page)
+        # Bolsa filters (share it first) + price check confirm
+        con.execute("UPDATE listings SET share_in_bolsa=1, lat=19.38613, lng=-99.17137, price_date='2026-01-01' WHERE id=?", (lid,))
+        con.commit()
+        cookie2, csrf2 = self.signup('Busca Bolsa', 'busca@ejemplo.test')
+        s, page, _ = req('app.fichaunica.localhost', '/bolsa?property_type=casa&max=40000&beds=3', cookie=cookie2)
+        self.assertIn('Del Valle', page)
+        self.assertIn('id="map"', page)
+        self.assertNotIn('19.38613', page)  # pins are snapped to a ~250 m grid, never the exact point
+        self.assertIn('19.385', page)
+        s, page, _ = req('app.fichaunica.localhost', '/bolsa?max=20000', cookie=cookie2)
+        self.assertNotIn('Del Valle', page)
+        s, page, _ = req('app.fichaunica.localhost', '/', cookie=cookie)
+        self.assertIn('sin confirmar', page)
+        s, page, _ = req('app.fichaunica.localhost', '/precios/%d' % lid, {'csrf': csrf}, cookie)
+        self.assertIn('Precio confirmado', page)
+        self.assertNotEqual(con.execute('SELECT price_date FROM listings WHERE id=?', (lid,)).fetchone()[0], '2026-01-01')
+        s, _, _ = req('app.fichaunica.localhost', '/precios/%d' % lid, {'csrf': csrf2}, cookie2)
+        con.close()
+
     def test_media_traversal_blocked(self):
         s, _, _ = req('app.fichaunica.localhost', '/media/../../etc/passwd')
         self.assertEqual(s, 404)

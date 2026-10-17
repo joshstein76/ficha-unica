@@ -56,6 +56,18 @@ nav.tabs a.on{color:var(--brand);font-weight:700}nav.tabs svg{width:22px;height:
 @media(min-width:900px){body{padding-bottom:0}nav.tabs{position:static;display:flex;justify-content:center;gap:18px;border:0;
 border-bottom:1px solid var(--line);padding:0}nav.tabs a{grid-auto-flow:column;font-size:14px;padding:12px 4px}nav.tabs a.desk{display:grid}}
 .fab{display:none}@media(max-width:899px){.fab{display:flex;position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(84px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;font-size:28px;padding:0;z-index:8;box-shadow:0 6px 18px rgba(0,0,0,.3)}}
+.wsteps{display:flex;gap:6px;flex-wrap:wrap;font-size:13px}.wsteps span{padding:4px 10px;border-radius:99px;background:var(--line);color:var(--muted)}
+.wsteps .on{background:var(--brand);color:#fff}.wsteps .done{background:var(--ok-bg);color:var(--ok)}
+.bigpick{display:grid;justify-items:center;gap:6px;padding:28px 12px;border:2px dashed var(--line);border-radius:14px;cursor:pointer;text-align:center}
+.bigpick{position:relative}.bigpick span{font-size:20px;font-weight:700}.bigpick input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}.seg input,.chip input{position:absolute;opacity:0}
+.seg span,.chip span{display:flex;justify-content:center;align-items:center;min-height:44px;border:1px solid var(--line);border-radius:10px;cursor:pointer;font-weight:600}
+.seg input:checked+span,.chip input:checked+span{border-color:var(--brand);background:var(--brand-2);color:var(--brand)}
+.seg input:focus-visible+span,.chip input:focus-visible+span{outline:3px solid var(--brand)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}.chip span{padding:0 14px;font-weight:500}
+.auth .btn{width:100%}
+.filters{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.map{border-radius:var(--r);border:1px solid var(--line);z-index:0}
 .auth{max-width:420px;margin:6vh auto;padding:0 16px;display:grid;gap:18px}
 :focus-visible{outline:3px solid var(--brand);outline-offset:2px}
 """

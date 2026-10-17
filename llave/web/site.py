@@ -3,7 +3,7 @@ Every listing page ships RealEstateListing JSON-LD, one canonical (Bolsa shares 
 a WhatsApp button and a lead form. Also sitemap.xml, robots.txt and llms.txt for AI search."""
 import json
 
-from .. import db, whatsapp
+from .. import db, geo, whatsapp
 from ..leads import rentapoliza_offer
 from .common import e, money, nice_date, facts_line, label, TYPES
 from .styles import FONTS, site_css
@@ -114,6 +114,13 @@ def listing(con, agency, c, shared_split=None, error=''):
     where = ', '.join(x for x in (c['address']['colonia'], c['address']['municipio'], c['address']['estado']) if x)
     wa = whatsapp.wa_link(agency['whatsapp'], whatsapp.listing_message(c)) if agency['whatsapp'] else ''
     rp = rentapoliza_offer(c)
+    map_html = ''
+    ad = c['address']
+    if ad['lat'] is not None and ad['lng'] is not None:
+        from .panel import map_block
+        la, ln = geo.approx(ad['lat'], ad['lng'], exact=ad['show_exact'])
+        map_html = '<div><h2>Ubicación%s</h2>%s</div>' % ('' if ad['show_exact'] else ' aproximada', map_block(
+            [{'lat': la, 'lng': ln, 't': c['title'], 'p': money(c['price'], c['currency']), 'a': ad['colonia'] or ''}], 240))
     am = ''.join('<li>%s</li>' % e(x) for x in c['amenities'])
     contact_name = agency['name']
     swipe = ''.join('<img src="%s" alt="%s"%s>' % (e(p['url_800']), e(p['alt']), '' if i == 0 else ' loading="lazy"')
@@ -141,7 +148,7 @@ def listing(con, agency, c, shared_split=None, error=''):
         ('<p class="muted small">Precio confirmado el %s. Sujeto a cambio y disponibilidad.</p>' % nice_date(c['price_date']))
         if c['price_date'] and c['price'] is not None else '',
         e(c['description']), ('<div><h2>Amenidades</h2><ul class="am">%s</ul></div>' % am) if am else '',
-        ('<p class="notice">%s</p>' % e(rp)) if rp else '',
+        (('<p class="notice">%s</p>' % e(rp)) if rp else '') + map_html,
         e(contact_name[:1].upper()), e(contact_name),
         ('<a class="wa" href="%s" rel="nofollow">%s Escribir por WhatsApp</a>' % (e(wa), WA_ICON)) if wa else '',
         c['id'], e(c['ref']), ('<p class="muted small" role="alert">%s</p>' % e(error)) if error else '',
