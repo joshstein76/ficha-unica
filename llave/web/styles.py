@@ -72,6 +72,7 @@ border-bottom:1px solid var(--line);padding:0}nav.tabs a{grid-auto-flow:column;f
 .bars{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:6px;align-items:end;height:140px}
 .bar{display:grid;grid-template-rows:1fr auto;height:100%;text-align:center}.bar span{align-self:end;background:var(--brand);border-radius:6px 6px 0 0;min-height:2px}
 .bar small{color:var(--muted);font-size:11px}
+.plan.current{border-color:var(--brand)}.price{margin:0;font-size:15px}.price b{font-size:26px}.plan ul{margin:0;padding-left:18px;display:grid;gap:4px}
 .auth{max-width:420px;margin:6vh auto;padding:0 16px;display:grid;gap:18px}
 :focus-visible{outline:3px solid var(--brand);outline-offset:2px}
 """
@@ -113,7 +114,8 @@ text-decoration:none;font-weight:600;font-family:var(--body);font-size:15px;whit
 .check{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--muted)}.check input{width:auto;margin-top:4px}
 .desc{white-space:pre-line;max-width:68ch}.muted{color:var(--muted)}
 .am{display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:0;list-style:none}.am li{border:1px solid var(--line);border-radius:99px;padding:4px 12px;font-size:14px}
-.agent{display:flex;gap:14px;align-items:center}.agent .av{width:56px;height:56px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-weight:700}
+.agent{display:flex;gap:14px;align-items:center;text-decoration:none}.agent .av{width:56px;height:56px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-weight:700;object-fit:cover;flex:0 0 auto}
+.agent.big .av{width:120px;height:120px;font-size:40px}.team{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
 footer.sf{border-top:1px solid var(--line);padding-block:28px;color:var(--muted);font-size:14px}
 footer.sf .in{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-between}
 .float{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));z-index:9;box-shadow:0 6px 20px rgba(0,0,0,.25)}

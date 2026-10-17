@@ -33,6 +33,10 @@ def init(con):
     for col in ('first_reply', 'first_reply_noname'):
         if col not in cols:
             con.execute('ALTER TABLE agencies ADD COLUMN %s TEXT' % col)
+    ucols = {r[1] for r in con.execute('PRAGMA table_info(users)')}
+    for col in ('slug', 'bio', 'zones'):  # agent public profile
+        if col not in ucols:
+            con.execute('ALTER TABLE users ADD COLUMN %s TEXT' % col)
     con.commit()
 
 
@@ -94,7 +98,9 @@ def canonical(con, listing_id):
                     'alt': p['alt'] or l['title']} for p in ph],
         'agency': {'id': a['id'], 'slug': a['slug'], 'name': a['name'], 'whatsapp': a['whatsapp'],
                    'email': a['email'], 'site_url': site_url(a)},
-        'agent': ({'name': u['name'], 'whatsapp': u['whatsapp'] or a['whatsapp'], 'email': u['email']} if u else None),
+        'agent': ({'name': u['name'], 'whatsapp': u['whatsapp'] or a['whatsapp'], 'email': u['email'],
+                   'slug': u['slug'] if 'slug' in u.keys() else None,
+                   'photo': u['photo_path'], 'id': u['id']} if u else None),
         'share_in_bolsa': bool(l['share_in_bolsa']), 'share_split_pct': l['share_split_pct'],
         'rentapoliza_offer': bool(l['rentapoliza_offer']), 'updated_at': l['updated_at'],
     }

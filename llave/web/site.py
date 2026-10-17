@@ -57,12 +57,12 @@ def home(con, agency):
            'areaServed': agency['city'] or 'México', 'description': agency['about'] or ''}
     body = ('<section class="hero">%s<div class="cap"><div class="in"><h1>%s</h1><p>%s</p></div></div></section>'
             '<main class="in"><section class="sec"><h2>Propiedades</h2>%s</section>'
-            '<section class="sec"><h2>Sobre nosotros</h2><p class="desc">%s</p></section></main>') % (
+            '<section class="sec"><h2>Sobre nosotros</h2><p class="desc">%s</p>%s</section></main>') % (
         ('<img src="%s" alt="">' % e(hero_img)) if hero_img else '',
         e(agency['name']), e(agency['tagline'] or ''),
         ('<div class="cards">%s</div>' % ''.join(_card(c) for c in cards)) if cards
         else '<p class="muted">Pronto publicaremos propiedades aquí.</p>',
-        e(agency['about'] or ''))
+        e(agency['about'] or ''), team_html(con, agency))
     ld = '<script type="application/ld+json">%s</script>' % json.dumps(org, ensure_ascii=False)
     return _page(agency, '%s · Bienes raíces' % agency['name'], body, ld, db.site_url(agency) + '/',
                  agency['about'] or agency['tagline'] or agency['name'])
@@ -122,7 +122,13 @@ def listing(con, agency, c, shared_split=None, error=''):
         map_html = '<div><h2>Ubicación%s</h2>%s</div>' % ('' if ad['show_exact'] else ' aproximada', map_block(
             [{'lat': la, 'lng': ln, 't': c['title'], 'p': money(c['price'], c['currency']), 'a': ad['colonia'] or ''}], 240))
     am = ''.join('<li>%s</li>' % e(x) for x in c['amenities'])
-    contact_name = agency['name']
+    ag = c.get('agent') if own else None
+    contact_name = ag['name'] if ag and (ag['name'] or '').split(' ')[0].lower() not in ('equipo', 'team') else agency['name']
+    avatar = ('<img class="av" src="%s/media/%s" alt="" width="56" height="56">' % (e(db.site_url(agency)), e(ag['photo']))
+              if ag and ag.get('photo') else '<div class="av" aria-hidden="true">%s</div>' % e(contact_name[:1].upper()))
+    profile_link = ('<br><a class="small" href="/asesor/%s">Ver perfil</a>' % e(ag['slug'])) if ag and ag.get('slug') else ''
+    if ag and ag.get('whatsapp') and agency['whatsapp']:
+        wa = whatsapp.wa_link(ag['whatsapp'], whatsapp.listing_message(c))
     swipe = ''.join('<img src="%s" alt="%s"%s>' % (e(p['url_800']), e(p['alt']), '' if i == 0 else ' loading="lazy"')
                     for i, p in enumerate(photos))
     body = ('<main class="in sec"><div><span class="tag">%s · %s · folio %s</span><h1>%s</h1>'
@@ -130,7 +136,7 @@ def listing(con, agency, c, shared_split=None, error=''):
             '<div class="gal">%s</div>%s<div class="swipe" aria-label="Fotos (desliza)">%s</div><p class="swipe-hint muted small">%d fotos · desliza →</p>'
             '<div class="lp"><div class="sec" style="padding:0"><div class="facts">%s</div>'
             '%s<div><h2>Descripción</h2><p class="desc">%s</p></div>%s%s</div>'
-            '<aside class="box" id="contacto"><div class="agent"><div class="av">%s</div><div><b>%s</b><br>'
+            '<aside class="box" id="contacto"><div class="agent">%s<div><b>%s</b>%s<br>'
             '<span class="muted">Te responde por WhatsApp</span></div></div>'
             '%s'
             '<form method="post" action="/contacto"><input type="hidden" name="listing" value="%d">'
@@ -149,7 +155,7 @@ def listing(con, agency, c, shared_split=None, error=''):
         if c['price_date'] and c['price'] is not None else '',
         e(c['description']), ('<div><h2>Amenidades</h2><ul class="am">%s</ul></div>' % am) if am else '',
         (('<p class="notice">%s</p>' % e(rp)) if rp else '') + map_html,
-        e(contact_name[:1].upper()), e(contact_name),
+        avatar, e(contact_name), profile_link,
         ('<a class="wa" href="%s" rel="nofollow">%s Escribir por WhatsApp</a>' % (e(wa), WA_ICON)) if wa else '',
         c['id'], e(c['ref']), ('<p class="muted small" role="alert">%s</p>' % e(error)) if error else '',
         ('<a class="wa float" href="%s" rel="nofollow" aria-label="WhatsApp">%s</a>'
@@ -255,3 +261,44 @@ def llms(con, agency):
             c['title'], db.site_url(agency), c['slug'], 'venta' if c['operation'] == 'venta' else 'renta',
             price, facts_line(c) or 's/d', c['address']['colonia'] or '', c['address']['municipio'] or ''))
     return '\n'.join(lines) + '\n'
+
+
+def _agents(con, agency_id):
+    return con.execute("SELECT * FROM users WHERE agency_id=? AND slug IS NOT NULL AND slug != '' ORDER BY id", (agency_id,)).fetchall()
+
+
+def team_html(con, agency):
+    rows = _agents(con, agency['id'])
+    if not rows:
+        return ''
+    cards = ''.join('<a class="agent" href="/asesor/%s">%s<div><b>%s</b><br><span class="muted small">%s</span></div></a>' % (
+        e(u['slug']), ('<img class="av" src="%s/media/%s" alt="" width="56" height="56" loading="lazy">' % (e(db.site_url(agency)), e(u['photo_path'])))
+        if u['photo_path'] else '<div class="av" aria-hidden="true">%s</div>' % e(u['name'][:1].upper()),
+        e(u['name']), e(u['zones'] or '')) for u in rows)
+    return '<h2>Equipo</h2><div class="team">%s</div>' % cards
+
+
+def agent_profile(con, agency, u):
+    ids = [r['id'] for r in con.execute("SELECT id FROM listings WHERE agency_id=? AND agent_id=? AND status IN ('activa','apartada') "
+                                        "ORDER BY updated_at DESC", (agency['id'], u['id']))]
+    cards = [db.canonical(con, i) for i in ids]
+    wa = whatsapp.wa_link(u['whatsapp'] or agency['whatsapp'], 'Hola %s, vi tu perfil y me gustaría más información.' % u['name'].split(' ')[0]) \
+        if (u['whatsapp'] or agency['whatsapp']) else ''
+    url = '%s/asesor/%s' % (db.site_url(agency), u['slug'])
+    ld = {'@context': 'https://schema.org', '@type': 'RealEstateAgent', 'name': u['name'], 'url': url,
+          'worksFor': {'@type': 'RealEstateAgent', 'name': agency['name'], 'url': db.site_url(agency)},
+          'areaServed': [z.strip() for z in (u['zones'] or '').split(',') if z.strip()] or (agency['city'] or 'México'),
+          'description': u['bio'] or ''}
+    if u['photo_path']:
+        ld['image'] = '%s/media/%s' % (db.site_url(agency), u['photo_path'])
+    body = ('<main class="in sec"><div class="agent big">%s<div><h1>%s</h1><p class="muted">%s · %s</p></div></div>'
+            '%s%s<section class="sec" style="padding:0"><h2>Propiedades de %s</h2>%s</section></main>') % (
+        ('<img class="av" src="%s/media/%s" alt="Foto de %s" width="120" height="120">' % (e(db.site_url(agency)), e(u['photo_path']), e(u['name'])))
+        if u['photo_path'] else '<div class="av" aria-hidden="true">%s</div>' % e(u['name'][:1].upper()),
+        e(u['name']), e(agency['name']), e(u['zones'] or agency['city'] or ''),
+        ('<p class="desc">%s</p>' % e(u['bio'])) if u['bio'] else '',
+        ('<p><a class="wa" href="%s" rel="nofollow">%s Escribir por WhatsApp</a></p>' % (e(wa), WA_ICON)) if wa else '',
+        e(u['name'].split(' ')[0]),
+        ('<div class="cards">%s</div>' % ''.join(_card(c) for c in cards)) if cards else '<p class="muted">Pronto publicará propiedades aquí.</p>')
+    head = '<script type="application/ld+json">%s</script>' % json.dumps(ld, ensure_ascii=False)
+    return _page(agency, '%s · %s' % (u['name'], agency['name']), body, head, url, u['bio'] or '%s, asesor inmobiliario en %s' % (u['name'], agency['name']))

@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import threading
 
-from .. import auth, db, geo, importer, lead_watch, ml_oauth, photo_fetch, photos, price_check, replies, stats, whatsapp
+from .. import auth, db, geo, importer, lead_watch, media, ml_oauth, photo_fetch, photos, price_check, replies, stats, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import panel, site
@@ -165,6 +165,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(site.sitemap(con, a), ctype='application/xml; charset=utf-8')
         if path == '/robots.txt':
             return self.send(site.robots(a), ctype='text/plain; charset=utf-8')
+        m = re.match(r'^/asesor/([a-z0-9-]+)/?$', path)
+        if m:
+            u = con.execute('SELECT * FROM users WHERE agency_id=? AND slug=?', (a['id'], m.group(1))).fetchone()
+            return self.send(site.agent_profile(con, a, u)) if u else self.send(site.not_found(a), 404)
         if path == '/llms.txt':
             return self.send(site.llms(con, a), ctype='text/plain; charset=utf-8')
         m = re.match(r'^/feeds/([a-z0-9_]+)\.(xml|json)$', path)
@@ -396,6 +400,31 @@ class Handler(BaseHTTPRequestHandler):
                 lead_watch.set_status(con, lid, a['id'], f.get('status', ''))
                 con.commit()
             return self.redirect('/clientes' + (('?estado=' + query['estado']) if query.get('estado') else ''))
+        if path == '/perfil':
+            if method == 'POST':
+                try:
+                    save_profile(con, a, ctx['user'], f, files)
+                except ValueError as ex:
+                    return self.send(panel.profile(ctx, error=str(ex)), 400)
+                ctx['user'] = con.execute('SELECT * FROM users WHERE id=?', (uid,)).fetchone()
+                return self.send(panel.profile(ctx, ok='Perfil guardado.'))
+            return self.send(panel.profile(ctx))
+        if path == '/plan':
+            return self.send(panel.plans(con, ctx))
+        m = re.match(r'^/plan/(gratis|pro|agencia)$', path)
+        if m:
+            key = m.group(1)
+            if method == 'POST':
+                n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
+                if n > db.PLAN_LIMITS[key]:
+                    return self.send(panel.plan_checkout(ctx, key, 'Tienes %d propiedades; este plan permite %d. Marca algunas como vendidas primero.'
+                                                          % (n, db.PLAN_LIMITS[key])), 400)
+                con.execute('UPDATE agencies SET plan=? WHERE id=?', (key, a['id']))
+                db.audit(con, actor, 'plan_change_test_mode', '%s -> %s (no payment)' % (a['plan'], key))
+                con.commit()
+                ctx['agency'] = con.execute('SELECT * FROM agencies WHERE id=?', (a['id'],)).fetchone()
+                return self.send(panel.plans(con, ctx, ok='Listo: ahora tienes el plan %s (modo prueba, sin cobro).' % key))
+            return self.send(panel.plan_checkout(ctx, key))
         if path == '/estadisticas':
             return self.send(panel.stats_page(ctx, stats.agency_stats(con, a['id'])))
         if path == '/portales':
@@ -646,6 +675,28 @@ def save_listing(con, a, uid, f, existing=None):
     return lid
 
 
+def save_profile(con, a, u, f, files):
+    name = (f.get('name') or '').strip()
+    if len(name) < 3:
+        raise ValueError('Escribe tu nombre.')
+    wa = whatsapp.norm_phone(f.get('whatsapp')) if (f.get('whatsapp') or '').strip() else None
+    if (f.get('whatsapp') or '').strip() and not wa:
+        raise ValueError('Revisa tu WhatsApp: 10 dígitos.')
+    photo = u['photo_path']
+    if files.get('photo'):
+        photo = media.save_brand_image(files['photo'][0], 'avatar')
+    slug = None
+    if f.get('public') == '1':
+        slug = u['slug'] or db.slugify(name)[:40]
+        base, k = slug, 2
+        while con.execute('SELECT 1 FROM users WHERE agency_id=? AND slug=? AND id!=?', (a['id'], slug, u['id'])).fetchone():
+            slug, k = '%s-%d' % (base, k), k + 1
+    con.execute('UPDATE users SET name=?, whatsapp=?, zones=?, bio=?, photo_path=?, slug=? WHERE id=?',
+                (name[:80], wa, (f.get('zones') or '').strip()[:200], (f.get('bio') or '').strip()[:600], photo, slug, u['id']))
+    db.audit(con, 'user:%d' % u['id'], 'profile_update', 'public' if slug else 'hidden')
+    con.commit()
+
+
 def save_site(con, a, f, files):
     name = (f.get('name') or '').strip()
     if not name:
@@ -661,7 +712,7 @@ def save_site(con, a, f, files):
         raise ValueError(err)
     logo = a['logo_path']
     if files.get('logo'):
-        logo = photos.save_logo(a['id'], files['logo'][0]) if hasattr(photos, 'save_logo') else logo
+        logo = media.save_brand_image(files['logo'][0], 'logo')
     con.execute('UPDATE agencies SET first_reply=?, first_reply_noname=? WHERE id=?', (fr or None, frn or None, a['id']))
     con.execute('UPDATE agencies SET name=?, tagline=?, about=?, whatsapp=?, email=?, city=?, design=?, accent=?, logo_path=? WHERE id=?',
                 (name[:80], (f.get('tagline') or '').strip()[:90], (f.get('about') or '').strip()[:2000], wa,

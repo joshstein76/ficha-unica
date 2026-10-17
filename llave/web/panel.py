@@ -108,7 +108,7 @@ def dashboard(con, ctx, welcome=False):
              % (n_late, '' if n_late == 1 else 's')) if n_late else '') + (('<div class="notice warn">%d precio%s sin confirmar en 30 días. <a href="/precios">Confírmalos con un toque</a></div>'
              % (n_stale, '' if n_stale == 1 else 's')) if n_stale else '') + ('%s<div><h1>Hola, %s</h1><p class="muted">Tu sitio: <a href="%s" target="_blank" rel="noopener">%s</a></p></div>'
             '<div class="stats"><div class="stat"><b>%d</b><small>Propiedades publicadas</small></div>'
-            '<div class="stat"><b>%d/%d</b><small>Usadas en plan %s</small></div>'
+            '<a class="stat" href="/plan" style="text-decoration:none;color:inherit"><b>%d/%d</b><small>Usadas en plan %s · cambiar</small></a>'
             '<div class="stat"><b>%d</b><small>Clientes nuevos</small></div>'
             '<div class="stat"><b>%d</b><small>Publicaciones en portales</small></div></div>'
             '%s'
@@ -467,10 +467,11 @@ def site_settings(con, ctx, ok='', error=''):
                   e(db.BASE_DOMAIN), e(a['slug']),
                   'verificado' if a['domain_verified_at'] else 'pendiente (la verificación se activa en producción)'))
              if a['custom_domain'] else ''))
-        if pro else '<p class="muted">Incluido en el plan Pro. Mientras tanto tu sitio vive gratis en '
+        if pro else '<p class="muted">Incluido en el plan <a href="/plan">Pro</a>. Mientras tanto tu sitio vive gratis en '
                     '<code>%s</code>.</p>' % e(db.site_url(a))))
     body = ('%s%s<div class="row" style="justify-content:space-between"><h1>Mi sitio</h1>'
-            '<a class="btn ghost small" href="%s" target="_blank" rel="noopener">Ver sitio ↗</a></div>'
+            '<span class="row"><a class="btn ghost small" href="/perfil">Mi perfil</a><a class="btn ghost small" href="/plan">Tu plan</a>'
+            '<a class="btn ghost small" href="%s" target="_blank" rel="noopener">Ver sitio ↗</a></span></div>'
             '<form class="stack" method="post" action="/sitio" enctype="multipart/form-data">%s'
             '<section class="card"><h2>Diseño</h2><div class="grid2">%s</div>'
             '<label>Color principal<input type="color" name="accent" value="%s" style="height:48px"></label></section>'
@@ -728,3 +729,62 @@ def prices(con, ctx, flash=''):
             'Cada 30 días te pedimos confirmarlos: un toque y listo.</p>%s') % (
         flash, rows or notice('✓ Todos tus precios están al día.'))
     return layout('Precios', body, ctx, 'propiedades')
+
+
+# ---------- my public profile ----------
+def profile(ctx, ok='', error=''):
+    u, a = ctx['user'], ctx['agency']
+    url = ('%s/asesor/%s' % (db.site_url(a), u['slug'])) if u['slug'] else ''
+    body = ('%s%s<div class="row" style="justify-content:space-between"><h1>Mi perfil</h1>%s</div>'
+            '<p class="muted">Tu página como asesor, dentro de tu sitio. Sale en tus propiedades y en Google.</p>'
+            '<form class="stack card" method="post" action="/perfil" enctype="multipart/form-data">%s'
+            '%s<label for="pf-name">Nombre<input id="pf-name" name="name" value="%s" required autocomplete="name"></label>'
+            '<label for="pf-wa">WhatsApp<input id="pf-wa" name="whatsapp" value="%s" inputmode="tel" autocomplete="tel"></label>'
+            '<label for="pf-zones">Zonas donde trabajas<input id="pf-zones" name="zones" value="%s" placeholder="Polanco, Lomas, Condesa"></label>'
+            '<label for="pf-bio">Sobre ti (2 o 3 frases)<textarea id="pf-bio" name="bio" maxlength="600">%s</textarea></label>'
+            '<label for="pf-photo">Tu foto (cuadrada de preferencia)<input id="pf-photo" type="file" name="photo" accept="image/*"></label>'
+            '<label class="check"><input type="checkbox" name="public" value="1"%s> Mostrar mi perfil en el sitio</label>'
+            '<button class="btn">Guardar perfil</button></form>') % (
+        notice(ok), notice(error, 'err'),
+        ('<a class="btn ghost small" href="%s" target="_blank" rel="noopener">Ver mi perfil ↗</a>' % e(url)) if url else '',
+        csrf_field(ctx),
+        ('<img src="/media/%s" alt="Tu foto actual" width="96" height="96" style="border-radius:50%%;object-fit:cover">' % e(u['photo_path']))
+        if u['photo_path'] else '',
+        e(u['name']), e(u['whatsapp']), e(u['zones']), e(u['bio']), ' checked' if u['slug'] else '')
+    return layout('Mi perfil', body, ctx, 'sitio')
+
+
+# ---------- plans (TEST MODE: no payment is taken anywhere) ----------
+PLANS = [
+    ('gratis', 'Gratis', 0, ['Tu sitio en una dirección gratis', '10 propiedades', 'Portales y buscadores gratuitos', 'Clientes por WhatsApp']),
+    ('pro', 'Pro', 299, ['Todo lo de Gratis', 'Tu propio dominio', '50 propiedades', 'Respuesta automática por WhatsApp', 'Estadísticas completas']),
+    ('agencia', 'Agencia', 799, ['Todo lo de Pro', '200 propiedades', 'Equipo de asesores', 'Bandeja de clientes compartida']),
+]
+
+
+def plans(con, ctx, ok=''):
+    a = ctx['agency']
+    n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
+    cards = ''.join(
+        '<div class="card plan%s"><h2>%s</h2><p class="price"><b>%s</b>%s</p><ul class="small">%s</ul>%s</div>' % (
+            ' current' if k == a['plan'] else '', e(name), 'Gratis' if not price else '$%d MXN' % price,
+            '' if not price else ' <span class="muted small">al mes, IVA incluido</span>',
+            ''.join('<li>%s</li>' % e(f) for f in feats),
+            '<span class="pill ok">Tu plan</span>' if k == a['plan'] else
+            '<a class="btn %s" href="/plan/%s">%s</a>' % ('' if price else 'ghost', k, 'Cambiar a %s' % name))
+        for k, name, price, feats in PLANS)
+    body = ('%s<h1>Tu plan</h1><p class="muted">Usas %d de %d propiedades.</p><div class="grid2 wide plans">%s</div>'
+            '<p class="small muted">Precios en pesos mexicanos con IVA. Sin plazo forzoso: cambias o cancelas cuando quieras.</p>') % (
+        notice(ok), n, db.PLAN_LIMITS.get(a['plan'], 10), cards)
+    return layout('Tu plan', body, ctx, 'sitio')
+
+
+def plan_checkout(ctx, key, error=''):
+    p = next((x for x in PLANS if x[0] == key), None)
+    body = ('<div class="auth"><div class="notice warn"><b>MODO PRUEBA</b>: no se cobra nada. En producción aquí va el pago con tarjeta '
+            '(procesado por Stripe para %s).</div><h1>Cambiar a %s</h1><p class="price"><b>%s</b>%s</p>%s'
+            '<form method="post" action="/plan/%s">%s<button class="btn">Confirmar cambio (prueba)</button></form>'
+            '<a class="btn ghost" href="/plan">Volver</a></div>') % (
+        e(db.OWNER), e(p[1]), 'Gratis' if not p[2] else '$%d MXN' % p[2], '' if not p[2] else ' <span class="muted small">al mes</span>',
+        notice(error, 'err'), e(key), csrf_field(ctx))
+    return layout('Cambiar de plan', body, ctx, 'sitio')
