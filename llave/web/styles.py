@@ -1,4 +1,5 @@
 """CSS for the agent panel and the three free-site designs (Residencia / Ciudad / Costa). Mobile-first."""
+import re
 
 FONTS = ('https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Figtree:wght@400;500;600;700'
          '&family=Fraunces:opsz,wght@9..144,500&display=swap')
@@ -90,11 +91,11 @@ text-decoration:none;font-weight:600;font-family:var(--body);font-size:15px;whit
 .facts b{display:block;font-size:20px}.facts small{color:var(--muted)}
 .box{background:var(--card);border:1px solid var(--line);border-radius:var(--br);padding:20px;display:grid;gap:12px;position:sticky;top:84px}
 .box form{display:grid;gap:10px}.box input,.box textarea{font:16px var(--body);padding:11px;border:1px solid var(--line);border-radius:8px;width:100%;background:var(--bg);color:var(--fg)}
-.box button{min-height:46px;border:0;border-radius:var(--br);background:var(--accent);color:#fff;font:600 16px var(--body);cursor:pointer}
+.box button{min-height:46px;border:0;border-radius:var(--br);background:var(--accent);color:var(--on-accent);font:600 16px var(--body);cursor:pointer}
 .check{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--muted)}.check input{width:auto;margin-top:4px}
 .desc{white-space:pre-line;max-width:68ch}.muted{color:var(--muted)}
 .am{display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:0;list-style:none}.am li{border:1px solid var(--line);border-radius:99px;padding:4px 12px;font-size:14px}
-.agent{display:flex;gap:14px;align-items:center}.agent .av{width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700}
+.agent{display:flex;gap:14px;align-items:center}.agent .av{width:56px;height:56px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-weight:700}
 footer.sf{border-top:1px solid var(--line);padding-block:28px;color:var(--muted);font-size:14px}
 footer.sf .in{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-between}
 .float{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));z-index:9;box-shadow:0 6px 20px rgba(0,0,0,.25)}
@@ -115,5 +116,11 @@ DARK = ('@media (prefers-color-scheme:dark){:root{--bg:#121212;--card:#1b1b1b;--
 
 def site_css(design, accent):
     tokens = DESIGN_TOKENS.get(design, DESIGN_TOKENS['ciudad'])
-    safe_accent = accent if (accent or '').startswith('#') and len(accent) in (4, 7) else '#1f4e79'
-    return tokens + ':root{--accent:%s}' % safe_accent + DARK + SITE_BASE
+    safe_accent = accent if re.match(r'^#[0-9a-fA-F]{6}$', accent or '') else '#1f4e79'
+    r, g, b = (int(safe_accent[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    # A near-black or very dark accent disappears on the dark theme: swap in a light neutral there.
+    dark_accent = '#d8d2c8' if lum < 0.22 else safe_accent
+    return (tokens + ':root{--accent:%s;--on-accent:#fff}' % safe_accent +
+            DARK.replace('color-scheme:dark}', '--accent:%s;--on-accent:%s;color-scheme:dark}' % (
+                dark_accent, '#121212' if lum < 0.22 else '#fff')) + SITE_BASE)
