@@ -20,6 +20,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from PIL import Image  # noqa: E402
 from http.server import ThreadingHTTPServer  # noqa: E402
 from llave import db  # noqa: E402
+
+# other test modules may have imported llave.db first: patch the module, never touch data/llave.db
+db.DB_PATH = os.environ['LLAVE_DB']
+db.MEDIA_DIR = os.environ['LLAVE_MEDIA']
+db.PORT = 8699
 from llave.web.server import Handler  # noqa: E402
 
 BASE = 'http://127.0.0.1:8699'
