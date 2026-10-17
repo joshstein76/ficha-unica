@@ -135,6 +135,8 @@ class Handler(BaseHTTPRequestHandler):
     def agency_site(self, con, a, method, path):
         if method == 'POST' and path == '/contacto':
             f, _ = self.form()
+            if f.get('website'):  # honeypot: bots fill every field; pretend success, store nothing
+                return self.redirect('/gracias')
             lid = int(f.get('listing') or 0) or None
             if lid and lid not in db.public_listing_ids(con, a['id']):
                 lid = None
@@ -167,12 +169,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send('Feed no disponible', 404, 'text/plain; charset=utf-8')
             con.commit()
             return self.send(body, ctype=ctype)
-        m = re.match(r'^/propiedad/([a-z0-9-]+)/?$', path)
+        m = re.match(r'^/propiedad/([a-z0-9-]+)(/ficha)?/?$', path)
         if m:
             for lid in db.public_listing_ids(con, a['id']):
                 c = db.canonical(con, lid)
                 if c['slug'] == m.group(1):
-                    return self.send(site.listing(con, a, c))
+                    return self.send(site.ficha(a, c) if m.group(2) else site.listing(con, a, c))
             return self.send(site.not_found(a), 404)
         return self.send(site.not_found(a), 404)
 

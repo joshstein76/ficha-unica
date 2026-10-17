@@ -132,6 +132,10 @@ class WebFlow(unittest.TestCase):
         self.assertIn('rel="canonical"', lp)
         self.assertIn('RentaPóliza', lp)
         self.assertNotIn('NOTA-SECRETA-123', lp)
+        s, fi, _ = req('casas-roma.llave.localhost', '/propiedad/%s/ficha' % slug)
+        self.assertEqual(s, 200)
+        self.assertIn('noindex', fi)
+        self.assertNotIn('NOTA-SECRETA-123', fi)
         # portal toggle -> feed
         s, _, _ = req('app.llave.localhost', '/portales/%d/trovit' % lid, {'csrf': csrf}, cookie)
         self.assertEqual(s, 303)
@@ -167,6 +171,10 @@ class WebFlow(unittest.TestCase):
         s, _, _ = req('hogar-sur.llave.localhost', '/contacto',
                       {'listing': lid, 'name': 'Luis', 'phone': '5533334444', 'consent': '1'})
         self.assertEqual(s, 303)
+        n0 = con.execute('SELECT COUNT(*) FROM leads').fetchone()[0]
+        s, _, _ = req('hogar-sur.llave.localhost', '/contacto', {'listing': lid, 'name': 'Bot', 'phone': '5599990000', 'consent': '1', 'website': 'spam.example'})
+        self.assertEqual(s, 303)
+        self.assertEqual(con.execute('SELECT COUNT(*) FROM leads').fetchone()[0], n0)
         b = con.execute("SELECT * FROM leads WHERE source='bolsa'").fetchone()
         self.assertIsNotNone(b)
         self.assertEqual(b['owner_agency_id'], a['id'])

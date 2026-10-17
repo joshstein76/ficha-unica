@@ -119,7 +119,7 @@ def listing(con, agency, c, shared_split=None, error=''):
             '<span class="muted">Te responde por WhatsApp</span></div></div>'
             '%s'
             '<form method="post" action="/contacto"><input type="hidden" name="listing" value="%d">'
-            '<input name="name" placeholder="Tu nombre" autocomplete="name" required>'
+            '<input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px"><input name="name" placeholder="Tu nombre" autocomplete="name" required>'
             '<input name="phone" placeholder="Tu WhatsApp (10 dígitos)" inputmode="tel" autocomplete="tel">'
             '<input name="email" type="email" placeholder="Correo (opcional)" autocomplete="email">'
             '<textarea name="message" rows="3">Hola, me interesa esta propiedad (folio %s).</textarea>'
@@ -143,6 +143,49 @@ def listing(con, agency, c, shared_split=None, error=''):
     ld = '<script type="application/ld+json">%s</script>' % json.dumps(listing_jsonld(c, canon), ensure_ascii=False)
     title = '%s · %s' % (c['title'], money(c['price'], c['currency']))
     return _page(agency, title, body, og + ld, canon, c['description'])
+
+
+FICHA_CSS = r"""
+@page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;font:11pt/1.45 "Figtree",system-ui,sans-serif;color:#1b1b1b;background:#fff}
+.sheet{max-width:186mm;margin:0 auto;padding:16px;display:grid;gap:10px}
+.hd{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--accent);padding-bottom:6px}
+.hd b{font-size:14pt}.hd span{color:#666;font-size:9pt}
+h1{font:400 22pt/1.1 "Instrument Serif",Georgia,serif;margin:0}
+.main{width:100%;height:88mm;object-fit:cover}.row3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.row3 img{width:100%;height:30mm;object-fit:cover}
+.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.facts div{border:1px solid #ddd;padding:6px}
+.facts b{display:block;font-size:13pt}.facts small{color:#666}
+.desc{font-size:10pt;white-space:pre-line;max-height:60mm;overflow:hidden}
+.ft{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #ddd;padding-top:8px;font-size:10pt}
+.noprint{display:flex;gap:8px;justify-content:center;padding:12px}.noprint button{min-height:44px;padding:0 18px;font:600 15px system-ui;border:0;background:#1b1b1b;color:#fff;border-radius:8px;cursor:pointer}
+@media print{.noprint{display:none}.sheet{padding:0}}
+"""
+
+
+def ficha(agency, c):
+    """Printable A4 listing sheet (the PDF 'ficha técnica' agents hand out; print-to-PDF from the browser).
+    Later: order printed copies from a nearby print shop through Cerquito."""
+    p = c['photos']
+    facts = [(money(c['price'], c['currency']), 'Precio'), (('%g m²' % c['m2_built']) if c['m2_built'] else None, 'Construcción'),
+             (c['bedrooms'], 'Recámaras'), (('%g' % c['bathrooms']) if c['bathrooms'] else None, 'Baños'),
+             (c['parking'], 'Estacionamientos'), (('%g m²' % c['m2_land']) if c['m2_land'] else None, 'Terreno')]
+    facts_html = ''.join('<div><b>%s</b><small>%s</small></div>' % (e(v), l) for v, l in facts if v not in (None, '', 0))
+    where = ', '.join(x for x in (c['address']['colonia'], c['address']['municipio'], c['address']['estado']) if x)
+    url = '%s/propiedad/%s' % (db.site_url(agency), c['slug'])
+    price_note = ('Precio al %s, sujeto a cambio y disponibilidad.' % nice_date(c['price_date'])) if c['price_date'] and c['price'] is not None else ''
+    return ('<!doctype html><html lang="es-MX"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<title>Ficha %s · %s</title><meta name="robots" content="noindex"><link rel="stylesheet" href="%s">'
+            '<style>:root{--accent:%s}%s</style></head><body>'
+            '<div class="noprint"><button onclick="window.print()">Imprimir o guardar PDF</button></div>'
+            '<div class="sheet"><div class="hd"><b>%s</b><span>Folio %s · %s</span></div><h1>%s</h1><span>%s</span>'
+            '%s<div class="row3">%s</div><div class="facts">%s</div><p class="desc">%s</p>'
+            '<div class="ft"><span><b>%s</b><br>WhatsApp %s</span><span style="text-align:right">%s<br>%s</span></div></div>'
+            '</body></html>') % (
+        e(c['ref']), e(agency['name']), FONTS, e(agency['accent'] if (agency['accent'] or '').startswith('#') else '#1b1b1b'),
+        FICHA_CSS, e(agency['name']), e(c['ref']), 'Venta' if c['operation'] == 'venta' else 'Renta', e(c['title']), e(where),
+        ('<img class="main" src="%s" alt="">' % e(p[0]['url'])) if p else '',
+        ''.join('<img src="%s" alt="">' % e(x['url_800']) for x in p[1:4]), facts_html, e(c['description'][:1200]),
+        e(agency['name']), e(agency['whatsapp'] or ''), e(url), e(price_note))
 
 
 def thanks(agency, wa_link=''):

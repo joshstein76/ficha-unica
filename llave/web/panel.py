@@ -168,7 +168,9 @@ def listing_form(con, ctx, l=None, error='', ok=''):
         problems = validate(db.canonical(con, lid))
     site_link = ''
     if lid and v.get('status') in db.PUBLIC_STATUSES:
-        site_link = '<a href="%s" target="_blank" rel="noopener">Ver en mi sitio ↗</a>' % e(db.listing_url(ctx['agency'], v))
+        site_link = ('<span class="row small"><a href="%s" target="_blank" rel="noopener">Ver en mi sitio ↗</a>'
+                     '<a href="%s/ficha" target="_blank" rel="noopener">Ficha para imprimir ↗</a></span>') % (
+            e(db.listing_url(ctx['agency'], v)), e(db.listing_url(ctx['agency'], v)))
     rp_box = ('<label class="check"><input type="checkbox" name="rentapoliza_offer" value="1"%s> '
               'Ofrecer póliza jurídica RentaPóliza (rentas)</label>' % (' checked' if v.get('rentapoliza_offer') else ''))
     body = ('%s%s<div class="row" style="justify-content:space-between"><h1>%s</h1>%s</div>%s'
