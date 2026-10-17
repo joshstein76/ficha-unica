@@ -1,0 +1,1 @@
+{"version":"0.0.1","configurations":[{"name":"llave","runtimeExecutable":"python3","runtimeArgs":["-m","llave.web.server"],"port":8640,"url":"http://app.llave.localhost:8640"}]}
