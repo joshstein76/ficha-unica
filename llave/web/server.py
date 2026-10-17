@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import threading
 
-from .. import auth, db, geo, importer, lead_watch, media, ml_oauth, photo_fetch, photos, price_check, replies, stats, whatsapp
+from .. import auth, cards, db, geo, importer, lead_watch, media, ml_oauth, photo_fetch, photos, price_check, replies, stats, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import panel, site
@@ -172,7 +172,7 @@ class Handler(BaseHTTPRequestHandler):
             if a:
                 return self.agency_site(con, a, method, path)
             if h in (base, 'localhost', '127.0.0.1'):
-                return self.send(panel.landing())
+                return self.send(panel.landing((query.get('ref') or '')[:60]))
             return self.send('Sitio no encontrado', 404, 'text/plain; charset=utf-8')
         except Exception:
             traceback.print_exc()
@@ -222,6 +222,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send('Feed no disponible', 404, 'text/plain; charset=utf-8')
             con.commit()
             return self.send(body, ctype=ctype)
+        m = re.match(r'^/propiedad/([a-z0-9-]+)/tarjeta-(post|historia)\.jpg$', path)
+        if m:
+            row = con.execute("SELECT id FROM listings WHERE agency_id=? AND slug=? AND status IN ('activa','apartada')",
+                              (a['id'], m.group(1))).fetchone()
+            if not row:
+                return self.send('No encontrada', 404, 'text/plain; charset=utf-8')
+            rel = cards.render_cached(con, row['id'], 'post' if m.group(2) == 'post' else 'story')
+            return self.media(rel)
         m = re.match(r'^/propiedad/([a-z0-9-]+)(/ficha)?/?$', path)
         if m:
             for lid in db.public_listing_ids(con, a['id']):
@@ -263,7 +271,7 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError as ex:
                     return self.send(panel.signup(str(ex), f), 400)
                 return self.start_session(con, uid, '/nueva?bienvenida=1')
-            return self.send(panel.signup())
+            return self.send(panel.signup(ref=(query.get('ref') or '')[:60]))
         if path == '/entrar':
             if method == 'POST':
                 f, _ = self.form()
@@ -355,6 +363,12 @@ class Handler(BaseHTTPRequestHandler):
             ok = price_check.confirm(con, int(m.group(1)), a['id'])
             con.commit()
             return self.send(panel.prices(con, ctx, panel.notice('Precio confirmado.' if ok else 'No encontramos esa propiedad.', '' if ok else 'err')))
+        if path == '/admin':
+            if ctx['user']['role'] != 'admin':
+                return self.send(panel.layout('No encontrado', panel.notice('Página no encontrada.', 'err'), ctx), 404)
+            return self.send(panel.admin(con, ctx))
+        if path == '/invitar':
+            return self.send(panel.invite(con, ctx))
         if path == '/servicios':
             return self.send(panel.services(ctx))
         if path == '/academia':
@@ -384,7 +398,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(panel.listing_form(con, ctx, None, str(ex)), 400)
                 return self.redirect('/propiedades/%d?ok=creada' % lid)
             n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
-            if n >= db.PLAN_LIMITS.get(a['plan'], 10):
+            if n >= db.listing_limit(con, a):
                 return self.send(panel.listings(con, ctx, panel.notice(
                     'Llegaste al límite de tu plan (%d propiedades). Marca alguna como vendida o cambia de plan.' % n, 'warn')))
             return self.send(panel.listing_form(con, ctx))
@@ -458,9 +472,9 @@ class Handler(BaseHTTPRequestHandler):
             key = m.group(1)
             if method == 'POST':
                 n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
-                if n > db.PLAN_LIMITS[key]:
+                if n > db.listing_limit(con, a, key):
                     return self.send(panel.plan_checkout(ctx, key, 'Tienes %d propiedades; este plan permite %d. Marca algunas como vendidas primero.'
-                                                          % (n, db.PLAN_LIMITS[key])), 400)
+                                                          % (n, db.listing_limit(con, a, key))), 400)
                 con.execute('UPDATE agencies SET plan=? WHERE id=?', (key, a['id']))
                 db.audit(con, actor, 'plan_change_test_mode', '%s -> %s (no payment)' % (a['plan'], key))
                 con.commit()
@@ -601,8 +615,9 @@ def signup(con, f):
     if con.execute('SELECT 1 FROM users WHERE email=?', (email,)).fetchone():
         raise ValueError('Ya existe una cuenta con ese correo. Entra con tu contraseña.')
     slug = unique_slug(con, agency)
-    cur = con.execute('INSERT INTO agencies(slug, name, whatsapp, email, city, tagline) VALUES (?,?,?,?,?,?)',
-                      (slug, agency, wa, email, 'Ciudad de México', 'Bienes raíces'))
+    ref = con.execute('SELECT id FROM agencies WHERE slug=?', ((f.get('ref') or '').strip().lower()[:60],)).fetchone()
+    cur = con.execute('INSERT INTO agencies(slug, name, whatsapp, email, city, tagline, referred_by) VALUES (?,?,?,?,?,?,?)',
+                      (slug, agency, wa, email, 'Ciudad de México', 'Bienes raíces', ref['id'] if ref else None))
     aid = cur.lastrowid
     uid = con.execute('INSERT INTO users(agency_id, name, email, whatsapp, password_hash) VALUES (?,?,?,?,?)',
                       (aid, name, email, wa, auth.hash_password(pw))).lastrowid
@@ -613,7 +628,7 @@ def signup(con, f):
 
 def over_limit(con, a):
     n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
-    return n >= db.PLAN_LIMITS.get(a['plan'], 10)
+    return n >= db.listing_limit(con, a)
 
 
 def create_draft(con, a, uid, op, ptype):

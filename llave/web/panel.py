@@ -17,11 +17,13 @@ ICONS = {
     'servicios': '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/>',
     'academia': '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/>',
     'estadisticas': '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+    'invitar': '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/>',
 }
 TABS = [('inicio', 'Inicio', '/'), ('propiedades', 'Propiedades', '/propiedades'), ('clientes', 'Clientes', '/clientes'),
         ('portales', 'Portales', '/portales'), ('bolsa', 'Bolsa', '/bolsa'), ('sitio', 'Mi sitio', '/sitio'),
-        ('estadisticas', 'Estadísticas', '/estadisticas'), ('servicios', 'Servicios', '/servicios'), ('academia', 'Academia', '/academia')]
-DESKTOP_ONLY = {'estadisticas', 'servicios', 'academia'}  # on phones they live on Inicio
+        ('estadisticas', 'Estadísticas', '/estadisticas'), ('invitar', 'Invitar', '/invitar'), ('servicios', 'Servicios', '/servicios'),
+        ('academia', 'Academia', '/academia')]
+DESKTOP_ONLY = {'estadisticas', 'invitar', 'servicios', 'academia'}  # on phones they live on Inicio
 
 
 def _icon(k):
@@ -37,7 +39,8 @@ def layout(title, body, ctx=None, tab=None, flash=''):
             '<a href="%s" class="%s"%s>%s<span>%s</span></a>' % (href, ('on ' if k == tab else '') + ('desk' if k in DESKTOP_ONLY else ''),
                                                                  ' aria-current="page"' if k == tab else '', _icon(k), lab)
             for k, lab, href in TABS)
-        top_right = ('<span class="row small"><a href="%s" target="_blank" rel="noopener">Ver mi sitio ↗</a>'
+        top_right = ('<span class="row small">' + ('<a href="/admin">Admin</a>' if ctx['user']['role'] == 'admin' else '') +
+                     '<a href="%s" target="_blank" rel="noopener">Ver mi sitio ↗</a>'
                      '<form method="post" action="/salir" style="margin:0">%s<button class="btn ghost small">Salir</button></form></span>'
                      % (e(db.site_url(ctx['agency'])), csrf_field(ctx)))
     return ('<!doctype html><html lang="es-MX"><head><meta charset="utf-8">'
@@ -57,12 +60,13 @@ def notice(msg, kind=''):
 
 
 # ---------- auth ----------
-def signup(error='', values=None):
+def signup(error='', values=None, ref=''):
     v = values or {}
+    ref = v.get('ref') or ref
     body = ('<div class="auth"><div><h1>Tu sitio inmobiliario gratis, hoy.</h1>'
             '<p class="muted">Sube tus propiedades una vez. Aparecen en tu sitio, en Google y en los portales. '
             'Tus clientes te llegan por WhatsApp.</p></div>%s'
-            '<form class="stack card" method="post" action="/registro">'
+            '<form class="stack card" method="post" action="/registro"><input type="hidden" name="ref" value="%s">'
             '<label>Tu nombre<input name="name" value="%s" autocomplete="name" required></label>'
             '<label>Nombre de tu inmobiliaria o marca<input name="agency" value="%s" placeholder="Ej. Casas Roma" required></label>'
             '<label>Tu WhatsApp<input name="whatsapp" value="%s" inputmode="tel" placeholder="55 1234 5678" required></label>'
@@ -71,7 +75,7 @@ def signup(error='', values=None):
             '<label class="check"><input type="checkbox" name="terms" value="1" required> Acepto los términos y el aviso de privacidad (borrador).</label>'
             '<button class="btn">Crear mi sitio gratis</button>'
             '<p class="small muted">¿Ya tienes cuenta? <a href="/entrar">Entrar</a></p></form></div>') % (
-        notice(error, 'err'), e(v.get('name')), e(v.get('agency')), e(v.get('whatsapp')), e(v.get('email')))
+        notice(error, 'err'), e(ref), e(v.get('name')), e(v.get('agency')), e(v.get('whatsapp')), e(v.get('email')))
     return layout('Crear cuenta', body)
 
 
@@ -92,7 +96,7 @@ def dashboard(con, ctx, welcome=False):
     n_new = con.execute("SELECT COUNT(*) FROM leads WHERE agency_id=? AND status='nuevo'", (a['id'],)).fetchone()[0]
     n_feed = con.execute("SELECT COUNT(*) FROM portal_publications p JOIN listings l ON l.id=p.listing_id "
                          "WHERE l.agency_id=? AND p.enabled=1", (a['id'],)).fetchone()[0]
-    limit = db.PLAN_LIMITS.get(a['plan'], 10)
+    limit = db.listing_limit(con, a)
     steps = [
         (n_all > 0, 'Sube tu primera propiedad', '/nueva'),
         (con.execute('SELECT COUNT(*) FROM photos p JOIN listings l ON l.id=p.listing_id WHERE l.agency_id=?', (a['id'],)).fetchone()[0] >= 5,
@@ -115,6 +119,8 @@ def dashboard(con, ctx, welcome=False):
             '%s'
             '<section class="card"><div class="row" style="justify-content:space-between"><h2>Últimos clientes</h2>'
             '<a href="/clientes">Ver todos</a></div>%s</section>'
+            '<a class="card" href="/invitar" style="text-decoration:none;color:inherit"><h2>Invita a un colega · +%d propiedades</h2>'
+            '<span class="small muted">Por cada colega que publique con tu enlace.</span></a>'
             '<section class="grid2"><a class="card" href="/estadisticas" style="text-decoration:none;color:inherit"><h2>Estadísticas</h2>'
             '<span class="small muted">Visitas, clientes y tu tiempo de respuesta.</span></a>'
             '<a class="card" href="/servicios" style="text-decoration:none;color:inherit"><h2>Servicios</h2>'
@@ -129,7 +135,7 @@ def dashboard(con, ctx, welcome=False):
             '<a class="row" href="%s" style="text-decoration:none;color:inherit"><span class="pill %s">%s</span>%s</a>'
             % (href, 'ok' if ok else 'pendiente', '✓' if ok else '•', e(t)) for ok, t, href in steps)))
         if done < 5 else '<div class="notice">✓ Tu sitio está completo. <a href="/nueva">Sube otra propiedad</a></div>',
-        _leads_list(con, leads) if leads else '<p class="muted">Aún no tienes clientes. Cuando alguien escriba desde tu sitio, aparece aquí y en WhatsApp.</p>')
+        _leads_list(con, leads) if leads else '<p class="muted">Aún no tienes clientes. Cuando alguien escriba desde tu sitio, aparece aquí y en WhatsApp.</p>', db.REFERRAL_BONUS_LISTINGS)
     return layout('Inicio', body, ctx, 'inicio')
 
 
@@ -190,8 +196,10 @@ def listing_form(con, ctx, l=None, error='', ok=''):
     site_link = ''
     if lid and v.get('status') in db.PUBLIC_STATUSES:
         site_link = ('<span class="row small"><a href="%s" target="_blank" rel="noopener">Ver en mi sitio ↗</a>'
-                     '<a href="%s/ficha" target="_blank" rel="noopener">Ficha para imprimir ↗</a></span>') % (
-            e(db.listing_url(ctx['agency'], v)), e(db.listing_url(ctx['agency'], v)))
+                     '<a href="%s/ficha" target="_blank" rel="noopener">Ficha para imprimir ↗</a>'
+                     '<a href="%s/tarjeta-post.jpg" target="_blank" rel="noopener">Tarjeta Instagram ↗</a>'
+                     '<a href="%s/tarjeta-historia.jpg" target="_blank" rel="noopener">Historia ↗</a></span>') % (
+            (e(db.listing_url(ctx['agency'], v)),) * 4)
     rp_box = ('<label class="check"><input type="checkbox" name="rentapoliza_offer" value="1"%s> '
               'Ofrecer póliza jurídica RentaPóliza (rentas)</label>' % (' checked' if v.get('rentapoliza_offer') else ''))
     body = ('%s%s<div class="row" style="justify-content:space-between"><h1>%s</h1>%s</div>%s'
@@ -496,12 +504,14 @@ def site_settings(con, ctx, ok='', error=''):
     return layout('Mi sitio', body, ctx, 'sitio')
 
 
-def landing():
+def landing(ref=''):
+    port = '' if db.PORT in (80, 443) else ':%d' % db.PORT
+    reg = 'http://app.%s%s/registro%s' % (db.BASE_DOMAIN, port, ('?ref=' + e(ref)) if ref else '')
     body = ('<div class="auth" style="max-width:640px"><h1 style="font-size:34px">Tu sitio inmobiliario gratis. '
             'Tus propiedades en Google y en los portales. Tus clientes en WhatsApp.</h1>'
             '<p class="muted">Sube cada propiedad una vez y listo. Sin tarjeta para empezar.</p>'
-            '<div class="row"><a class="btn" href="/registro">Crear mi sitio gratis</a><a class="btn ghost" href="/entrar">Entrar</a></div>'
-            '<p class="small muted">Versión local de prueba. Nada aquí es público todavía.</p></div>')
+            '<div class="row"><a class="btn" href="%s">Crear mi sitio gratis</a><a class="btn ghost" href="http://app.%s%s/entrar">Entrar</a></div>'
+            '<p class="small muted">Versión local de prueba. Nada aquí es público todavía.</p></div>') % (reg, e(db.BASE_DOMAIN), port)
     return layout('Bienvenido', body)
 
 
@@ -692,7 +702,8 @@ def wizard_done(ctx, l):
             '<p class="muted">Ya está en tu sitio. Compártela con tus clientes.</p>'
             '<a class="btn" href="%s" target="_blank" rel="noopener">Ver en mi sitio</a>'
             '<a class="btn wa" href="%s" target="_blank" rel="noopener">Compartir por WhatsApp</a>'
-            '<a class="btn ghost" href="/nueva">Subir otra</a></div>') % (e(url), e(share))
+            '<a class="btn ghost" href="%s/tarjeta-post.jpg" target="_blank" rel="noopener">Tarjeta para Instagram</a>'
+            '<a class="btn ghost" href="/nueva">Subir otra</a></div>') % (e(url), e(share), e(url))
     return layout('¡Publicada!', body, ctx, 'propiedades')
 
 
@@ -777,7 +788,7 @@ def plans(con, ctx, ok=''):
         for k, name, price, feats in PLANS)
     body = ('%s<h1>Tu plan</h1><p class="muted">Usas %d de %d propiedades.</p><div class="grid2 wide plans">%s</div>'
             '<p class="small muted">Precios en pesos mexicanos con IVA. Sin plazo forzoso: cambias o cancelas cuando quieras.</p>') % (
-        notice(ok), n, db.PLAN_LIMITS.get(a['plan'], 10), cards)
+        notice(ok), n, db.listing_limit(con, a), cards)
     return layout('Tu plan', body, ctx, 'sitio')
 
 
@@ -790,3 +801,79 @@ def plan_checkout(ctx, key, error=''):
         e(db.OWNER), e(p[1]), 'Gratis' if not p[2] else '$%d MXN' % p[2], '' if not p[2] else ' <span class="muted small">al mes</span>',
         notice(error, 'err'), e(key), csrf_field(ctx))
     return layout('Cambiar de plan', body, ctx, 'sitio')
+
+
+# ---------- invite a colleague (referral loop) ----------
+def invite(con, ctx):
+    a = ctx['agency']
+    port = '' if db.PORT in (80, 443) else ':%d' % db.PORT
+    link = 'http://app.%s%s/registro?ref=%s' % (db.BASE_DOMAIN, port, a['slug'])
+    msg = ('Oye, estoy usando Ficha Única: sitio web inmobiliario gratis, tus propiedades en Mercado Libre y en Google, '
+           'y tus clientes directo a tu WhatsApp. Crea el tuyo aquí: ' + link)
+    rows = con.execute("SELECT a.name, a.created_at, (SELECT COUNT(*) FROM listings l WHERE l.agency_id=a.id AND l.status IN ('activa','apartada')) AS pub "
+                       "FROM agencies a WHERE a.referred_by=? ORDER BY a.id DESC", (a['id'],)).fetchall()
+    q = db.qualified_referrals(con, a['id'])
+    lst = ''.join('<div class="item" style="grid-template-columns:1fr auto"><div><b>%s</b><br><span class="small muted">desde %s</span></div>'
+                  '<span class="pill %s">%s</span></div>' % (e(r['name']), e(nice_date(r['created_at'])), 'ok' if r['pub'] else 'pendiente',
+                                                            'publicó ✓' if r['pub'] else 'aún sin publicar') for r in rows)
+    body = ('<h1>Invita a un colega</h1><p class="muted">Por cada colega que cree su sitio con tu enlace y publique su primera propiedad, '
+            'te damos <b>%d propiedades más</b> en tu plan, para siempre.</p>'
+            '<section class="card"><label for="ref-link">Tu enlace<input id="ref-link" value="%s" readonly onclick="this.select()"></label>'
+            '<div class="row"><a class="btn wa" href="%s" target="_blank" rel="noopener">Compartir por WhatsApp</a>'
+            '<button class="btn ghost" type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById(\'ref-link\').value);this.textContent=\'Copiado ✓\'">Copiar enlace</button></div></section>'
+            '<div class="stats"><div class="stat"><b>%d</b><small>Colegas invitados</small></div><div class="stat"><b>%d</b><small>Ya publicaron</small></div>'
+            '<div class="stat"><b>+%d</b><small>Propiedades extra ganadas</small></div></div><div class="list">%s</div>') % (
+        db.REFERRAL_BONUS_LISTINGS, e(link), e(whatsapp.wa_link('', msg)), len(rows), q, q * db.REFERRAL_BONUS_LISTINGS,
+        lst or '<p class="muted">Aún no invitas a nadie. Comparte tu enlace en tus grupos de asesores.</p>')
+    return layout('Invita a un colega', body, ctx, 'invitar')
+
+
+# ---------- admin (Josh / Samantha): every agency, leads at risk ----------
+def _mask_phone(p):
+    d = ''.join(ch for ch in (p or '') if ch.isdigit())
+    return ('•••• ' + d[-4:]) if d else '—'
+
+
+def admin(con, ctx):
+    lead_watch.ensure_columns(con)
+    tot = lambda q, *a: con.execute(q, a).fetchone()[0]
+    risk = con.execute(
+        "SELECT l.*, a.name AS agency_name, a.slug, a.whatsapp AS agency_wa, li.ref, li.title FROM leads l "
+        "JOIN agencies a ON a.id=l.agency_id LEFT JOIN listings li ON li.id=l.listing_id "
+        "WHERE l.status='nuevo' AND l.first_response_at IS NULL AND l.created_at < datetime('now','-5 minutes') "
+        "ORDER BY l.created_at LIMIT 100").fetchall()
+    agencies = con.execute(
+        "SELECT a.*, (SELECT COUNT(*) FROM listings x WHERE x.agency_id=a.id AND x.status IN ('activa','apartada')) AS pub, "
+        "(SELECT COUNT(*) FROM leads x WHERE x.agency_id=a.id AND x.created_at >= datetime('now','-30 days')) AS leads30, "
+        "(SELECT COUNT(*) FROM leads x WHERE x.agency_id=a.id AND x.status='nuevo' AND x.first_response_at IS NULL "
+        "  AND x.created_at < datetime('now','-5 minutes')) AS late, "
+        "(SELECT MAX(at) FROM audit x WHERE x.actor IN (SELECT 'user:'||u.id FROM users u WHERE u.agency_id=a.id)) AS last_seen, "
+        "(SELECT name FROM agencies r WHERE r.id=a.referred_by) AS ref_by "
+        "FROM agencies a ORDER BY late DESC, a.id DESC LIMIT 500").fetchall()
+    ob = con.execute("SELECT kind, status, COUNT(*) AS n FROM outbox GROUP BY kind, status ORDER BY n DESC").fetchall()
+    risk_rows = ''.join(
+        '<tr><td><b>%s</b><br><span class="small muted">%s · %s</span></td><td>%s<br><span class="small muted">%s</span></td>'
+        '<td><span class="pill error">%s min</span></td><td>%s</td></tr>' % (
+            e(r['agency_name']), e(r['slug']), e(_mask_phone(r['agency_wa'])), e((r['name'] or 'Sin nombre').split(' ')[0]),
+            e(r['ref'] or 'general'), _age_min(r['created_at']) or 0, e(r['source'])) for r in risk)
+    ag_rows = ''.join(
+        '<tr><td><b>%s</b><br><a class="small" href="%s" target="_blank" rel="noopener">%s</a></td><td>%s</td><td>%d</td><td>%d</td>'
+        '<td>%s</td><td>%s</td><td class="small">%s</td></tr>' % (
+            e(a['name']), e(db.site_url(a)), e(a['slug']), e(a['plan']), a['pub'], a['leads30'],
+            ('<span class="pill error">%d</span>' % a['late']) if a['late'] else '0', e(a['ref_by'] or '—'),
+            e(nice_date(a['last_seen'])) if a['last_seen'] else '—') for a in agencies)
+    body = ('<h1>Admin · Ficha Única</h1><p class="muted small">Solo lectura. Visible para cuentas con rol admin.</p>'
+            '<div class="stats"><div class="stat"><b>%d</b><small>Agencias</small></div><div class="stat"><b>%d</b><small>Propiedades públicas</small></div>'
+            '<div class="stat"><b>%d</b><small>Clientes (30 días)</small></div><div class="stat"><b>%d</b><small>Clientes en riesgo (&gt;5 min)</small></div></div>'
+            '<section class="card"><h2>Clientes en riesgo</h2>%s</section>'
+            '<section class="card"><h2>Agencias</h2><div class="tbl" tabindex="0" role="region" aria-label="Agencias"><table><thead><tr>'
+            '<th scope="col">Agencia</th><th scope="col">Plan</th><th scope="col">Públicas</th><th scope="col">Clientes 30 d</th>'
+            '<th scope="col">En riesgo</th><th scope="col">Invitada por</th><th scope="col">Última actividad</th></tr></thead><tbody>%s</tbody></table></div></section>'
+            '<section class="card"><h2>Salida (modo prueba)</h2><p class="small">%s</p></section>') % (
+        tot('SELECT COUNT(*) FROM agencies'), tot("SELECT COUNT(*) FROM listings WHERE status IN ('activa','apartada')"),
+        tot("SELECT COUNT(*) FROM leads WHERE created_at >= datetime('now','-30 days')"), len(risk),
+        ('<div class="tbl" tabindex="0" role="region" aria-label="Clientes en riesgo"><table><thead><tr><th scope="col">Agencia</th>'
+         '<th scope="col">Cliente</th><th scope="col">Esperando</th><th scope="col">Origen</th></tr></thead><tbody>%s</tbody></table></div>' % risk_rows)
+        if risk else notice('✓ Ningún cliente esperando más de 5 minutos.'),
+        ag_rows, e(' · '.join('%s/%s: %d' % (o['kind'], o['status'], o['n']) for o in ob) or 'Sin operaciones.'))
+    return layout('Admin', body, ctx, 'admin')

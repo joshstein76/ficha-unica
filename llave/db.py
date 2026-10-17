@@ -13,6 +13,7 @@ PORT = int(os.environ.get('LLAVE_PORT', '8640'))
 
 PLAN_LIMITS = {'gratis': 10, 'pro': 50, 'agencia': 200}
 PUBLIC_STATUSES = ('activa', 'apartada')  # shown on sites + fed to portals
+REFERRAL_BONUS_LISTINGS = 5  # extra listings per invited colleague who publishes (Claude's call 10-17; Josh can change)
 
 BRAND = 'Ficha Única'                 # public name (Josh 10-17); LLAVE = internal code name
 OWNER = 'Ciao Bella Marketing'        # legal owner of the platform (Josh 10-17)
@@ -33,6 +34,8 @@ def init(con):
     for col in ('first_reply', 'first_reply_noname'):
         if col not in cols:
             con.execute('ALTER TABLE agencies ADD COLUMN %s TEXT' % col)
+    if 'referred_by' not in cols:  # agent referral loop
+        con.execute('ALTER TABLE agencies ADD COLUMN referred_by INTEGER REFERENCES agencies(id)')
     ucols = {r[1] for r in con.execute('PRAGMA table_info(users)')}
     for col in ('slug', 'bio', 'zones'):  # agent public profile
         if col not in ucols:
@@ -133,3 +136,16 @@ def public_listing_ids(con, agency_id, include_shared=True):
 
 def audit(con, actor, action, detail=''):
     con.execute('INSERT INTO audit(actor, action, detail) VALUES (?,?,?)', (actor, action, detail))
+
+
+def qualified_referrals(con, agency_id):
+    """Agencies this one invited that already have at least one public listing."""
+    return con.execute("SELECT COUNT(DISTINCT a.id) FROM agencies a JOIN listings l ON l.agency_id=a.id "
+                       "WHERE a.referred_by=? AND l.status IN ('activa','apartada')", (agency_id,)).fetchone()[0]
+
+
+def listing_limit(con, agency, plan=None):
+    """Plan limit + referral bonus."""
+    a = dict(agency)
+    base = PLAN_LIMITS.get(plan or a.get('plan') or 'gratis', PLAN_LIMITS['gratis'])
+    return base + REFERRAL_BONUS_LISTINGS * qualified_referrals(con, a['id'])
