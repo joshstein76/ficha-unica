@@ -208,6 +208,18 @@ class WebFlow(unittest.TestCase):
         self.assertEqual(s, 200)
         self.assertIn('Ciao Bella Marketing', page)
 
+    def test_mercadolibre_connect_demo(self):
+        cookie, csrf = self.signup('Conecta ML', 'ml@ejemplo.test')
+        s, page, _ = req('app.fichaunica.localhost', '/portales/mercadolibre/conectar', cookie=cookie)
+        self.assertEqual(s, 200)
+        self.assertIn('modo demo', page)
+        s, _, _ = req('app.fichaunica.localhost', '/portales/mercadolibre/conectar', {'csrf': csrf, 'demo': '1'}, cookie)
+        self.assertEqual(s, 303)
+        s, page, _ = req('app.fichaunica.localhost', '/portales', cookie=cookie)
+        self.assertIn('demo, sin publicar de verdad', page)
+        s, page, _ = req('app.fichaunica.localhost', '/oauth/mercadolibre/callback?state=nope&code=x', cookie=cookie)
+        self.assertEqual(s, 400)
+
     def test_media_traversal_blocked(self):
         s, _, _ = req('app.fichaunica.localhost', '/media/../../etc/passwd')
         self.assertEqual(s, 404)

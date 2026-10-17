@@ -2,7 +2,7 @@
 Pages are plain functions returning HTML; server.py handles routing, sessions and POSTs."""
 import json
 
-from .. import db, replies, whatsapp
+from .. import db, ml_oauth, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS)
 from .styles import FONTS, PANEL
@@ -106,7 +106,7 @@ def dashboard(con, ctx, welcome=False):
             '<div class="stat"><b>%d/%d</b><small>Usadas en plan %s</small></div>'
             '<div class="stat"><b>%d</b><small>Clientes nuevos</small></div>'
             '<div class="stat"><b>%d</b><small>Publicaciones en portales</small></div></div>'
-            '<section class="card"><h2>Tu sitio listo en 5 pasos (%d/5)</h2><div class="list">%s</div></section>'
+            '%s'
             '<section class="card"><div class="row" style="justify-content:space-between"><h2>Últimos clientes</h2>'
             '<a href="/clientes">Ver todos</a></div>%s</section>'
             '<section class="grid2"><a class="card" href="/servicios" style="text-decoration:none;color:inherit"><h2>Servicios</h2>'
@@ -114,10 +114,13 @@ def dashboard(con, ctx, welcome=False):
             '<a class="card" href="/academia" style="text-decoration:none;color:inherit"><h2>Academia</h2>'
             '<span class="small muted">Clases cortas para vender y rentar más.</span></a></section>') % (
         notice('¡Listo! Tu sitio ya existe. Ahora sube tu primera propiedad.') if welcome else '',
-        e(ctx['user']['name'].split(' ')[0]), e(db.site_url(a)), e(db.site_url(a).split('//')[1]),
-        n_list, n_all, limit, e(a['plan']), n_new, n_feed, done,
-        ''.join('<a class="row" href="%s" style="text-decoration:none;color:inherit"><span class="pill %s">%s</span>%s</a>'
-                % (href, 'ok' if ok else 'pendiente', '✓' if ok else '•', e(t)) for ok, t, href in steps),
+        e(a['name'] if ctx['user']['name'].split(' ')[0].lower() in replies.GENERIC_ACCOUNT else ctx['user']['name'].split(' ')[0]),
+        e(db.site_url(a)), e(db.site_url(a).split('//')[1]),
+        n_list, n_all, limit, e(a['plan']), n_new, n_feed,
+        ('<section class="card"><h2>Tu sitio listo en 5 pasos (%d/5)</h2><div class="list">%s</div></section>' % (done, ''.join(
+            '<a class="row" href="%s" style="text-decoration:none;color:inherit"><span class="pill %s">%s</span>%s</a>'
+            % (href, 'ok' if ok else 'pendiente', '✓' if ok else '•', e(t)) for ok, t, href in steps)))
+        if done < 5 else '<div class="notice">✓ Tu sitio está completo. <a href="/propiedades/nueva">Sube otra propiedad</a></div>',
         _leads_list(con, leads) if leads else '<p class="muted">Aún no tienes clientes. Cuando alguien escriba desde tu sitio, aparece aquí y en WhatsApp.</p>')
     return layout('Inicio', body, ctx, 'inicio')
 
@@ -142,7 +145,8 @@ def listings(con, ctx, flash=''):
         for r in rows)
     body = ('%s<div class="row" style="justify-content:space-between"><h1>Propiedades</h1>'
             '<span class="row"><a class="btn ghost small" href="/propiedades/importar">Importar CSV</a>'
-            '<a class="btn" href="/propiedades/nueva">+ Nueva</a></span></div><div class="list">%s</div>') % (
+            '<a class="btn" href="/propiedades/nueva">+ Nueva</a></span></div><div class="list">%s</div>'
+            '<a class="btn fab" href="/propiedades/nueva" aria-label="Nueva propiedad">+</a>') % (
         flash, items or '<p class="muted">Aún no hay propiedades. Sube la primera: tarda 2 minutos.</p>')
     return layout('Propiedades', body, ctx, 'propiedades')
 
@@ -287,11 +291,27 @@ def portals(con, ctx, flash=''):
             '<section class="card"><div class="tbl"><table><thead><tr><th>Propiedad</th>%s</tr></thead><tbody>%s</tbody></table></div>'
             '<p class="small muted">Mercado Libre: por ahora generamos la publicación en modo prueba; '
             'para publicar de verdad conectarás tu propia cuenta.</p></section>'
-            '<section class="card"><h2>Tus feeds</h2><ul class="small">%s</ul></section>'
+            '%s<section class="card"><h2>Tus feeds</h2><ul class="small">%s</ul></section>'
             '<section class="card"><h2>Próximamente</h2><ul class="small">%s</ul></section>') % (
         flash, head, ''.join(trs) or '<tr><td colspan="9" class="muted">Publica una propiedad (estado Activa) para activarla en portales.</td></tr>',
-        feeds, soon)
+        _ml_card(con, ctx), feeds, soon)
     return layout('Portales', body, ctx, 'portales')
+
+
+def _ml_card(con, ctx):
+    st = ml_oauth.status(con, ctx['agency']['id'])
+    if st.get('status') in ('conectada', 'demo'):
+        inner = ('<p style="margin:0">Cuenta: <b>%s</b> <span class="pill %s">%s</span></p>'
+                 '<form method="post" action="/portales/mercadolibre/desconectar">%s<button class="btn ghost small">Desconectar</button></form>') % (
+            e(st.get('nickname') or ''), 'ok' if st['status'] == 'conectada' else 'pendiente',
+            'conectada' if st['status'] == 'conectada' else 'demo, sin publicar de verdad', csrf_field(ctx))
+    else:
+        inner = ('<p class="small muted" style="margin:0">Publica en Mercado Libre Inmuebles con tu propia cuenta. '
+                 'Tus precios y fotos se actualizan solos.</p><div class="row"><a class="btn small" href="/portales/mercadolibre/conectar">Conectar mi cuenta</a>'
+                 '%s</div>') % ('' if st.get('configured') else
+                                '<form method="post" action="/portales/mercadolibre/conectar">%s<input type="hidden" name="demo" value="1">'
+                                '<button class="btn ghost small">Ver demo</button></form>' % csrf_field(ctx))
+    return '<section class="card"><h2>Mercado Libre</h2>%s</section>' % inner
 
 
 # ---------- Bolsa ----------
@@ -390,8 +410,10 @@ def import_page(ctx, preview=None, csv_text='', error='', done=None):
             '(guárdalo como CSV) y súbelo aquí. Entran como borrador para que las revises antes de publicar.</p>',
             notice(error, 'err')]
     if done:
-        body.append(notice('Listo: %d propiedades importadas como borrador.%s' % (
-            len(done['created']), (' %d omitidas.' % len(done['skipped'])) if done['skipped'] else '')))
+        body.append(notice('Listo: %d propiedades importadas como borrador.%s%s' % (
+            len(done['created']), (' %d omitidas.' % len(done['skipped'])) if done['skipped'] else '',
+            (' Estamos bajando %d fotos de tus enlaces; aparecen en cada propiedad en unos minutos.' % done['photos_queued'])
+            if done.get('photos_queued') else '')))
         body.append('<p><a class="btn" href="/propiedades">Ver mis propiedades</a></p>')
     if preview:
         n = sum(1 for r in preview['rows'] if r['action'] == 'crear')
@@ -405,7 +427,7 @@ def import_page(ctx, preview=None, csv_text='', error='', done=None):
                     '<div class="tbl"><table><thead><tr><th>Fila</th><th>Título</th><th>Precio</th><th></th></tr></thead><tbody>%s</tbody></table></div>'
                     '<form method="post" action="/propiedades/importar">%s<input type="hidden" name="step" value="commit">'
                     '<textarea name="csv" hidden>%s</textarea><button class="btn"%s>Importar %d propiedades</button></form>'
-                    '<p class="small muted">Las fotos por enlace se agregan en la siguiente versión; por ahora súbelas en cada propiedad.</p></section>' % (
+                    '<p class="small muted">Si tu archivo trae enlaces de fotos, las bajamos solas (máximo 20 por propiedad).</p></section>' % (
                         n, preview['total'], ''.join(notice(w, 'warn') for w in preview['warnings']), cols, trs, csrf_field(ctx),
                         e(csv_text), '' if n else ' disabled', n))
     body.append('<form class="stack card" method="post" action="/propiedades/importar" enctype="multipart/form-data">%s'

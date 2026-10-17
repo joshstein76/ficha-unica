@@ -55,6 +55,7 @@ nav.tabs a{display:grid;justify-items:center;gap:2px;font-size:11px;color:var(--
 nav.tabs a.on{color:var(--brand);font-weight:700}nav.tabs svg{width:22px;height:22px}
 @media(min-width:900px){body{padding-bottom:0}nav.tabs{position:static;display:flex;justify-content:center;gap:18px;border:0;
 border-bottom:1px solid var(--line);padding:0}nav.tabs a{grid-auto-flow:column;font-size:14px;padding:12px 4px}nav.tabs a.desk{display:grid}}
+.fab{display:none}@media(max-width:899px){.fab{display:flex;position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(84px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;font-size:28px;padding:0;z-index:8;box-shadow:0 6px 18px rgba(0,0,0,.3)}}
 .auth{max-width:420px;margin:6vh auto;padding:0 16px;display:grid;gap:18px}
 :focus-visible{outline:3px solid var(--brand);outline-offset:2px}
 """
@@ -100,6 +101,16 @@ text-decoration:none;font-weight:600;font-family:var(--body);font-size:15px;whit
 footer.sf{border-top:1px solid var(--line);padding-block:28px;color:var(--muted);font-size:14px}
 footer.sf .in{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-between}
 .float{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));z-index:9;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.lp-price{margin:6px 0 0;font-size:22px;font-weight:700}.lp-price .muted{font-size:15px;font-weight:400}
+.swipe,.swipe-hint,.mbar{display:none}
+@media(max-width:700px){.gal,.strip{display:none}.swipe{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;
+margin-inline:calc(-1 * max(16px,env(safe-area-inset-left)));padding-inline:max(16px,env(safe-area-inset-left))}
+.swipe img{flex:0 0 88%;aspect-ratio:4/3;object-fit:cover;scroll-snap-align:center;border-radius:calc(var(--br)/2)}
+.swipe-hint{display:block;margin:-12px 0 0}.float{display:none}.box{position:static}
+.mbar{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:9;background:var(--hdr);
+border-top:1px solid var(--line);padding:10px max(16px,env(safe-area-inset-left)) calc(10px + env(safe-area-inset-bottom))}
+.mbar a{justify-content:center;min-height:48px}.mbar .ask{display:flex;align-items:center;border-radius:var(--br);background:var(--accent);
+color:var(--on-accent);text-decoration:none;font-weight:600;font-family:var(--body)}body:has(.mbar){padding-bottom:76px}}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 """
 

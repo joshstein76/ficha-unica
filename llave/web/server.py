@@ -14,9 +14,10 @@ import traceback
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .. import auth, db, importer, photos, replies, whatsapp
+import threading
+
+from .. import auth, db, importer, ml_oauth, photo_fetch, photos, replies, whatsapp
 from ..feeds import build_feed, registry
-from ..feeds.mercadolibre import dry_run_publish
 from ..leads import create_lead
 from . import panel, site
 from .common import csrf_ok, to_cents, to_num
@@ -253,6 +254,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(panel.import_page(ctx, error='El archivo es muy grande (máximo 2 MB).'), 400)
             if f.get('step') == 'commit':
                 done = importer.commit(con, a['id'], uid, text)
+                photo_fetch.ensure_table(con)
+                done['photos_queued'] = photo_fetch.enqueue(con, done.get('photo_urls') or {})
+                con.commit()
+                if done['photos_queued']:
+                    start_photo_worker()
                 return self.send(panel.import_page(ctx, done=done))
             return self.send(panel.import_page(ctx, importer.preview(con, a['id'], text), text))
         if path == '/propiedades/nueva':
@@ -307,6 +313,29 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(panel.leads(con, ctx))
         if path == '/portales':
             return self.send(panel.portals(con, ctx))
+        if path == '/portales/mercadolibre/conectar':
+            if method == 'POST' and f.get('demo') == '1':
+                ml_oauth.connect_demo(con, a['id'])
+                con.commit()
+                return self.redirect('/portales')
+            url = ml_oauth.start(con, a['id'])
+            con.commit()
+            if url:
+                return self.redirect(url)
+            return self.send(panel.portals(con, ctx, panel.notice(
+                'La conexión con Mercado Libre se activa cuando Ficha Única registre su app. Mientras tanto puedes ver el flujo en modo demo.', 'warn')))
+        if path == '/portales/mercadolibre/desconectar' and method == 'POST':
+            ml_oauth.disconnect(con, a['id'])
+            con.commit()
+            return self.redirect('/portales')
+        if path == '/oauth/mercadolibre/callback':
+            try:
+                ml_oauth.finish(con, query.get('state', ''), query.get('code', ''))
+                con.commit()
+                return self.redirect('/portales')
+            except (ValueError, RuntimeError) as ex:
+                con.commit()
+                return self.send(panel.portals(con, ctx, panel.notice(str(ex), 'err')), 400)
         m = re.match(r'^/portales/(\d+)/([a-z0-9_]+)$', path)
         if m and method == 'POST':
             l = con.execute("SELECT * FROM listings WHERE id=? AND agency_id=?", (int(m.group(1)), a['id'])).fetchone()
@@ -319,7 +348,7 @@ class Handler(BaseHTTPRequestHandler):
                         'ON CONFLICT(listing_id, portal) DO UPDATE SET enabled=excluded.enabled, status=excluded.status',
                         (l['id'], key, on, 'pendiente'))
             if on and key == 'mercadolibre':
-                dry_run_publish(con, l['id'])
+                ml_oauth.publish(con, l['id'])  # live only with a connected account + LLAVE_ML_LIVE=1; else outbox dry-run
             db.audit(con, actor, 'portal_toggle', '%s listing:%d -> %d' % (key, l['id'], on))
             con.commit()
             return self.redirect('/portales')
@@ -357,6 +386,29 @@ class Handler(BaseHTTPRequestHandler):
             con.commit()
             return self.redirect('/sitio')
         return self.send(panel.layout('No encontrado', panel.notice('Página no encontrada.', 'err'), ctx), 404)
+
+
+# ---------- background photo downloads (CSV import) ----------
+_worker_lock = threading.Lock()
+
+
+def start_photo_worker():
+    """One worker at a time, own DB connection; downloads queued CSV photo URLs (SSRF-guarded in photo_fetch)."""
+    if not _worker_lock.acquire(blocking=False):
+        return
+
+    def run():
+        c = db.connect()
+        try:
+            photo_fetch.ensure_table(c)
+            while True:
+                r = photo_fetch.run_jobs(c, limit=20)
+                if not (r.get('lista', 0) + r.get('error', 0)):
+                    break
+        finally:
+            c.close()
+            _worker_lock.release()
+    threading.Thread(target=run, daemon=True).start()
 
 
 # ---------- actions (module-level so tests can call them) ----------

@@ -116,8 +116,11 @@ def listing(con, agency, c, shared_split=None, error=''):
     rp = rentapoliza_offer(c)
     am = ''.join('<li>%s</li>' % e(x) for x in c['amenities'])
     contact_name = agency['name']
+    swipe = ''.join('<img src="%s" alt="%s"%s>' % (e(p['url_800']), e(p['alt']), '' if i == 0 else ' loading="lazy"')
+                    for i, p in enumerate(photos))
     body = ('<main class="in sec"><div><span class="tag">%s · %s · folio %s</span><h1>%s</h1>'
-            '<p class="muted">%s</p></div><div class="gal">%s</div>%s'
+            '<p class="muted">%s</p><p class="lp-price">%s <span class="muted">%s</span></p></div>'
+            '<div class="gal">%s</div>%s<div class="swipe" aria-label="Fotos (desliza)">%s</div><p class="swipe-hint muted small">%d fotos · desliza →</p>'
             '<div class="lp"><div class="sec" style="padding:0"><div class="facts">%s</div>'
             '%s<div><h2>Descripción</h2><p class="desc">%s</p></div>%s%s</div>'
             '<aside class="box" id="contacto"><div class="agent"><div class="av">%s</div><div><b>%s</b><br>'
@@ -132,7 +135,8 @@ def listing(con, agency, c, shared_split=None, error=''):
             '<a href="/aviso-de-privacidad">aviso de privacidad</a>.</label>%s'
             '<button type="submit">Quiero más información</button></form></aside></div></main>%s') % (
         'Venta' if c['operation'] == 'venta' else 'Renta', e(label(TYPES, c['property_type'])), e(c['ref']),
-        e(c['title']), e(where), gal, ('<div class="strip">%s</div>' % strip) if strip else '',
+        e(c['title']), e(where), e(money(c['price'], c['currency'])), e(facts_line(c)), gal,
+        ('<div class="strip">%s</div>' % strip) if strip else '', swipe, len(photos),
         ''.join(facts),
         ('<p class="muted small">Precio confirmado el %s. Sujeto a cambio y disponibilidad.</p>' % nice_date(c['price_date']))
         if c['price_date'] and c['price'] is not None else '',
@@ -141,7 +145,9 @@ def listing(con, agency, c, shared_split=None, error=''):
         e(contact_name[:1].upper()), e(contact_name),
         ('<a class="wa" href="%s" rel="nofollow">%s Escribir por WhatsApp</a>' % (e(wa), WA_ICON)) if wa else '',
         c['id'], e(c['ref']), ('<p class="muted small" role="alert">%s</p>' % e(error)) if error else '',
-        ('<a class="wa float" href="%s" rel="nofollow" aria-label="WhatsApp">%s</a>' % (e(wa), WA_ICON)) if wa else '')
+        ('<a class="wa float" href="%s" rel="nofollow" aria-label="WhatsApp">%s</a>'
+         '<nav class="mbar"><a class="wa" href="%s" rel="nofollow">%s WhatsApp</a><a class="ask" href="#contacto">Me interesa</a></nav>'
+         % (e(wa), WA_ICON, e(wa), WA_ICON)) if wa else '')
     og = ''.join('<meta property="%s" content="%s">' % (k, e(v)) for k, v in (
         ('og:title', c['title']), ('og:type', 'website'), ('og:url', canon),
         ('og:image', photos[0]['url'] if photos else ''), ('og:description', c['description'][:200])))
