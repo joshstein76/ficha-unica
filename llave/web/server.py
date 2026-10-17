@@ -1,7 +1,7 @@
 """LLAVE local server. Routes by Host header:
   app.<base>        agent panel      ·  <slug>.<base>  agent site (+ /feeds/<portal>.xml)
   <custom domain>   agent site (verified only)  ·  <base>  landing
-Run: python3 -m llave.web.server   (then open http://app.llave.localhost:8640)"""
+Run: python3 -m llave.web.server   (then open http://app.fichaunica.localhost:8640)"""
 import cgi
 import datetime
 import json
@@ -14,7 +14,7 @@ import traceback
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .. import auth, db, photos, whatsapp
+from .. import auth, db, importer, photos, whatsapp
 from ..feeds import build_feed, registry
 from ..feeds.mercadolibre import dry_run_publish
 from ..leads import create_lead
@@ -30,7 +30,7 @@ class Ctx(dict):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = 'LLAVE/0.1'
+    server_version = 'FichaUnica/0.1'
 
     # ---------- plumbing ----------
     def log_message(self, fmt, *args):
@@ -216,6 +216,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(panel.login('Correo o contraseña incorrectos.'), 401)
                 return self.start_session(con, u['id'])
             return self.send(panel.login())
+        if path in ('/terminos', '/privacidad'):
+            return self.send(panel.legal(path[1:]))
         if not ctx:
             return self.redirect('/entrar') if path != '/' else self.send(panel.landing())
         f, files = ({}, {})
@@ -237,6 +239,22 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(panel.dashboard(con, ctx, welcome=query.get('bienvenida') == '1'))
         if path == '/propiedades':
             return self.send(panel.listings(con, ctx))
+        if path == '/servicios':
+            return self.send(panel.services(ctx))
+        if path == '/academia':
+            return self.send(panel.academy(ctx))
+        if path == '/propiedades/importar':
+            if method != 'POST':
+                return self.send(panel.import_page(ctx))
+            text = (files.get('archivo') or [b''])[0].decode('utf-8-sig', 'replace') or f.get('csv', '')
+            if not text.strip():
+                return self.send(panel.import_page(ctx, error='Sube un archivo CSV o pega el contenido.'), 400)
+            if len(text) > 2 * 1024 * 1024:
+                return self.send(panel.import_page(ctx, error='El archivo es muy grande (máximo 2 MB).'), 400)
+            if f.get('step') == 'commit':
+                done = importer.commit(con, a['id'], uid, text)
+                return self.send(panel.import_page(ctx, done=done))
+            return self.send(panel.import_page(ctx, importer.preview(con, a['id'], text), text))
         if path == '/propiedades/nueva':
             if method == 'POST':
                 try:
@@ -466,7 +484,7 @@ def main():
     db.init(con)
     con.close()
     srv = ThreadingHTTPServer(('127.0.0.1', db.PORT), Handler)
-    print('LLAVE local: panel http://app.%s:%d · sitios http://<slug>.%s:%d' % (db.BASE_DOMAIN, db.PORT, db.BASE_DOMAIN, db.PORT))
+    print('Ficha Única (LLAVE) local: panel http://app.%s:%d · sitios http://<slug>.%s:%d' % (db.BASE_DOMAIN, db.PORT, db.BASE_DOMAIN, db.PORT))
     srv.serve_forever()
 
 

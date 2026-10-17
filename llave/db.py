@@ -8,11 +8,14 @@ import unicodedata
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.environ.get('LLAVE_DB', os.path.join(ROOT, 'data', 'llave.db'))
 MEDIA_DIR = os.environ.get('LLAVE_MEDIA', os.path.join(ROOT, 'data', 'media'))
-BASE_DOMAIN = os.environ.get('LLAVE_BASE_DOMAIN', 'llave.localhost')  # prod: the public brand domain
+BASE_DOMAIN = os.environ.get('LLAVE_BASE_DOMAIN', 'fichaunica.localhost')  # prod: the public brand domain
 PORT = int(os.environ.get('LLAVE_PORT', '8640'))
 
 PLAN_LIMITS = {'gratis': 10, 'pro': 50, 'agencia': 200}
 PUBLIC_STATUSES = ('activa', 'apartada')  # shown on sites + fed to portals
+
+BRAND = 'Ficha Única'                 # public name (Josh 10-17); LLAVE = internal code name
+OWNER = 'Ciao Bella Marketing'        # legal owner of the platform (Josh 10-17)
 
 
 def connect(path=None):

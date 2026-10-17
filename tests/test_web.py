@@ -87,12 +87,12 @@ class WebFlow(unittest.TestCase):
         cls.srv.shutdown()
 
     def signup(self, agency, email):
-        s, body, h = req('app.llave.localhost', '/registro', {
+        s, body, h = req('app.fichaunica.localhost', '/registro', {
             'name': 'María López', 'agency': agency, 'whatsapp': '55 1234 5678', 'email': email,
             'password': 'segura1234', 'terms': '1'})
         self.assertEqual(s, 303, body[:300])
         cookie = h['Set-Cookie'].split(';')[0]
-        s, body, _ = req('app.llave.localhost', '/', cookie=cookie)
+        s, body, _ = req('app.fichaunica.localhost', '/', cookie=cookie)
         csrf = re.search(r'name="csrf" value="([0-9a-f]+)"', body).group(1)
         return cookie, csrf
 
@@ -102,7 +102,7 @@ class WebFlow(unittest.TestCase):
         a = con.execute("SELECT * FROM agencies WHERE slug='casas-roma'").fetchone()
         self.assertIsNotNone(a)
         # CSRF enforced
-        s, _, _ = req('app.llave.localhost', '/propiedades/nueva', {'title': 'x'}, cookie)
+        s, _, _ = req('app.fichaunica.localhost', '/propiedades/nueva', {'title': 'x'}, cookie)
         self.assertEqual(s, 403)
         form = {'csrf': csrf, 'title': 'Departamento con terraza en la Roma Norte', 'operation': 'renta',
                 'property_type': 'departamento', 'price': '28,000', 'currency': 'MXN', 'status': 'activa',
@@ -110,21 +110,21 @@ class WebFlow(unittest.TestCase):
                 'bedrooms': '2', 'bathrooms': '2', 'parking': '1', 'colonia': 'Roma Norte', 'municipio': 'Cuauhtémoc',
                 'estado': 'Ciudad de México', 'share_in_bolsa': '1', 'share_split_pct': '50',
                 'rentapoliza_offer': '1', 'internal_note': 'NOTA-SECRETA-123', 'amenities': 'Terraza, Gimnasio'}
-        s, _, h = req('app.llave.localhost', '/propiedades/nueva', form, cookie)
+        s, _, h = req('app.fichaunica.localhost', '/propiedades/nueva', form, cookie)
         self.assertEqual(s, 303)
         lid = int(re.search(r'/propiedades/(\d+)', h['Location']).group(1))
         body, ct = multipart({'csrf': csrf}, [('fotos', ('a%d.jpg' % i, jpeg(color=(i * 30, 100, 150)))) for i in range(5)]
                              + [('fotos', ('chica.jpg', jpeg(300, 300)))])
-        s, page, _ = req('app.llave.localhost', '/propiedades/%d/fotos' % lid, body, cookie, ct)
+        s, page, _ = req('app.fichaunica.localhost', '/propiedades/%d/fotos' % lid, body, cookie, ct)
         self.assertEqual(s, 200)
         self.assertIn('5 fotos listas', page)
         self.assertIn('no se pudieron usar', page)
         # public site + listing page with JSON-LD, canonical, RentaPóliza hook
-        s, home, _ = req('casas-roma.llave.localhost', '/')
+        s, home, _ = req('casas-roma.fichaunica.localhost', '/')
         self.assertEqual(s, 200)
         self.assertIn('Departamento con terraza', home)
         slug = con.execute('SELECT slug FROM listings WHERE id=?', (lid,)).fetchone()['slug']
-        s, lp, _ = req('casas-roma.llave.localhost', '/propiedad/' + slug)
+        s, lp, _ = req('casas-roma.fichaunica.localhost', '/propiedad/' + slug)
         self.assertEqual(s, 200)
         ld = json.loads(re.search(r'<script type="application/ld\+json">(.*?)</script>', lp, re.S).group(1))
         self.assertEqual(ld['@type'], 'RealEstateListing')
@@ -132,23 +132,23 @@ class WebFlow(unittest.TestCase):
         self.assertIn('rel="canonical"', lp)
         self.assertIn('RentaPóliza', lp)
         self.assertNotIn('NOTA-SECRETA-123', lp)
-        s, fi, _ = req('casas-roma.llave.localhost', '/propiedad/%s/ficha' % slug)
+        s, fi, _ = req('casas-roma.fichaunica.localhost', '/propiedad/%s/ficha' % slug)
         self.assertEqual(s, 200)
         self.assertIn('noindex', fi)
         self.assertNotIn('NOTA-SECRETA-123', fi)
         # portal toggle -> feed
-        s, _, _ = req('app.llave.localhost', '/portales/%d/trovit' % lid, {'csrf': csrf}, cookie)
+        s, _, _ = req('app.fichaunica.localhost', '/portales/%d/trovit' % lid, {'csrf': csrf}, cookie)
         self.assertEqual(s, 303)
-        s, feed, _ = req('casas-roma.llave.localhost', '/feeds/trovit.xml')
+        s, feed, _ = req('casas-roma.fichaunica.localhost', '/feeds/trovit.xml')
         self.assertEqual(s, 200)
         self.assertIn('For Rent', feed)
         self.assertNotIn('NOTA-SECRETA-123', feed)
-        s, _, _ = req('app.llave.localhost', '/portales/%d/mercadolibre' % lid, {'csrf': csrf}, cookie)
+        s, _, _ = req('app.fichaunica.localhost', '/portales/%d/mercadolibre' % lid, {'csrf': csrf}, cookie)
         self.assertEqual(con.execute("SELECT COUNT(*) FROM outbox WHERE kind='portal.mercadolibre.create'").fetchone()[0], 1)
         # lead from the site: consent required, then stored + GHL dry-run ops
-        s, _, _ = req('casas-roma.llave.localhost', '/contacto', {'listing': lid, 'name': 'Ana', 'phone': '5511112222'})
+        s, _, _ = req('casas-roma.fichaunica.localhost', '/contacto', {'listing': lid, 'name': 'Ana', 'phone': '5511112222'})
         self.assertEqual(s, 400)
-        s, _, h = req('casas-roma.llave.localhost', '/contacto',
+        s, _, h = req('casas-roma.fichaunica.localhost', '/contacto',
                       {'listing': lid, 'name': 'Ana Pérez', 'phone': '55 1111 2222', 'consent': '1', 'message': 'Me interesa'})
         self.assertEqual(s, 303)
         lead = con.execute('SELECT * FROM leads WHERE agency_id=? ORDER BY id DESC', (a['id'],)).fetchone()
@@ -157,37 +157,59 @@ class WebFlow(unittest.TestCase):
         kinds = [r['kind'] for r in con.execute("SELECT kind FROM outbox WHERE ref=?", ('lead:%d' % lead['id'],))]
         self.assertIn('ghl.contact_upsert', kinds)
         self.assertTrue(all(r['status'] == 'dry_run' for r in con.execute('SELECT status FROM outbox')))
-        s, leads_page, _ = req('app.llave.localhost', '/clientes', cookie=cookie)
+        s, leads_page, _ = req('app.fichaunica.localhost', '/clientes', cookie=cookie)
         self.assertIn('Ana Pérez', leads_page)
         # Bolsa: a second agency shares the listing; lead on their site is a 'bolsa' lead, canonical -> owner
         cookie2, csrf2 = self.signup('Hogar Sur', 'pedro@ejemplo.test')
-        s, bolsa, _ = req('app.llave.localhost', '/bolsa', cookie=cookie2)
+        s, bolsa, _ = req('app.fichaunica.localhost', '/bolsa', cookie=cookie2)
         self.assertIn('Departamento con terraza', bolsa)
-        s, _, _ = req('app.llave.localhost', '/bolsa/%d/compartir' % lid, {'csrf': csrf2}, cookie2)
+        s, _, _ = req('app.fichaunica.localhost', '/bolsa/%d/compartir' % lid, {'csrf': csrf2}, cookie2)
         self.assertEqual(s, 303)
-        s, lp2, _ = req('hogar-sur.llave.localhost', '/propiedad/' + slug)
+        s, lp2, _ = req('hogar-sur.fichaunica.localhost', '/propiedad/' + slug)
         self.assertEqual(s, 200)
-        self.assertIn('<link rel="canonical" href="http://casas-roma.llave.localhost:8699/propiedad/%s">' % slug, lp2)
-        s, _, _ = req('hogar-sur.llave.localhost', '/contacto',
+        self.assertIn('<link rel="canonical" href="http://casas-roma.fichaunica.localhost:8699/propiedad/%s">' % slug, lp2)
+        s, _, _ = req('hogar-sur.fichaunica.localhost', '/contacto',
                       {'listing': lid, 'name': 'Luis', 'phone': '5533334444', 'consent': '1'})
         self.assertEqual(s, 303)
         n0 = con.execute('SELECT COUNT(*) FROM leads').fetchone()[0]
-        s, _, _ = req('hogar-sur.llave.localhost', '/contacto', {'listing': lid, 'name': 'Bot', 'phone': '5599990000', 'consent': '1', 'website': 'spam.example'})
+        s, _, _ = req('hogar-sur.fichaunica.localhost', '/contacto', {'listing': lid, 'name': 'Bot', 'phone': '5599990000', 'consent': '1', 'website': 'spam.example'})
         self.assertEqual(s, 303)
         self.assertEqual(con.execute('SELECT COUNT(*) FROM leads').fetchone()[0], n0)
         b = con.execute("SELECT * FROM leads WHERE source='bolsa'").fetchone()
         self.assertIsNotNone(b)
         self.assertEqual(b['owner_agency_id'], a['id'])
         # the sharer's own sitemap must not list the shared listing
-        s, sm, _ = req('hogar-sur.llave.localhost', '/sitemap.xml')
+        s, sm, _ = req('hogar-sur.fichaunica.localhost', '/sitemap.xml')
         self.assertNotIn(slug, sm)
         # other agency cannot edit the listing
-        s, _, _ = req('app.llave.localhost', '/propiedades/%d' % lid, cookie=cookie2)
+        s, _, _ = req('app.fichaunica.localhost', '/propiedades/%d' % lid, cookie=cookie2)
         self.assertEqual(s, 404)
         con.close()
 
+    def test_import_services_legal(self):
+        cookie, csrf = self.signup('Importa Ya', 'imp@ejemplo.test')
+        csv_text = 'titulo;precio;colonia;alcaldía;recámaras\nDepartamento luminoso en Narvarte;3,200,000;Narvarte;Benito Juárez;2\nX;1;;;\n'
+        s, page, _ = req('app.fichaunica.localhost', '/propiedades/importar', {'csrf': csrf, 'step': 'preview', 'csv': csv_text}, cookie)
+        self.assertEqual(s, 200)
+        self.assertIn('1 de 2 filas se crean', page)
+        con = db.connect()
+        aid = con.execute("SELECT id FROM agencies WHERE slug='importa-ya'").fetchone()['id']
+        self.assertEqual(con.execute('SELECT COUNT(*) FROM listings WHERE agency_id=?', (aid,)).fetchone()[0], 0)
+        s, page, _ = req('app.fichaunica.localhost', '/propiedades/importar', {'csrf': csrf, 'step': 'commit', 'csv': csv_text}, cookie)
+        self.assertIn('1 propiedades importadas', page)
+        r = con.execute('SELECT * FROM listings WHERE agency_id=?', (aid,)).fetchone()
+        self.assertEqual((r['status'], r['estado'], r['price_cents']), ('borrador', 'Ciudad de México', 320000000))
+        con.close()
+        for path, text in (('/servicios', 'RentaPóliza'), ('/academia', 'Próximamente')):
+            s, page, _ = req('app.fichaunica.localhost', path, cookie=cookie)
+            self.assertEqual(s, 200)
+            self.assertIn(text, page)
+        s, page, _ = req('app.fichaunica.localhost', '/terminos')
+        self.assertEqual(s, 200)
+        self.assertIn('Ciao Bella Marketing', page)
+
     def test_media_traversal_blocked(self):
-        s, _, _ = req('app.llave.localhost', '/media/../../etc/passwd')
+        s, _, _ = req('app.fichaunica.localhost', '/media/../../etc/passwd')
         self.assertEqual(s, 404)
 
 

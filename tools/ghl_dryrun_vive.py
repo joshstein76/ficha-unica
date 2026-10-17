@@ -61,7 +61,7 @@ def main():
     if not canon:
         src = 'hard-coded'
         canon = {'ref': 'VIVE-HERACLITO', 'title': 'Departamento en Heráclito, Polanco', 'operation': 'venta',
-                 'url': 'http://vive.llave.localhost:8640/propiedad/heraclito', 'price': None, 'currency': 'MXN',
+                 'url': 'http://vive.fichaunica.localhost:8640/propiedad/heraclito', 'price': None, 'currency': 'MXN',
                  'price_date': None, 'address': {'colonia': 'Polanco'}}
     lead = {'name': 'Cliente Prueba', 'phone': '+520000000000', 'email': '', 'message': 'Prueba', 'source': 'sitio'}
     agency = {'id': 0, 'slug': 'vive', 'name': 'VIVE Polanco', 'whatsapp': None, 'ghl_location_id': loc}

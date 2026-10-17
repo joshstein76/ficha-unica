@@ -51,7 +51,7 @@ def facts_line(c):
     if c.get('bedrooms'):
         bits.append('%d rec.' % c['bedrooms'])
     if c.get('bathrooms'):
-        bits.append('%g baños' % c['bathrooms'])
+        bits.append('%g baño%s' % (c['bathrooms'], '' if c['bathrooms'] == 1 else 's'))
     if c.get('parking'):
         bits.append('%d est.' % c['parking'])
     return ' · '.join(bits)

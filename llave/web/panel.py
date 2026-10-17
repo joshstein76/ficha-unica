@@ -14,9 +14,13 @@ ICONS = {
     'portales': '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
     'bolsa': '<path d="M7 7h10l-1 13H8z"/><path d="M9 7a3 3 0 0 1 6 0"/>',
     'sitio': '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',
+    'servicios': '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/>',
+    'academia': '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/>',
 }
 TABS = [('inicio', 'Inicio', '/'), ('propiedades', 'Propiedades', '/propiedades'), ('clientes', 'Clientes', '/clientes'),
-        ('portales', 'Portales', '/portales'), ('bolsa', 'Bolsa', '/bolsa'), ('sitio', 'Mi sitio', '/sitio')]
+        ('portales', 'Portales', '/portales'), ('bolsa', 'Bolsa', '/bolsa'), ('sitio', 'Mi sitio', '/sitio'),
+        ('servicios', 'Servicios', '/servicios'), ('academia', 'Academia', '/academia')]
+DESKTOP_ONLY = {'servicios', 'academia'}  # on phones they live on Inicio
 
 
 def _icon(k):
@@ -29,17 +33,17 @@ def layout(title, body, ctx=None, tab=None, flash=''):
     top_right = '<a class="btn ghost small" href="/entrar">Entrar</a>'
     if ctx:
         nav = '<nav class="tabs">%s</nav>' % ''.join(
-            '<a href="%s" class="%s">%s<span>%s</span></a>' % (href, 'on' if k == tab else '', _icon(k), lab)
+            '<a href="%s" class="%s">%s<span>%s</span></a>' % (href, ('on ' if k == tab else '') + ('desk' if k in DESKTOP_ONLY else ''), _icon(k), lab)
             for k, lab, href in TABS)
         top_right = ('<span class="row small"><a href="%s" target="_blank" rel="noopener">Ver mi sitio ↗</a>'
                      '<form method="post" action="/salir" style="margin:0">%s<button class="btn ghost small">Salir</button></form></span>'
                      % (e(db.site_url(ctx['agency'])), csrf_field(ctx)))
     return ('<!doctype html><html lang="es-MX"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
-            '<title>%s · LLAVE</title><link rel="stylesheet" href="%s"><style>%s</style></head><body>'
-            '<header class="top"><a class="logo" href="/">LLA<span>VE</span></a>%s</header>%s'
-            '<main class="wrap">%s%s</main></body></html>') % (
-        e(title), FONTS, PANEL, top_right, nav, flash, body)
+            '<title>%s · Ficha Única</title><link rel="stylesheet" href="%s"><style>%s</style></head><body>'
+            '<header class="top"><a class="logo" href="/">Ficha <span>Única</span></a>%s</header>%s'
+            '<main class="wrap">%s%s</main><footer class="wrap small muted" style="padding-top:0">Ficha Única es un servicio de %s · <a href="/terminos">Términos</a> · <a href="/privacidad">Privacidad</a></footer></body></html>') % (
+        e(title), FONTS, PANEL, top_right, nav, flash, body, e(db.OWNER))
 
 
 def csrf_field(ctx):
@@ -104,7 +108,11 @@ def dashboard(con, ctx, welcome=False):
             '<div class="stat"><b>%d</b><small>Publicaciones en portales</small></div></div>'
             '<section class="card"><h2>Tu sitio listo en 5 pasos (%d/5)</h2><div class="list">%s</div></section>'
             '<section class="card"><div class="row" style="justify-content:space-between"><h2>Últimos clientes</h2>'
-            '<a href="/clientes">Ver todos</a></div>%s</section>') % (
+            '<a href="/clientes">Ver todos</a></div>%s</section>'
+            '<section class="grid2"><a class="card" href="/servicios" style="text-decoration:none;color:inherit"><h2>Servicios</h2>'
+            '<span class="small muted">Póliza para rentas, clientes de lujo, Miami y marketing con IA.</span></a>'
+            '<a class="card" href="/academia" style="text-decoration:none;color:inherit"><h2>Academia</h2>'
+            '<span class="small muted">Clases cortas para vender y rentar más.</span></a></section>') % (
         notice('¡Listo! Tu sitio ya existe. Ahora sube tu primera propiedad.') if welcome else '',
         e(ctx['user']['name'].split(' ')[0]), e(db.site_url(a)), e(db.site_url(a).split('//')[1]),
         n_list, n_all, limit, e(a['plan']), n_new, n_feed, done,
@@ -133,7 +141,8 @@ def listings(con, ctx, flash=''):
             '%d fotos' % con.execute('SELECT COUNT(*) FROM photos WHERE listing_id=?', (r['id'],)).fetchone()[0] or 'sin fotos')
         for r in rows)
     body = ('%s<div class="row" style="justify-content:space-between"><h1>Propiedades</h1>'
-            '<a class="btn" href="/propiedades/nueva">+ Nueva</a></div><div class="list">%s</div>') % (
+            '<span class="row"><a class="btn ghost small" href="/propiedades/importar">Importar CSV</a>'
+            '<a class="btn" href="/propiedades/nueva">+ Nueva</a></span></div><div class="list">%s</div>') % (
         flash, items or '<p class="muted">Aún no hay propiedades. Sube la primera: tarda 2 minutos.</p>')
     return layout('Propiedades', body, ctx, 'propiedades')
 
@@ -366,3 +375,91 @@ def landing():
             '<div class="row"><a class="btn" href="/registro">Crear mi sitio gratis</a><a class="btn ghost" href="/entrar">Entrar</a></div>'
             '<p class="small muted">Versión local de prueba. Nada aquí es público todavía.</p></div>')
     return layout('Bienvenido', body)
+
+
+# ---------- import ----------
+def import_page(ctx, preview=None, csv_text='', error='', done=None):
+    body = ['<h1>Importar propiedades</h1><p class="muted">¿Vienes de otro sistema? Exporta tus propiedades a CSV o Excel '
+            '(guárdalo como CSV) y súbelo aquí. Entran como borrador para que las revises antes de publicar.</p>',
+            notice(error, 'err')]
+    if done:
+        body.append(notice('Listo: %d propiedades importadas como borrador.%s' % (
+            len(done['created']), (' %d omitidas.' % len(done['skipped'])) if done['skipped'] else '')))
+        body.append('<p><a class="btn" href="/propiedades">Ver mis propiedades</a></p>')
+    if preview:
+        n = sum(1 for r in preview['rows'] if r['action'] == 'crear')
+        cols = ', '.join('%s ← "%s"' % (e(k), e(v)) for k, v in preview['columns_detected'].items())
+        trs = ''.join('<tr><td>%d</td><td>%s</td><td>%s</td><td><span class="pill %s">%s</span><br><span class="small">%s</span></td></tr>' % (
+            r['line'], e(r['data'].get('title') or '—'),
+            e(money((r['data']['price_cents'] // 100) if r['data'].get('price_cents') is not None else None, r['data'].get('currency', 'MXN'))),
+            'ok' if r['action'] == 'crear' else 'error', 'se crea' if r['action'] == 'crear' else 'se omite',
+            e('; '.join(r['problems']))) for r in preview['rows'][:300])
+        body.append('<section class="card"><h2>Vista previa: %d de %d filas se crean</h2>%s<p class="small muted">Columnas reconocidas: %s</p>'
+                    '<div class="tbl"><table><thead><tr><th>Fila</th><th>Título</th><th>Precio</th><th></th></tr></thead><tbody>%s</tbody></table></div>'
+                    '<form method="post" action="/propiedades/importar">%s<input type="hidden" name="step" value="commit">'
+                    '<textarea name="csv" hidden>%s</textarea><button class="btn"%s>Importar %d propiedades</button></form>'
+                    '<p class="small muted">Las fotos por enlace se agregan en la siguiente versión; por ahora súbelas en cada propiedad.</p></section>' % (
+                        n, preview['total'], ''.join(notice(w, 'warn') for w in preview['warnings']), cols, trs, csrf_field(ctx),
+                        e(csv_text), '' if n else ' disabled', n))
+    body.append('<form class="stack card" method="post" action="/propiedades/importar" enctype="multipart/form-data">%s'
+                '<input type="hidden" name="step" value="preview"><label>Archivo CSV<input type="file" name="archivo" accept=".csv,text/csv"></label>'
+                '<label>…o pega el contenido<textarea name="csv" placeholder="titulo,precio,colonia,municipio,estado&#10;Depto en la Roma,4500000,Roma Norte,Cuauhtémoc,CDMX"></textarea></label>'
+                '<button class="btn ghost">Ver vista previa</button></form>' % csrf_field(ctx))
+    return layout('Importar', ''.join(body), ctx, 'propiedades')
+
+
+# ---------- Servicios + Academia ----------
+SERVICES = [
+    ('Póliza jurídica para rentas', 'RentaPóliza',
+     'Protege a tus propietarios en cada renta. Actívala en la propiedad (casilla "Ofrecer póliza jurídica").', None, 'Próximamente'),
+    ('¿Tienes un cliente o una propiedad de lujo en Polanco?', 'VIVE Polanco',
+     'Refiérenos compradores o propiedades de lujo en CDMX. Te contactamos para acordar la comisión.',
+     'https://wa.me/525578358858?text=' + 'Hola%2C%20soy%20asesor%20en%20Ficha%20%C3%9Anica%20y%20quiero%20referir%20un%20cliente%20o%20propiedad%20de%20lujo.',
+     'Referir por WhatsApp'),
+    ('¿Vendes en Miami?', 'IDX Bloom', 'Sitio web con búsqueda MLS (IDX) para asesores en Florida.', 'https://idxbloom.com', 'Conocer IDX Bloom'),
+    ('Marketing con IA y SEO', 'Ciao Bella Marketing', 'Campañas, contenido y posicionamiento en Google y en asistentes de IA.',
+     'https://ciaobellamarketing.com', 'Conocer Ciao Bella'),
+]
+LESSONS = [
+    ('Tu primera propiedad en 10 minutos', 'Del celular a tu sitio y a los portales.'),
+    ('Fotos que venden con tu celular', 'Luz, ángulos y orden: lo que más cambia una ficha.'),
+    ('Aparecer en Google y en ChatGPT', 'Qué lee un buscador en tu ficha y cómo ayudarle.'),
+    ('Responder en 5 minutos por WhatsApp', 'El primer mensaje y cómo agendar la visita.'),
+    ('Compartir en la Bolsa sin perder comisión', 'Cómo funciona la división y qué acordar por escrito.'),
+    ('Rentas seguras', 'Contrato, póliza jurídica y entrega del inmueble.'),
+]
+
+
+def services(ctx):
+    cards = ''.join('<div class="card"><span class="small muted">%s</span><h2>%s</h2><p style="margin:0">%s</p>%s</div>' % (
+        e(brand), e(t), e(d), ('<a class="btn small ghost" href="%s" target="_blank" rel="noopener">%s</a>' % (e(url), e(cta)))
+        if url else '<span class="pill pendiente">%s</span>' % e(cta)) for t, brand, d, url, cta in SERVICES)
+    body = ('<h1>Servicios</h1><p class="muted">Todo lo que tu negocio necesita, con empresas de la misma familia que Ficha Única.</p>'
+            '<div class="grid2 wide">%s</div>') % cards
+    return layout('Servicios', body, ctx, 'servicios')
+
+
+def academy(ctx):
+    items = ''.join('<div class="card" style="gap:4px"><b>%s</b><span class="small muted">%s</span><span class="pill pendiente">Próximamente</span></div>'
+                    % (e(t), e(d)) for t, d in LESSONS)
+    body = ('<h1>Academia</h1><p class="muted">Clases cortas, en video y en español, para vender y rentar más con Ficha Única. '
+            'Gratis para todos los asesores.</p><div class="grid2">%s</div>') % items
+    return layout('Academia', body, ctx, 'academia')
+
+
+# ---------- legal drafts (platform) ----------
+def legal(kind):
+    if kind == 'terminos':
+        title, text = 'Términos de uso', (
+            'Ficha Única es un servicio de %s. Al crear tu cuenta aceptas publicar solo propiedades que tienes derecho a '
+            'anunciar, con información verdadera y precios con fecha. Eres responsable del contenido y de las fotos que subes. '
+            'Podemos retirar anuncios falsos, duplicados o que infrinjan derechos de terceros. El plan Gratis puede cambiar con aviso previo.' % db.OWNER)
+    else:
+        title, text = 'Aviso de privacidad (asesores)', (
+            '%s es responsable de los datos de tu cuenta (nombre, correo, WhatsApp, datos de tu inmobiliaria). Los usamos para '
+            'darte el servicio, soporte y avisos de tu cuenta. Los datos de los clientes que te escriben desde tu sitio los tratamos '
+            'por cuenta tuya, como encargado. Derechos ARCO: escríbenos desde tu cuenta.' % db.OWNER)
+    body = ('<div class="auth" style="max-width:720px"><h1>%s</h1><p>%s</p><p class="notice warn"><b>BORRADOR</b>: texto de trabajo; '
+            'lo revisa un abogado (Ley Federal de Protección de Datos Personales en Posesión de los Particulares, 2025) antes de publicarse.</p></div>') % (
+        e(title), e(text))
+    return layout(title, body)

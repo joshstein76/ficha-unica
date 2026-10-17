@@ -24,12 +24,17 @@ def _page(agency, title, body, head_extra='', canonical=None, description=''):
             '<header class="sh"><div class="in"><a class="brand" href="/">%s</a>%s</div></header>'
             '%s'
             '<footer class="sf"><div class="in"><span>© %s · %s</span><span><a href="/aviso-de-privacidad">Aviso de privacidad</a></span>'
-            '<span class="muted">Sitio creado con LLAVE</span></div></footer></body></html>') % (
+            '<span class="muted">Sitio creado con <a href="%s" rel="nofollow">Ficha Única</a></span></div></footer></body></html>') % (
         e(title), e(description[:160]),
         ('<link rel="canonical" href="%s">' % e(canonical)) if canonical else '',
         FONTS, site_css(a['design'], a['accent']), head_extra, brand,
         ('<a class="wa" href="%s" rel="nofollow">%s WhatsApp</a>' % (e(wa), WA_ICON)) if wa else '',
-        body, e(a['name']), e(a['city'] or 'México'))
+        body, e(a['name']), e(a['city'] or 'México'), e(brand_url('sitio-' + a['slug'])))
+
+
+def brand_url(source):
+    port = '' if db.PORT in (80, 443) else ':%d' % db.PORT
+    return 'http://%s%s/?source=%s' % (db.BASE_DOMAIN, port, source)
 
 
 def _card(c):
@@ -200,9 +205,10 @@ def privacy(agency):
             '%s es responsable de los datos personales que nos compartes en este sitio (nombre, teléfono, correo y tu mensaje). '
             'Los usamos para responder tu solicitud sobre propiedades y darte seguimiento por WhatsApp, teléfono o correo. '
             'No vendemos tus datos. Puedes pedir acceso, corrección, cancelación u oposición (derechos ARCO) escribiendo a %s.\n\n'
+            'Este sitio funciona con Ficha Única, un servicio de %s, que trata tus datos solo por cuenta de %s.\n\n'
             '<b>BORRADOR LOCAL</b>: texto de ejemplo, debe revisarlo un abogado conforme a la Ley Federal de Protección de Datos '
             'Personales en Posesión de los Particulares (2025) antes de publicarse.</div></main>') % (
-        e(agency['name']), e(agency['email'] or agency['whatsapp'] or ''))
+        e(agency['name']), e(agency['email'] or agency['whatsapp'] or ''), e(db.OWNER), e(agency['name']))
     return _page(agency, 'Aviso de privacidad · ' + agency['name'], body)
 
 

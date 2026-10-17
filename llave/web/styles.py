@@ -14,11 +14,12 @@ PANEL = r"""
 a{color:var(--brand)}h1,h2,h3{line-height:1.2;margin:0;text-wrap:balance}h1{font-size:24px}h2{font-size:18px}
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px max(16px,env(safe-area-inset-left));
 background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
-.logo{font-weight:700;letter-spacing:.14em;font-size:15px;color:var(--fg);text-decoration:none}
+.logo{font-weight:700;font-size:18px;color:var(--fg);text-decoration:none}
 .logo span{color:var(--brand)}
 .wrap{max-width:860px;margin:0 auto;padding:20px max(16px,env(safe-area-inset-left)) 32px;display:grid;gap:18px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:12px;min-width:0}
 .grid2{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.grid2.wide{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
 .stats{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
 .stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px}
 .stat b{display:block;font-size:26px;font-variant-numeric:tabular-nums}.stat small{color:var(--muted)}
@@ -37,7 +38,7 @@ textarea{min-height:120px}input[type=checkbox]{width:auto}
 border-radius:var(--r);padding:10px;text-decoration:none;color:inherit;min-width:0}
 .item img,.item .ph{width:84px;height:64px;object-fit:cover;border-radius:8px;background:var(--line)}
 .item b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;background:var(--line);color:var(--muted)}
+.pill{justify-self:start;display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;background:var(--line);color:var(--muted)}
 .pill.activa,.pill.en_feed,.pill.publicada,.pill.ok{background:var(--ok-bg);color:var(--ok)}
 .pill.borrador,.pill.pausada,.pill.pendiente,.pill.dry_run{background:var(--warn-bg);color:var(--warn)}
 .pill.error,.pill.sin_convenio{background:var(--bad-bg);color:var(--bad)}
@@ -48,12 +49,12 @@ border-radius:var(--r);padding:10px;text-decoration:none;color:inherit;min-width
 table{border-collapse:collapse;width:100%;font-size:14px}td,th{padding:8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 .tbl{overflow-x:auto}
 code{font-size:13px;word-break:break-all}
-nav.tabs{position:fixed;bottom:0;left:0;right:0;display:grid;grid-template-columns:repeat(6,1fr);background:var(--card);
+nav.tabs a.desk{display:none}nav.tabs{position:fixed;bottom:0;left:0;right:0;display:grid;grid-template-columns:repeat(6,1fr);background:var(--card);
 border-top:1px solid var(--line);padding:6px max(4px,env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom));z-index:9}
 nav.tabs a{display:grid;justify-items:center;gap:2px;font-size:11px;color:var(--muted);text-decoration:none;padding:4px 0}
 nav.tabs a.on{color:var(--brand);font-weight:700}nav.tabs svg{width:22px;height:22px}
 @media(min-width:900px){body{padding-bottom:0}nav.tabs{position:static;display:flex;justify-content:center;gap:18px;border:0;
-border-bottom:1px solid var(--line);padding:0}nav.tabs a{grid-auto-flow:column;font-size:14px;padding:12px 4px}}
+border-bottom:1px solid var(--line);padding:0}nav.tabs a{grid-auto-flow:column;font-size:14px;padding:12px 4px}nav.tabs a.desk{display:grid}}
 .auth{max-width:420px;margin:6vh auto;padding:0 16px;display:grid;gap:18px}
 :focus-visible{outline:3px solid var(--brand);outline-offset:2px}
 """

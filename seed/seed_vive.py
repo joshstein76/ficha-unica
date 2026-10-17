@@ -46,6 +46,26 @@ def parse_beds_baths(s):
     return (int(b.group(1)) if b else None), (float(ba.group(1)) if ba else None)
 
 
+# Josh cleared ALL Ritz units for portals on 2026-10-17. Facts copied from LISTING-TEXTS-ES-EN.md (VIVE pack, 10-17).
+# resale=True -> the required line "Residencia de propietario privado (reventa), publicada por VIVE Polanco". 4804 is NOT a resale.
+RITZ = {
+    '4804': dict(cents=130000000, cur='USD', date='2026-10-17', m2=75, beds=1, baths=1, park=1, maint=None, resale=False,
+                 datos='75 m² interiores · 1 recámara con escritorio · 1 baño · 1 estacionamiento · mantenimiento US$1,200 al mes · '
+                       'entrega inmediata · nunca habitada, se vende amueblada'),
+    '4908': dict(cents=280000000, cur='USD', date='2026-10-01', m2=134, beds=2, baths=2.5, park=2, resale=True,
+                 datos='134 m² interiores + 33 m² de terraza · 2 recámaras · 2.5 baños · 2 estacionamientos · vista al Bosque de Chapultepec'),
+    '5102': dict(cents=85000000, cur='USD', date='2026-10-01', m2=83, beds=1, baths=1, park=1, resale=True,
+                 datos='aprox. 83 m² interiores · 1 recámara · 1 baño · 1 estacionamiento · nivel 51 · vista a la ciudad'),
+    '5002': dict(cents=82500000, cur='USD', date='2026-10-01', m2=78, beds=1, baths=1, park=1, resale=True,
+                 datos='78 m² interiores · 1 recámara · 1 baño · 1 estacionamiento · nivel 50 · vista a la ciudad'),
+    '5105': dict(cents=2750000000, cur='MXN', date='2026-10-01', m2=96, beds=2, baths=2, park=2, resale=True,
+                 datos='96 m² interiores + 14.27 m² de terraza · 2 recámaras · 2 baños · 2 estacionamientos · nivel 51 · vista al Bosque de Chapultepec'),
+    '5407': dict(cents=149000000, cur='USD', date='2026-10-01', m2=80, beds=1, baths=2, park=1, resale=True,
+                 datos='80 m² interiores + 18 m² de terraza · 1 recámara · 2 baños · 1 estacionamiento · vista al Bosque de Chapultepec'),
+}
+RESALE_LINE = 'Residencia de propietario privado (reventa), publicada por VIVE Polanco.'
+
+
 def parse_texts():
     txt = open(os.path.join(PACK, 'LISTING-TEXTS-ES-EN.md'), encoding='utf-8').read()
     out = {}
@@ -152,7 +172,8 @@ def main():
         beds, baths = parse_beds_baths(r['beds_baths'])
         m2 = first_num(r['size'])
         parking = int(first_num(r['parking'])) if first_num(r['parking']) is not None else None
-        cleared = her or unit == '5203'
+        cleared = True  # Josh 2026-10-17: all Ritz units + Heráclito cleared for portals
+        rz = RITZ.get(unit)
         t = texts.get('heraclito' if her else ('5203' if unit == '5203' else None))
         if t:
             title, desc = t['title'], t['desc']
@@ -167,7 +188,13 @@ def main():
                 facts.append('%g baño%s' % (baths, '' if baths == 1 else 's'))
             if parking:
                 facts.append('%d estacionamiento%s' % (parking, '' if parking == 1 else 's'))
-            desc = ('Residencia %s en The Ritz-Carlton Residences, Mexico City, Paseo de la Reforma 509.' % unit +
+            if rz:
+                cents, curr, note = rz['cents'], rz['cur'], None
+                m2, beds, baths, parking = rz['m2'], rz['beds'], rz['baths'], rz['park']
+                facts = []
+            desc = (((RESALE_LINE + ' ') if rz and rz['resale'] else '') +
+                    'Residencia %s en The Ritz-Carlton Residences, Mexico City, Paseo de la Reforma 509.' % unit +
+                    ((' ' + rz['datos'][0].upper() + rz['datos'][1:] + '.') if rz else '') +
                     (' ' + ' · '.join(facts).capitalize() + '.' if facts else '') +
                     ' Consulta disponibilidad y precio con VIVE Polanco.')
         if her:
@@ -187,7 +214,7 @@ def main():
             "street,ext_number,colonia,municipio,estado,show_exact_location,source_url,share_in_bolsa,internal_note) "
             "VALUES(?,?,?,?,?, 'venta','departamento',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'Ciudad de México',0,?,?,?)",
             (vive, uid1, ref, db.slugify(title), 'activa' if cleared else 'pausada', title, desc, cents, curr,
-             '2026-10-05' if unit == '5203' else '2026-10-17', m2, beds, baths, parking,
+             '2026-10-05' if unit == '5203' else (rz['date'] if rz else '2026-10-17'), m2, beds, baths, parking,
              '52' if unit == '5203' else None, furnished, 1 if unit == '5203' else 0,
              json.dumps(RITZ_AMEN_5203 if unit == '5203' else [], ensure_ascii=False),
              addr[0], addr[1], addr[2], addr[3], r['live_url'], 1 if her else 0,
