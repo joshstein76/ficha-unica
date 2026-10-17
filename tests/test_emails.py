@@ -7,12 +7,27 @@ from llave import emails  # noqa: E402
 
 
 class Subjects(unittest.TestCase):
-    def test_pattern(self):
-        self.assertEqual(emails.subject('Ficha Única', 'Casas Roma'), 'Ficha Única / Casas Roma')
-        self.assertEqual(emails.subject('Ficha Única', their_name='laura pérez'), 'Ficha Única / Laura')
-        self.assertEqual(emails.to_agent({'name': 'Casas Roma', 'email': 'x@y.mx'}, 'Hola')['subject'], 'Ficha Única / Casas Roma')
-        self.assertEqual(emails.to_lead({'name': 'VIVE Polanco'}, 'Ana Ruiz', 'a@b.mx', 'Hola')['subject'], 'VIVE Polanco / Ana')
-        self.assertEqual(emails.subject('VIVE Polanco', their_name='@ana_88'), 'VIVE Polanco')  # never a handle
+    def test_outreach_slash(self):
+        self.assertEqual(emails.agent_invite('Casas Roma', 'Hola')['subject'], 'Ficha Única / Casas Roma')
+        self.assertEqual(emails.outreach_subject('Ficha Única', ''), 'Ficha Única')
+
+    def test_lead_first_name_plus_words(self):
+        self.assertEqual(emails.to_lead({'name': 'VIVE Polanco'}, 'ana ruiz', 'a@b.mx', '3 fotos de Roma 12', 'x')['subject'],
+                         'Ana, 3 fotos de Roma 12')
+        self.assertEqual(emails.lead_subject('@ana_88', '¿martes o jueves?'), '¿martes o jueves?')  # never a handle
+        self.assertEqual(emails.to_lead({'name': 'VIVE Polanco'}, 'Ana', 'a@b.mx', '3 fotos', 'x')['from_name'], 'VIVE Polanco')
+        with self.assertRaises(ValueError):
+            emails.lead_subject('Ana', 'hola')                     # 1 word
+        with self.assertRaises(ValueError):
+            emails.lead_subject('Ana', 'uno dos tres cuatro cinco seis')
+
+    def test_transactional_and_rules(self):
+        self.assertEqual(emails.transactional_subject('Su visita: martes 10:30'), 'Su visita: martes 10:30')
+        self.assertLessEqual(len(emails.transactional_subject('x' * 80)), 40)
+        self.assertEqual(emails.check('Ana, 3 fotos de Roma 12'), '')
+        self.assertTrue(emails.check('Oferta GRATIS hoy'))
+        self.assertTrue(emails.check('Ana, mira esto 🏠'))
+        self.assertTrue(emails.check('URGENTE: Ana'))
 
 
 if __name__ == '__main__':

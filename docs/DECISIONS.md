@@ -53,4 +53,8 @@ Each line: the call, why, how to undo.
     - Backups are online SQLite copies with an integrity check, a checksum and gzip, plus incremental media; retention is 14 daily + 8 weekly.
     - Deploy kit in `deploy/`: the target (VPS or Cloud) is configurable, it's a dry run unless `target.env` + `--go`, and it does a backup, release symlink, health check and auto-rollback.
     - Recommendation: Hostinger VPS (wildcard + custom-domain TLS need root).
-37. **Email subjects (Josh's permanent rule, 10-17):** always "<Our brand> / <Their company or first name>", nothing more: `llave/emails.py` (platform→agent "Ficha Única / <agency>", agency→lead "<agency> / <first name>"; never a handle or email as the name).
+37. **Email subjects by type** (Josh 10-17, `functions/content/EMAIL-SUBJECT-PLAYBOOK.md`), in `llave/emails.py`:
+    - Agent invites / outreach use the slash format: "Ficha Única / <agency>".
+    - Agency → client first reply and follow-ups use "<first name>, <2–5 words>" (e.g. "Ana, 3 fotos de Roma 12"). With no real name, just the words.
+    - Transactional emails are plain.
+    - All subjects ≤ 40 characters, no emoji, ALL CAPS or "urgente/gratis/oferta" (`emails.check`). The sender name is the brand.
