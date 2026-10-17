@@ -53,8 +53,7 @@ def confirm(con, listing_id, agency_id, today=None):
 
 
 def panel_url():
-    port = '' if db.PORT in (80, 443) else ':%d' % db.PORT
-    return 'http://app.%s%s' % (db.BASE_DOMAIN, port)
+    return db.origin('app')
 
 
 def _line(s):

@@ -505,13 +505,13 @@ def site_settings(con, ctx, ok='', error=''):
 
 
 def landing(ref=''):
-    port = '' if db.PORT in (80, 443) else ':%d' % db.PORT
-    reg = 'http://app.%s%s/registro%s' % (db.BASE_DOMAIN, port, ('?ref=' + e(ref)) if ref else '')
+    reg = '%s/registro%s' % (db.origin('app'), ('?ref=' + e(ref)) if ref else '')
     body = ('<div class="auth" style="max-width:640px"><h1 style="font-size:34px">Tu sitio inmobiliario gratis. '
             'Tus propiedades en Google y en los portales. Tus clientes en WhatsApp.</h1>'
             '<p class="muted">Sube cada propiedad una vez y listo. Sin tarjeta para empezar.</p>'
-            '<div class="row"><a class="btn" href="%s">Crear mi sitio gratis</a><a class="btn ghost" href="http://app.%s%s/entrar">Entrar</a></div>'
-            '<p class="small muted">Versión local de prueba. Nada aquí es público todavía.</p></div>') % (reg, e(db.BASE_DOMAIN), port)
+            '<div class="row"><a class="btn" href="%s">Crear mi sitio gratis</a><a class="btn ghost" href="%s/entrar">Entrar</a></div>'
+            '%s</div>') % (reg, e(db.origin('app')), '' if db.ENV == 'production' else
+                           '<p class="small muted">Versión local de prueba. Nada aquí es público todavía.</p>')
     return layout('Bienvenido', body)
 
 
@@ -806,8 +806,7 @@ def plan_checkout(ctx, key, error=''):
 # ---------- invite a colleague (referral loop) ----------
 def invite(con, ctx):
     a = ctx['agency']
-    port = '' if db.PORT in (80, 443) else ':%d' % db.PORT
-    link = 'http://app.%s%s/registro?ref=%s' % (db.BASE_DOMAIN, port, a['slug'])
+    link = '%s/registro?ref=%s' % (db.origin('app'), a['slug'])
     msg = ('Oye, estoy usando Ficha Única: sitio web inmobiliario gratis, tus propiedades en Mercado Libre y en Google, '
            'y tus clientes directo a tu WhatsApp. Crea el tuyo aquí: ' + link)
     rows = con.execute("SELECT a.name, a.created_at, (SELECT COUNT(*) FROM listings l WHERE l.agency_id=a.id AND l.status IN ('activa','apartada')) AS pub "

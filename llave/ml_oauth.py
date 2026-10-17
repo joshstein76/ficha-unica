@@ -31,7 +31,7 @@ def config():
         'client_id': os.environ.get('ML_CLIENT_ID', ''),
         'client_secret': os.environ.get('ML_CLIENT_SECRET', ''),
         'redirect_uri': os.environ.get('ML_REDIRECT_URI') or
-                        'http://app.%s:%d/oauth/mercadolibre/callback' % (db.BASE_DOMAIN, db.PORT),
+                        db.origin('app') + '/oauth/mercadolibre/callback',
     }
 
 

@@ -1,0 +1,24 @@
+# VPS reverse proxy with automatic HTTPS. Free subdomains use one wildcard cert (DNS challenge plugin needed for the
+# wildcard: build caddy with the DNS provider module, e.g. cloudflare); agents' own domains use on-demand TLS, allowed
+# only if the app says so (/_tls/ask checks: our hosts + verified custom domains).
+{
+	on_demand_tls {
+		ask http://127.0.0.1:8640/_tls/ask
+	}
+}
+
+fichaunica.mx, www.fichaunica.mx, app.fichaunica.mx, *.fichaunica.mx {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8640
+}
+
+https:// {
+	tls {
+		on_demand
+	}
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8640
+}

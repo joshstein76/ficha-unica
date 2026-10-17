@@ -61,8 +61,7 @@ def _page(agency, title, body, head_extra='', canonical=None, description=''):
 
 
 def brand_url(source):
-    port = '' if db.PORT in (80, 443) else ':%d' % db.PORT
-    return 'http://%s%s/?source=%s' % (db.BASE_DOMAIN, port, source)
+    return '%s/?source=%s' % (db.origin(), source)
 
 
 def _card(c):

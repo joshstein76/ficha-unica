@@ -63,6 +63,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(data)))
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
+        if db.ENV == 'production':
+            self.send_header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+            self.send_header('X-Frame-Options', 'SAMEORIGIN')
         for k, v in headers.items():
             self.send_header(k, v)
         self.end_headers()
@@ -161,6 +164,14 @@ class Handler(BaseHTTPRequestHandler):
             path, query = u.path, {k: v[-1] for k, v in urllib.parse.parse_qs(u.query).items()}
             if path.startswith('/media/'):
                 return self.media(path[len('/media/'):])
+            if path == '/healthz':
+                return self.send(json.dumps(health(con)), ctype='application/json', headers={'Cache-Control': 'no-store'})
+            if path == '/_tls/ask':
+                # Caddy on-demand TLS asks here before issuing a certificate: only our hosts + verified custom domains.
+                if self.client_address[0] not in ('127.0.0.1', '::1'):
+                    return self.send('forbidden', 403, 'text/plain; charset=utf-8')
+                ok = tls_allowed(con, (query.get('domain') or '').lower())
+                return self.send('ok' if ok else 'no', 200 if ok else 404, 'text/plain; charset=utf-8')
             h = self.host()
             base = db.BASE_DOMAIN
             if h == 'app.' + base:
@@ -174,8 +185,13 @@ class Handler(BaseHTTPRequestHandler):
             if h in (base, 'localhost', '127.0.0.1'):
                 return self.send(panel.landing((query.get('ref') or '')[:60]))
             return self.send('Sitio no encontrado', 404, 'text/plain; charset=utf-8')
-        except Exception:
+        except Exception as ex:
             traceback.print_exc()
+            try:
+                from .. import alerts
+                alerts.report(ex, {'path': self.path.split('?')[0], 'host': self.host(), 'method': method})
+            except Exception:
+                pass
             self.send('<h1>Algo salió mal</h1><p>Intenta de nuevo en un momento.</p>', 500)
         finally:
             con.close()
@@ -259,7 +275,8 @@ class Handler(BaseHTTPRequestHandler):
         exp = (datetime.datetime.utcnow() + datetime.timedelta(days=SESSION_DAYS)).strftime('%Y-%m-%d %H:%M:%S')
         con.execute('INSERT INTO sessions(token, user_id, expires_at) VALUES (?,?,?)', (tok, user_id, exp))
         con.commit()
-        self.redirect(to, {'Set-Cookie': 'llave_s=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=%d' % (tok, SESSION_DAYS * 86400)})
+        secure = '; Secure' if db.SCHEME == 'https' else ''
+        self.redirect(to, {'Set-Cookie': 'llave_s=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=%d%s' % (tok, SESSION_DAYS * 86400, secure)})
 
     def panel(self, con, method, path, query):
         ctx = self.session(con)
@@ -778,13 +795,50 @@ def save_site(con, a, f, files):
     con.commit()
 
 
+def health(con):
+    try:
+        from .. import alerts
+        return alerts.heartbeat()
+    except Exception:
+        ok = con.execute('SELECT 1').fetchone()[0] == 1
+        return {'ok': ok, 'db_ok': ok}
+
+
+def tls_allowed(con, domain):
+    base = db.BASE_DOMAIN
+    if domain in (base, 'app.' + base, 'www.' + base):
+        return True
+    if domain.endswith('.' + base):
+        return bool(con.execute('SELECT 1 FROM agencies WHERE slug=?', (domain[:-len(base) - 1],)).fetchone())
+    d = domain[4:] if domain.startswith('www.') else domain
+    return bool(con.execute('SELECT 1 FROM agencies WHERE custom_domain=? AND domain_verified_at IS NOT NULL', (d,)).fetchone())
+
+
+def check_production_config():
+    """Refuse to start in production with unsafe defaults."""
+    from .common import SECRET
+    problems = []
+    if db.ENV == 'production':
+        if SECRET == 'llave-local-dev-secret' or len(SECRET) < 32:
+            problems.append('LLAVE_SECRET must be set (32+ random chars)')
+        if db.BASE_DOMAIN.endswith('.localhost'):
+            problems.append('LLAVE_BASE_DOMAIN must be the real domain (e.g. fichaunica.mx)')
+        if os.environ.get('LLAVE_GHL_LIVE') == '1' and not os.environ.get('LLAVE_GHL_APPROVED_BY_JOSH'):
+            problems.append('LLAVE_GHL_LIVE=1 needs LLAVE_GHL_APPROVED_BY_JOSH set (Josh\'s written yes)')
+    return problems
+
+
 def main():
+    bad = check_production_config()
+    if bad:
+        sys.exit('Ficha Única no arranca: ' + '; '.join(bad))
     os.makedirs(os.path.dirname(db.DB_PATH), exist_ok=True)
     con = db.connect()
     db.init(con)
     con.close()
-    srv = ThreadingHTTPServer(('127.0.0.1', db.PORT), Handler)
-    print('Ficha Única (LLAVE) local: panel http://app.%s:%d · sitios http://<slug>.%s:%d' % (db.BASE_DOMAIN, db.PORT, db.BASE_DOMAIN, db.PORT))
+    bind = os.environ.get('LLAVE_BIND', '127.0.0.1')  # always behind the reverse proxy; never expose directly
+    srv = ThreadingHTTPServer((bind, db.PORT), Handler)
+    print('Ficha Única (LLAVE) %s: panel %s · sitios %s' % (db.ENV, db.origin('app'), db.origin('<slug>')))
     srv.serve_forever()
 
 

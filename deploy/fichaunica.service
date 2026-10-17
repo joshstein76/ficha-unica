@@ -1,0 +1,18 @@
+# VPS: /etc/systemd/system/fichaunica.service  (systemctl enable --now fichaunica)
+[Unit]
+Description=Ficha Única (LLAVE) app server
+After=network.target
+
+[Service]
+User=fichaunica
+WorkingDirectory=/srv/fichaunica/current
+EnvironmentFile=/srv/fichaunica-data/app.env
+ExecStart=/usr/bin/python3 -m llave.web.server
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/srv/fichaunica-data
+
+[Install]
+WantedBy=multi-user.target

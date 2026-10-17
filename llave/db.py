@@ -10,6 +10,18 @@ DB_PATH = os.environ.get('LLAVE_DB', os.path.join(ROOT, 'data', 'llave.db'))
 MEDIA_DIR = os.environ.get('LLAVE_MEDIA', os.path.join(ROOT, 'data', 'media'))
 BASE_DOMAIN = os.environ.get('LLAVE_BASE_DOMAIN', 'fichaunica.localhost')  # prod: the public brand domain
 PORT = int(os.environ.get('LLAVE_PORT', '8640'))
+ENV = os.environ.get('LLAVE_ENV', 'local')               # local | production
+# Public URLs: behind the reverse proxy in production they are https on 443 (no port in links).
+SCHEME = os.environ.get('LLAVE_PUBLIC_SCHEME', 'https' if ENV == 'production' else 'http')
+PUBLIC_PORT = os.environ.get('LLAVE_PUBLIC_PORT')         # None = same as PORT locally, none in production
+
+
+def origin(host_prefix=''):
+    """'https://app.fichaunica.mx' style origin for app./<slug>./'' (bare brand domain)."""
+    host = ('%s.%s' % (host_prefix, BASE_DOMAIN)) if host_prefix else BASE_DOMAIN
+    pp = int(PUBLIC_PORT) if PUBLIC_PORT else (None if ENV == 'production' else PORT)
+    port = '' if pp in (None, 80, 443) else ':%d' % pp
+    return '%s://%s%s' % (SCHEME, host, port)
 
 PLAN_LIMITS = {'gratis': 10, 'pro': 50, 'agencia': 200}
 PUBLIC_STATUSES = ('activa', 'apartada')  # shown on sites + fed to portals
@@ -53,8 +65,7 @@ def site_url(agency):
     a = dict(agency)
     if a.get('custom_domain') and a.get('domain_verified_at'):
         return 'https://' + a['custom_domain']
-    port = '' if PORT in (80, 443) else ':%d' % PORT
-    return 'http://%s.%s%s' % (a['slug'], BASE_DOMAIN, port)
+    return origin(a['slug'])
 
 
 def listing_url(agency, listing):

@@ -1,0 +1,10 @@
+# crontab -e on the server (times UTC). Nothing here sends to clients; GHL/portal sends stay dry until Josh's yes.
+SHELL=/bin/bash
+# backups: daily 09:15 UTC (3:15 a.m. CDMX) + prune
+15 9 * * * set -a; . /srv/fichaunica-data/app.env; set +a; cd /srv/fichaunica/current && python3 tools/backup.py --prune >> /srv/fichaunica-data/logs/backup.log 2>&1
+# unanswered-lead reminders to agencies: every minute
+* * * * * set -a; . /srv/fichaunica-data/app.env; set +a; cd /srv/fichaunica/current && python3 tools/lead_watch_run.py >> /srv/fichaunica-data/logs/lead_watch.log 2>&1
+# weekly price check: Mondays 15:00 UTC (9 a.m. CDMX)
+0 15 * * 1 set -a; . /srv/fichaunica-data/app.env; set +a; cd /srv/fichaunica/current && python3 tools/price_check_weekly.py >> /srv/fichaunica-data/logs/price_check.log 2>&1
+# Cloud plan only: watchdog
+# * * * * * DATA_DIR=$HOME/fichaunica-data $HOME/fichaunica/current/deploy/run-cloud.sh watch
