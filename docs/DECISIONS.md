@@ -53,3 +53,4 @@ Each line: the call, why, how to undo.
     - Backups are online SQLite copies with an integrity check, a checksum and gzip, plus incremental media; retention is 14 daily + 8 weekly.
     - Deploy kit in `deploy/`: the target (VPS or Cloud) is configurable, it's a dry run unless `target.env` + `--go`, and it does a backup, release symlink, health check and auto-rollback.
     - Recommendation: Hostinger VPS (wildcard + custom-domain TLS need root).
+37. **Email subjects (Josh's permanent rule, 10-17):** always "<Our brand> / <Their company or first name>", nothing more: `llave/emails.py` (platform→agent "Ficha Única / <agency>", agency→lead "<agency> / <first name>"; never a handle or email as the name).
