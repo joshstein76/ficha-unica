@@ -17,3 +17,11 @@ Each line: the call, why, how to undo.
 - The VIVE GHL token lacks the custom-fields read scope (`locations/customFields.readonly`). Needed before LLAVE fields can be created or checked.
 - The first-reply template to leads (Spanish) needs Josh's OK.
 - The "LLAVE Leads" pipeline doesn't exist yet. Create it with the sub-account.
+
+## Josh's answers 10-17 (via Samantha) and what changed in the build
+12. **Public name = Ficha Única.** Every customer-facing string uses it. LLAVE stays as the internal code name (repo, modules). Local base domain is `fichaunica.localhost`; production is `fichaunica.mx` once Josh buys the domain.
+13. **Owner = Ciao Bella Marketing.** It appears in the panel footer, the terms + platform privacy drafts at `/terminos` and `/privacidad`, and each agent site's privacy notice: the agency is responsible for its clients' data and Ciao Bella Marketing acts as processor. VIVE stays separate.
+14. **All Ritz units cleared** for portals (Josh 10-17). 5002/5102/5407/5105/4908 carry the required private-owner resale line. 4804 is not called a resale. Prices are dated from the VIVE pack.
+15. **Servicios hub** cross-sells RentaPóliza (rentas, "Próximamente" while on hold), VIVE (luxury referrals by WhatsApp, commission agreed in person, no number shown), IDX Bloom (Miami) and Ciao Bella (AI/SEO). **Academia** has 6 lesson stubs. On phones both live on Inicio (6-tab limit).
+16. **CSV import** (preview → commit, always as borrador, plan limits respected). Photo URLs in a CSV are NOT downloaded yet: fetching arbitrary URLs needs SSRF guards, so it goes in a later version.
+17. **Footer link "Sitio creado con Ficha Única"** on every agent site, carrying `?source=sitio-<slug>`: every free site brings us new agents (the Wix loop).
