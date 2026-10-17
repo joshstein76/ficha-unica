@@ -16,13 +16,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import threading
 
-from .. import auth, db, geo, importer, ml_oauth, photo_fetch, photos, price_check, replies, whatsapp
+from .. import auth, db, geo, importer, lead_watch, ml_oauth, photo_fetch, photos, price_check, replies, stats, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import panel, site
 from .common import csrf_ok, to_cents, to_num
 
 MAX_UPLOAD = 40 * 1024 * 1024
+_SCHEMA_OK = False
 SESSION_DAYS = 30
 
 
@@ -108,6 +109,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def route(self, method):
         con = db.connect()
+        global _SCHEMA_OK
+        if not _SCHEMA_OK:
+            lead_watch.ensure_columns(con)  # adds leads.first_response_at / reminded_at + listing_views
+            con.commit()
+            _SCHEMA_OK = True
         try:
             u = urllib.parse.urlsplit(self.path)
             path, query = u.path, {k: v[-1] for k, v in urllib.parse.parse_qs(u.query).items()}
@@ -175,6 +181,9 @@ class Handler(BaseHTTPRequestHandler):
             for lid in db.public_listing_ids(con, a['id']):
                 c = db.canonical(con, lid)
                 if c['slug'] == m.group(1):
+                    if not m.group(2) and method == 'GET' and not stats.is_bot(self.headers.get('User-Agent')):
+                        stats.record_view(con, lid)
+                        con.commit()
                     return self.send(site.ficha(a, c) if m.group(2) else site.listing(con, a, c))
             return self.send(site.not_found(a), 404)
         return self.send(site.not_found(a), 404)
@@ -370,7 +379,25 @@ class Handler(BaseHTTPRequestHandler):
             ok = 'Propiedad creada. Ahora sube las fotos.' if query.get('ok') == 'creada' else ''
             return self.send(panel.listing_form(con, ctx, l, ok=ok))
         if path == '/clientes':
-            return self.send(panel.leads(con, ctx))
+            return self.send(panel.leads(con, ctx, query.get('estado')))
+        m = re.match(r'^/clientes/(\d+)/(whatsapp|estado)$', path)
+        if m:
+            lid = int(m.group(1))
+            if m.group(2) == 'whatsapp':
+                ld = con.execute('SELECT * FROM leads WHERE id=? AND agency_id=?', (lid, a['id'])).fetchone()
+                if not ld or not ld['phone']:
+                    return self.redirect('/clientes')
+                lead_watch.mark_responded(con, lid, a['id'])
+                con.commit()
+                lst = con.execute('SELECT title FROM listings WHERE id=?', (ld['listing_id'],)).fetchone() if ld['listing_id'] else None
+                text = replies.render(a, ld['name'], lst['title'] if lst else None, ctx['user']['name'])
+                return self.redirect(whatsapp.wa_link(ld['phone'], text))
+            if method == 'POST':
+                lead_watch.set_status(con, lid, a['id'], f.get('status', ''))
+                con.commit()
+            return self.redirect('/clientes' + (('?estado=' + query['estado']) if query.get('estado') else ''))
+        if path == '/estadisticas':
+            return self.send(panel.stats_page(ctx, stats.agency_stats(con, a['id'])))
         if path == '/portales':
             return self.send(panel.portals(con, ctx))
         if path == '/portales/mercadolibre/conectar':

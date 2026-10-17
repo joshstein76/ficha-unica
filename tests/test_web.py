@@ -263,6 +263,42 @@ class WebFlow(unittest.TestCase):
         s, _, _ = req('app.fichaunica.localhost', '/precios/%d' % lid, {'csrf': csrf2}, cookie2)
         con.close()
 
+    def test_inbox_status_reminder_stats(self):
+        cookie, csrf = self.signup('Rapida Respuesta', 'rapida@ejemplo.test')
+        body, ct = multipart({'csrf': csrf, 'operation': 'venta', 'property_type': 'departamento'}, [('fotos', ('a.jpg', jpeg()))])
+        s, _, h = req('app.fichaunica.localhost', '/nueva', body, cookie, ct)
+        lid = int(re.search(r'/nueva/(\d+)/2', h['Location']).group(1))
+        req('app.fichaunica.localhost', '/nueva/%d/2' % lid, {'csrf': csrf, 'price': '3000000', 'colonia': 'Narvarte',
+            'municipio': 'Benito Juárez', 'estado': 'Ciudad de México'}, cookie)
+        req('app.fichaunica.localhost', '/nueva/%d/3' % lid, {'csrf': csrf, 'title': 'Departamento en venta en Narvarte', 'description': 'x'}, cookie)
+        con = db.connect()
+        slug = con.execute('SELECT slug FROM listings WHERE id=?', (lid,)).fetchone()['slug']
+        for ua in ('Mozilla/5.0', 'Mozilla/5.0', 'Googlebot/2.1'):
+            r = urllib.request.Request(BASE + '/propiedad/' + slug, headers={'Host': 'rapida-respuesta.fichaunica.localhost', 'User-Agent': ua})
+            OPENER.open(r).read()
+        self.assertEqual(con.execute('SELECT SUM(views) FROM listing_views WHERE listing_id=?', (lid,)).fetchone()[0], 2)
+        req('rapida-respuesta.fichaunica.localhost', '/contacto', {'listing': lid, 'name': 'Carla Ruiz', 'phone': '5512121212', 'consent': '1'})
+        lead = con.execute('SELECT * FROM leads WHERE listing_id=?', (lid,)).fetchone()
+        con.execute("UPDATE leads SET created_at=datetime('now','-9 minutes') WHERE id=?", (lead['id'],))
+        con.commit()
+        s, page, _ = req('app.fichaunica.localhost', '/', cookie=cookie)
+        self.assertIn('sin respuesta hace más de 5 minutos', page)
+        from llave import lead_watch
+        self.assertEqual(lead_watch.remind(con), 1)
+        self.assertEqual(lead_watch.remind(con), 0)
+        s, _, h = req('app.fichaunica.localhost', '/clientes/%d/whatsapp' % lead['id'], cookie=cookie)
+        self.assertEqual(s, 303)
+        self.assertTrue(h['Location'].startswith('https://wa.me/525512121212?text=Hola%20Carla'))
+        l2 = con.execute('SELECT * FROM leads WHERE id=?', (lead['id'],)).fetchone()
+        self.assertEqual(l2['status'], 'contactado')
+        self.assertIsNotNone(l2['first_response_at'])
+        req('app.fichaunica.localhost', '/clientes/%d/estado' % lead['id'], {'csrf': csrf, 'status': 'cita'}, cookie)
+        self.assertEqual(con.execute('SELECT status FROM leads WHERE id=?', (lead['id'],)).fetchone()[0], 'cita')
+        s, page, _ = req('app.fichaunica.localhost', '/estadisticas', cookie=cookie)
+        self.assertEqual(s, 200)
+        self.assertIn('Visitas a tus propiedades', page)
+        con.close()
+
     def test_media_traversal_blocked(self):
         s, _, _ = req('app.fichaunica.localhost', '/media/../../etc/passwd')
         self.assertEqual(s, 404)

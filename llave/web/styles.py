@@ -68,6 +68,10 @@ border-bottom:1px solid var(--line);padding:0}nav.tabs a{grid-auto-flow:column;f
 .auth .btn{width:100%}
 .filters{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
 .map{border-radius:var(--r);border:1px solid var(--line);z-index:0}
+.card.late{border-color:var(--bad)}
+.bars{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:6px;align-items:end;height:140px}
+.bar{display:grid;grid-template-rows:1fr auto;height:100%;text-align:center}.bar span{align-self:end;background:var(--brand);border-radius:6px 6px 0 0;min-height:2px}
+.bar small{color:var(--muted);font-size:11px}
 .auth{max-width:420px;margin:6vh auto;padding:0 16px;display:grid;gap:18px}
 :focus-visible{outline:3px solid var(--brand);outline-offset:2px}
 """

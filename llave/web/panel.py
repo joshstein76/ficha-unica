@@ -2,7 +2,7 @@
 Pages are plain functions returning HTML; server.py handles routing, sessions and POSTs."""
 import json
 
-from .. import db, geo, ml_oauth, price_check, replies, whatsapp
+from .. import db, geo, lead_watch, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS)
 from .styles import FONTS, PANEL
@@ -16,11 +16,12 @@ ICONS = {
     'sitio': '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',
     'servicios': '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/>',
     'academia': '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/>',
+    'estadisticas': '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
 }
 TABS = [('inicio', 'Inicio', '/'), ('propiedades', 'Propiedades', '/propiedades'), ('clientes', 'Clientes', '/clientes'),
         ('portales', 'Portales', '/portales'), ('bolsa', 'Bolsa', '/bolsa'), ('sitio', 'Mi sitio', '/sitio'),
-        ('servicios', 'Servicios', '/servicios'), ('academia', 'Academia', '/academia')]
-DESKTOP_ONLY = {'servicios', 'academia'}  # on phones they live on Inicio
+        ('estadisticas', 'Estadísticas', '/estadisticas'), ('servicios', 'Servicios', '/servicios'), ('academia', 'Academia', '/academia')]
+DESKTOP_ONLY = {'estadisticas', 'servicios', 'academia'}  # on phones they live on Inicio
 
 
 def _icon(k):
@@ -42,7 +43,7 @@ def layout(title, body, ctx=None, tab=None, flash=''):
             '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
             '<title>%s · Ficha Única</title><link rel="stylesheet" href="%s"><style>%s</style></head><body>'
             '<header class="top"><a class="logo" href="/">Ficha <span>Única</span></a>%s</header>%s'
-            '<main class="wrap">%s%s</main><footer class="wrap small muted" style="padding-top:0">Ficha Única es un servicio de %s · <a href="/terminos">Términos</a> · <a href="/privacidad">Privacidad</a></footer></body></html>') % (
+            '<main class="wrap">%s%s</main><footer class="wrap small muted" style="padding-top:0;display:block">Ficha Única es un servicio de %s · <a href="/terminos">Términos</a> · <a href="/privacidad">Privacidad</a></footer></body></html>') % (
         e(title), FONTS, PANEL, top_right, nav, flash, body, e(db.OWNER))
 
 
@@ -102,7 +103,9 @@ def dashboard(con, ctx, welcome=False):
     done = sum(1 for s in steps if s[0])
     leads = con.execute('SELECT * FROM leads WHERE agency_id=? ORDER BY id DESC LIMIT 5', (a['id'],)).fetchall()
     n_stale = len(price_check.stale_listings(con, a['id']))
-    body = (('<div class="notice warn">%d precio%s sin confirmar en 30 días. <a href="/precios">Confírmalos con un toque</a></div>'
+    n_late = late_count(con, a['id'])
+    body = (('<div class="notice err">⏰ %d cliente%s sin respuesta hace más de 5 minutos. <a href="/clientes?estado=nuevo">Respóndeles ya</a></div>'
+             % (n_late, '' if n_late == 1 else 's')) if n_late else '') + (('<div class="notice warn">%d precio%s sin confirmar en 30 días. <a href="/precios">Confírmalos con un toque</a></div>'
              % (n_stale, '' if n_stale == 1 else 's')) if n_stale else '') + ('%s<div><h1>Hola, %s</h1><p class="muted">Tu sitio: <a href="%s" target="_blank" rel="noopener">%s</a></p></div>'
             '<div class="stats"><div class="stat"><b>%d</b><small>Propiedades publicadas</small></div>'
             '<div class="stat"><b>%d/%d</b><small>Usadas en plan %s</small></div>'
@@ -111,7 +114,9 @@ def dashboard(con, ctx, welcome=False):
             '%s'
             '<section class="card"><div class="row" style="justify-content:space-between"><h2>Últimos clientes</h2>'
             '<a href="/clientes">Ver todos</a></div>%s</section>'
-            '<section class="grid2"><a class="card" href="/servicios" style="text-decoration:none;color:inherit"><h2>Servicios</h2>'
+            '<section class="grid2"><a class="card" href="/estadisticas" style="text-decoration:none;color:inherit"><h2>Estadísticas</h2>'
+            '<span class="small muted">Visitas, clientes y tu tiempo de respuesta.</span></a>'
+            '<a class="card" href="/servicios" style="text-decoration:none;color:inherit"><h2>Servicios</h2>'
             '<span class="small muted">Póliza para rentas, clientes de lujo, Miami y marketing con IA.</span></a>'
             '<a class="card" href="/academia" style="text-decoration:none;color:inherit"><h2>Academia</h2>'
             '<span class="small muted">Clases cortas para vender y rentar más.</span></a></section>') % (
@@ -241,31 +246,94 @@ def listing_form(con, ctx, l=None, error='', ok=''):
 
 
 # ---------- leads ----------
-def _leads_list(con, rows):
+def _age_min(created_at):
+    import datetime as _dt
+    try:
+        t = _dt.datetime.strptime(created_at[:19], '%Y-%m-%d %H:%M:%S')
+    except (TypeError, ValueError):
+        return None
+    return int((_dt.datetime.utcnow() - t).total_seconds() // 60)
+
+
+def _leads_list(con, rows, ctx=None):
     out = []
     for r in rows:
         lst = con.execute('SELECT title, ref FROM listings WHERE id=?', (r['listing_id'],)).fetchone() if r['listing_id'] else None
-        wa = whatsapp.wa_link(r['phone'], 'Hola %s, gracias por escribir%s.' % (
-            (r['name'] or '').split(' ')[0], (' sobre ' + lst['title']) if lst else '')) if r['phone'] else ''
-        out.append('<div class="card" style="gap:6px"><div class="row" style="justify-content:space-between"><b>%s</b>'
-                   '<span class="pill %s">%s</span></div><span class="small muted">%s · %s · %s</span>%s'
-                   '<p class="small" style="margin:0">%s</p><div class="row">%s%s</div></div>' % (
-                       e(r['name'] or 'Sin nombre'), e(r['status']), e(label(LEAD_STATUSES, r['status'])),
+        keys = r.keys()
+        waiting = r['status'] == 'nuevo' and ('first_response_at' not in keys or not r['first_response_at'])
+        age = _age_min(r['created_at']) if waiting else None
+        late = waiting and age is not None and age >= 5
+        badge = ('<span class="pill error">⏰ sin respuesta · %s</span>' % ('%d min' % age if age < 120 else '%d h' % (age // 60))) if late else ''
+        chips = ''
+        if ctx:
+            chips = '<form class="row" method="post" action="/clientes/%d/estado">%s%s</form>' % (r['id'], csrf_field(ctx), ''.join(
+                '<button class="btn small %s" name="status" value="%s">%s</button>' % ('' if k == r['status'] else 'ghost', k, v)
+                for k, v in LEAD_STATUSES))
+        out.append('<div class="card%s" style="gap:6px"><div class="row" style="justify-content:space-between"><b>%s</b>'
+                   '<span class="row">%s<span class="pill %s">%s</span></span></div><span class="small muted">%s · %s · %s</span>%s'
+                   '<p class="small" style="margin:0">%s</p><div class="row">%s%s</div>%s</div>' % (
+                       ' late' if late else '', e(r['name'] or 'Sin nombre'), badge, e(r['status']), e(label(LEAD_STATUSES, r['status'])),
                        e(nice_date(r['created_at'])), e(r['source']), e(lst['ref'] if lst else 'general'),
                        ('<span class="small">%s</span>' % e(lst['title'])) if lst else '', e(r['message']),
-                       ('<a class="btn wa small" href="%s" target="_blank" rel="noopener">Responder por WhatsApp</a>' % e(wa)) if wa else '',
-                       ('<a class="btn ghost small" href="mailto:%s">Correo</a>' % e(r['email'])) if r['email'] else ''))
+                       ('<a class="btn wa small" href="/clientes/%d/whatsapp" target="_blank" rel="noopener">Responder por WhatsApp</a>' % r['id'])
+                       if r['phone'] else '',
+                       ('<a class="btn ghost small" href="mailto:%s">Correo</a>' % e(r['email'])) if r['email'] else '', chips))
     return '<div class="list">%s</div>' % ''.join(out)
 
 
-def leads(con, ctx):
+def late_count(con, agency_id):
+    """Leads still unanswered after 5 minutes (reminded or not): the number that must be zero."""
+    lead_watch.ensure_columns(con)
+    return con.execute("SELECT COUNT(*) FROM leads WHERE agency_id=? AND status='nuevo' AND first_response_at IS NULL "
+                       "AND created_at < datetime('now','-5 minutes')", (agency_id,)).fetchone()[0]
+
+
+def leads(con, ctx, estado=None):
     a = ctx['agency']
-    rows = con.execute("SELECT * FROM leads WHERE agency_id=? AND status!='descartado' ORDER BY id DESC LIMIT 200", (a['id'],)).fetchall()
-    ob = con.execute("SELECT COUNT(*) FROM outbox o JOIN leads l ON o.ref='lead:'||l.id WHERE l.agency_id=?", (a['id'],)).fetchone()[0]
-    body = ('<h1>Clientes</h1><p class="muted small">Cada cliente también se prepara para GoHighLevel '
-            '(%d operaciones en modo prueba, nada enviado).</p>%s') % (
-        ob, _leads_list(con, rows) if rows else '<p class="muted">Aún no hay clientes.</p>')
+    lead_watch.ensure_columns(con)
+    q, args = "SELECT * FROM leads WHERE agency_id=?", [a['id']]
+    if estado in dict(LEAD_STATUSES):
+        q += ' AND status=?'
+        args.append(estado)
+    else:
+        q += " AND status!='descartado'"
+    rows = con.execute(q + ' ORDER BY id DESC LIMIT 200', args).fetchall()
+    late = late_count(con, a['id'])
+    tabs = '<div class="row">%s</div>' % ''.join(
+        '<a class="btn small %s" href="/clientes%s">%s</a>' % ('' if (estado or '') == k else 'ghost', ('?estado=' + k) if k else '', v)
+        for k, v in [('', 'Todos')] + LEAD_STATUSES)
+    body = ('<h1>Clientes</h1>%s<p class="muted small">Respóndeles en menos de 5 minutos: es lo que más cierra. '
+            'Al tocar "Responder por WhatsApp" se abre tu mensaje listo y lo marcamos como contactado.</p>%s%s') % (
+        notice('Tienes %d cliente%s esperando respuesta hace más de 5 minutos.' % (late, '' if late == 1 else 's'), 'err') if late else '',
+        tabs, _leads_list(con, rows, ctx) if rows else '<p class="muted">No hay clientes en esta vista.</p>')
     return layout('Clientes', body, ctx, 'clientes')
+
+
+def stats_page(ctx, st):
+    rows = ''.join('<tr><td>%s<br><span class="small muted">%s</span></td><td>%d</td><td>%d</td></tr>' % (
+        e(x['title']), e(x['ref']), x['views'], x['leads']) for x in st['views_by_listing'])
+    weeks = st['leads_by_week']
+    mx = max([w['leads'] for w in weeks] + [1])
+    bars = ''.join('<div class="bar" title="%s: %d"><span style="height:%d%%"></span><small>%s</small></div>' % (
+        e(w['week']), w['leads'], int(100 * w['leads'] / mx), e(w['week'][-3:])) for w in weeks)
+    med = st['median_first_response_min']
+    body = ('<h1>Estadísticas</h1><p class="muted">Últimos 30 días.</p><div class="stats">'
+            '<div class="stat"><b>%d</b><small>Visitas a tus propiedades</small></div>'
+            '<div class="stat"><b>%d</b><small>Clientes nuevos</small></div>'
+            '<div class="stat"><b>%s</b><small>Tiempo de respuesta (mediana)</small></div>'
+            '<div class="stat"><b>%s</b><small>Respondidos en ≤5 min</small></div></div>'
+            '%s<section class="card"><h2>Clientes por semana</h2><div class="bars">%s</div></section>'
+            '<section class="card"><h2>Tus propiedades</h2><div class="tbl"><table><thead><tr><th>Propiedad</th><th>Visitas</th>'
+            '<th>Clientes</th></tr></thead><tbody>%s</tbody></table></div></section>'
+            '<section class="card"><h2>De dónde llegan</h2><p class="small">%s</p><h2>Colonias con más interés</h2><p class="small">%s</p></section>') % (
+        st['views_total'], st['leads_total'], ('%g min' % med) if med is not None else '—',
+        ('%g%%' % st['pct_answered_5min']) if st['pct_answered_5min'] is not None else '—',
+        notice('%d cliente%s sin respuesta ahora.' % (st['unanswered_now'], '' if st['unanswered_now'] == 1 else 's'), 'warn')
+        if st['unanswered_now'] else '', bars,
+        rows or '<tr><td colspan="3" class="muted">Aún sin datos.</td></tr>',
+        e(', '.join('%s: %d' % kv for kv in st['leads_by_source'].items()) or 'Aún sin datos.'),
+        e(', '.join('%s (%d)' % kv for kv in st['top_colonias']) or 'Aún sin datos.'))
+    return layout('Estadísticas', body, ctx, 'estadisticas')
 
 
 # ---------- portals ----------
@@ -500,8 +568,8 @@ def services(ctx):
 
 
 def academy(ctx):
-    items = ''.join('<div class="card" style="gap:4px"><b>%s</b><span class="small muted">%s</span><span class="pill pendiente">Próximamente</span></div>'
-                    % (e(t), e(d)) for t, d in LESSONS)
+    items = ''.join('<div class="card" style="gap:4px"><b>%d. %s</b><span class="small muted">%s</span><span class="pill pendiente">%s</span></div>'
+                    % (i + 1, e(t), e(d), 'Video en preparación' if i == 0 else 'Próximamente') for i, (t, d) in enumerate(LESSONS))
     body = ('<h1>Academia</h1><p class="muted">Clases cortas, en video y en español, para vender y rentar más con Ficha Única. '
             'Gratis para todos los asesores.</p><div class="grid2">%s</div>') % items
     return layout('Academia', body, ctx, 'academia')
