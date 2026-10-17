@@ -73,7 +73,8 @@ class T(unittest.TestCase):
             if p['kind'] == 'ghl.agent_alert':
                 self.assertEqual(p['audience'], 'agency'); self.assertNotEqual(p['to_whatsapp'], '+525512345678')
             if p['kind'] == 'ghl.lead_first_reply':
-                self.assertEqual(p['status'], 'needs_template'); self.assertNotIn('text', p['body'])
+                self.assertEqual(p['status'], 'approved_template'); self.assertIn('gracias por escribir', p['body']['text'])
+                self.assertNotIn('{', p['body']['text'])
             self.assertNotEqual(p['kind'], 'ghl.message')
 
     def test_live_raises(self):

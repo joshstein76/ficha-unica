@@ -2,7 +2,7 @@
 Pages are plain functions returning HTML; server.py handles routing, sessions and POSTs."""
 import json
 
-from .. import db, whatsapp
+from .. import db, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS)
 from .styles import FONTS, PANEL
@@ -362,9 +362,16 @@ def site_settings(con, ctx, ok='', error=''):
             '<label>Correo de contacto<input name="email" type="email" value="%s"></label>'
             '<label>Ciudad<input name="city" value="%s"></label>'
             '<label>Logo (PNG o JPG)<input type="file" name="logo" accept="image/png,image/jpeg,image/webp"></label></section>'
+            '<section class="card"><h2>Primer mensaje a tus clientes</h2><p class="small muted">Es lo primero que recibe por WhatsApp '
+            'quien te escribe. Puedes usar {nombre}, {propiedad}, {asesor} e {inmobiliaria}. Déjalo vacío para usar el mensaje recomendado.</p>'
+            '<label>Cuando sabemos su nombre<textarea name="first_reply" rows="3" placeholder="%s">%s</textarea></label>'
+            '<label>Cuando no sabemos su nombre<textarea name="first_reply_noname" rows="3" placeholder="%s">%s</textarea></label>'
+            '<p class="small"><b>Así se verá:</b> %s</p></section>'
             '<button class="btn">Guardar cambios</button></form>%s') % (
         notice(ok), notice(error, 'err'), e(db.site_url(a)), csrf_field(ctx), designs, e(a['accent']), e(a['name']),
-        e(a['tagline']), e(a['about']), e(a['whatsapp']), e(a['email']), e(a['city']), domain)
+        e(a['tagline']), e(a['about']), e(a['whatsapp']), e(a['email']), e(a['city']),
+        e(replies.DEFAULT_FIRST_REPLY), e(a['first_reply']), e(replies.DEFAULT_FIRST_REPLY_NONAME), e(a['first_reply_noname']),
+        e(replies.render(a, 'Ana Pérez', 'Departamento con terraza en la Roma Norte', ctx['user']['name'])), domain)
     return layout('Mi sitio', body, ctx, 'sitio')
 
 

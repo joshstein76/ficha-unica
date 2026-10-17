@@ -3,7 +3,7 @@ import json
 import os
 import sys
 
-from . import db, whatsapp
+from . import db, replies, whatsapp
 
 _GUARD = '/Users/joshstein/Desktop/Claude Ledger/josh-command-center/clients/vive-polanco/ops'
 FALLBACK_TERMS = ('alara', 'global luxury', 'glicka', 'paulina sierra', 'gabriella orozco', 'sheila')
@@ -81,8 +81,10 @@ def plan_for_lead(lead_row, canonical, agency_row, owner_agency_row=None, split_
         ops.append({'kind': 'ghl.agent_alert', 'method': None, 'path': None, 'channel': 'whatsapp',
                     'audience': 'agency', 'role': role, 'agency_slug': r['slug'],
                     'to_whatsapp': r.get('whatsapp'), 'body': {'text': text}})
-    ops.append({'kind': 'ghl.lead_first_reply', 'status': 'needs_template', 'audience': 'lead',
-                'todo': 'Primer mensaje al lead: requiere plantilla aprobada por un humano.', 'body': {}})
+    agent_name = (c.get('agent') or {}).get('name') if c else None
+    ops.append({'kind': 'ghl.lead_first_reply', 'status': 'approved_template', 'audience': 'lead', 'channel': 'whatsapp',
+                'to_phone': lead.get('phone') or '', 'template': 'first_reply (Josh 2026-10-17, editable per agency)',
+                'body': {'text': replies.render(ag, lead.get('name'), c['title'] if c else None, agent_name)}})
     return ops
 
 

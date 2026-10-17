@@ -28,6 +28,11 @@ def connect(path=None):
 def init(con):
     with open(os.path.join(ROOT, 'llave', 'schema.sql'), encoding='utf-8') as f:
         con.executescript(f.read())
+    # light migrations for databases created before a column existed
+    cols = {r[1] for r in con.execute('PRAGMA table_info(agencies)')}
+    for col in ('first_reply', 'first_reply_noname'):
+        if col not in cols:
+            con.execute('ALTER TABLE agencies ADD COLUMN %s TEXT' % col)
     con.commit()
 
 

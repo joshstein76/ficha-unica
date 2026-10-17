@@ -14,7 +14,7 @@ import traceback
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .. import auth, db, importer, photos, whatsapp
+from .. import auth, db, importer, photos, replies, whatsapp
 from ..feeds import build_feed, registry
 from ..feeds.mercadolibre import dry_run_publish
 from ..leads import create_lead
@@ -468,9 +468,14 @@ def save_site(con, a, f, files):
         raise ValueError('Revisa el WhatsApp.')
     design = f.get('design') if f.get('design') in ('residencia', 'ciudad', 'costa') else a['design']
     accent = f.get('accent') if re.match(r'^#[0-9a-fA-F]{6}$', f.get('accent') or '') else a['accent']
+    fr, frn = (f.get('first_reply') or '').strip(), (f.get('first_reply_noname') or '').strip()
+    err = replies.check(fr) or replies.check(frn, need_name=False)
+    if err:
+        raise ValueError(err)
     logo = a['logo_path']
     if files.get('logo'):
         logo = photos.save_logo(a['id'], files['logo'][0]) if hasattr(photos, 'save_logo') else logo
+    con.execute('UPDATE agencies SET first_reply=?, first_reply_noname=? WHERE id=?', (fr or None, frn or None, a['id']))
     con.execute('UPDATE agencies SET name=?, tagline=?, about=?, whatsapp=?, email=?, city=?, design=?, accent=?, logo_path=? WHERE id=?',
                 (name[:80], (f.get('tagline') or '').strip()[:90], (f.get('about') or '').strip()[:2000], wa,
                  (f.get('email') or '').strip()[:120], (f.get('city') or '').strip()[:60], design, accent, logo, a['id']))

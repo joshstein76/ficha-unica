@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS agencies (
   domain_verified_at TEXT,
   plan TEXT NOT NULL DEFAULT 'gratis',    -- gratis | pro | agencia
   ghl_location_id TEXT,                   -- set only when a GHL sub-account exists for the agency
+  first_reply TEXT,                       -- NULL = default approved by Josh 10-17 (llave/replies.py)
+  first_reply_noname TEXT,
   is_demo INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
