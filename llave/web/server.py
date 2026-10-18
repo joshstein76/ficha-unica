@@ -21,11 +21,11 @@ import threading
 from .. import auth, cards, db, geo, importer, lead_watch, media, ml_oauth, photo_fetch, photos, price_check, replies, stats, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
-from . import panel, site
+from . import panel, portal, site
 from .common import csrf_ok, to_cents, to_num
 
 MAX_UPLOAD = 40 * 1024 * 1024
-_SCHEMA_OK = False
+_SCHEMA_OK = set()
 SESSION_DAYS = 30
 
 
@@ -154,11 +154,12 @@ class Handler(BaseHTTPRequestHandler):
     def route(self, method):
         self._body_read = False
         con = db.connect()
-        global _SCHEMA_OK
-        if not _SCHEMA_OK:
+        if db.DB_PATH not in _SCHEMA_OK:  # per database (tests run several temp DBs in one process)
             lead_watch.ensure_columns(con)  # adds leads.first_response_at / reminded_at + listing_views
+            from .. import eco
+            eco.ensure_tables(con)
             con.commit()
-            _SCHEMA_OK = True
+            _SCHEMA_OK.add(db.DB_PATH)
         try:
             u = urllib.parse.urlsplit(self.path)
             path, query = u.path, {k: v[-1] for k, v in urllib.parse.parse_qs(u.query).items()}
@@ -182,8 +183,8 @@ class Handler(BaseHTTPRequestHandler):
                 a = con.execute('SELECT * FROM agencies WHERE custom_domain=? AND domain_verified_at IS NOT NULL', (h,)).fetchone()
             if a:
                 return self.agency_site(con, a, method, path)
-            if h in (base, 'localhost', '127.0.0.1'):
-                return self.send(panel.landing((query.get('ref') or '')[:60]))
+            if h in (base, 'www.' + base, 'localhost', '127.0.0.1'):
+                return self.brand_site(con, method, path, query)
             return self.send('Sitio no encontrado', 404, 'text/plain; charset=utf-8')
         except Exception as ex:
             traceback.print_exc()
@@ -195,6 +196,45 @@ class Handler(BaseHTTPRequestHandler):
             self.send('<h1>Algo salió mal</h1><p>Intenta de nuevo en un momento.</p>', 500)
         finally:
             con.close()
+
+    def eco_webhook(self, con, brand):
+        """Signed webhook from a sister company (contract: docs/RENTAPOLIZA-API-CONTRACT.md). Secret per brand in env."""
+        from .. import eco
+        secret = os.environ.get('LLAVE_ECO_SECRET_' + brand.upper())
+        length = int(self.headers.get('Content-Length') or 0)
+        raw = self.rfile.read(min(length, 65536))
+        self._body_read = True
+        if not secret:
+            return self.send(json.dumps({'ok': False, 'code': 'no_configurado'}), 503, 'application/json')
+        ts = self.headers.get('X-Eco-Timestamp')
+        if not ts or not eco.verify_webhook(secret, raw, self.headers.get('X-Eco-Signature', ''), ts):
+            return self.send(json.dumps({'ok': False, 'code': 'firma_invalida'}), 401, 'application/json')
+        try:
+            body = json.loads(raw.decode('utf-8'))
+        except ValueError:
+            return self.send(json.dumps({'ok': False, 'code': 'json_invalido'}), 400, 'application/json')
+        res = eco.handle_rentapoliza_webhook(con, body)
+        con.commit()
+        return self.send(json.dumps(res), 200 if res.get('ok') else 422, 'application/json')
+
+    # ---------- brand domain: agent landing + public directory ----------
+    def brand_site(self, con, method, path, query):
+        if path == '/propiedades':
+            return self.send(portal.page(con, query))
+        if path == '/aviso-de-privacidad':
+            return self.send(panel.legal('privacidad'))
+        if path == '/busco' and method == 'POST':
+            f, _ = self.form()
+            if f.get('website'):
+                return self.redirect('/propiedades?enviado=1')
+            try:
+                route_general_request(con, f)
+            except ValueError as ex:
+                return self.send(portal.page(con, {}, str(ex)), 400)
+            return self.send(portal.page(con, {}, '¡Gracias! Un asesor de la zona te escribe por WhatsApp.'))
+        if path == '/robots.txt':
+            return self.send('User-agent: *\nAllow: /\n', ctype='text/plain; charset=utf-8')
+        return self.send(panel.landing((query.get('ref') or '')[:60]))
 
     # ---------- agent site ----------
     def agency_site(self, con, a, method, path):
@@ -214,6 +254,38 @@ class Handler(BaseHTTPRequestHandler):
             return self.redirect('/gracias?l=%s' % (lid or ''))
         if path == '/':
             return self.send(site.home(con, a))
+        if path == '/vende':
+            if method != 'POST':
+                return self.send(site.valuation(con, a))
+            f, _ = self.form()
+            if f.get('website'):
+                return self.send(site.valuation(con, a, {'ok': False}))
+            try:
+                m2 = float((f.get('m2') or '').replace(',', ''))
+            except ValueError:
+                return self.send(site.valuation(con, a, error='Escriba los m² con números.'), 400)
+            msg = 'Quiere %s su %s en %s, %s: %g m²%s.' % ('vender' if f.get('operation') != 'renta' else 'rentar',
+                                                           f.get('property_type') or 'propiedad', f.get('colonia', ''), f.get('municipio', ''),
+                                                           m2, (', %s recámaras' % f['bedrooms']) if (f.get('bedrooms') or '').isdigit() else '')
+            try:
+                create_lead(con, a['id'], None, f.get('name', ''), f.get('phone', ''), '', msg, 'vendedor', f.get('consent') == '1')
+            except ValueError as ex:
+                return self.send(site.valuation(con, a, error=str(ex)), 400)
+            from ..ai import comps
+            res = comps.estimate(con, 'renta' if f.get('operation') == 'renta' else 'venta', f.get('property_type') or 'departamento',
+                                 'MXN', f.get('colonia'), f.get('municipio'), m2)
+            return self.send(site.valuation(con, a, res))
+        if path == '/alerta' and method == 'POST':
+            f, _ = self.form()
+            if not f.get('website'):
+                try:
+                    from .. import alerts_buyers
+                    alerts_buyers.subscribe(con, a['id'], f.get('name'), f.get('phone'), f.get('operation'), f.get('property_type'),
+                                            f.get('colonia'), (f.get('max') or '').replace(',', '').replace('$', ''), f.get('currency', 'MXN'),
+                                            f.get('beds'), f.get('consent') == '1')
+                except ValueError as ex:
+                    return self.send(site.thanks(a, '', str(ex)), 400)
+            return self.send(site.thanks(a, '', 'Listo. Le avisaremos por WhatsApp cuando salga algo así.'))
         if path == '/gracias':
             msg = 'Hola, acabo de dejar mis datos en su sitio.'
             return self.send(site.thanks(a, whatsapp.wa_link(a['whatsapp'], msg) if a['whatsapp'] else ''))
@@ -299,6 +371,23 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(panel.login())
         if path in ('/terminos', '/privacidad'):
             return self.send(panel.legal(path[1:]))
+        m = re.match(r'^/api/eco/(rentapoliza)$', path)
+        if m and method == 'POST':
+            return self.eco_webhook(con, m.group(1))
+        m = re.match(r'^/unirse/([A-Za-z0-9_-]{20,60})$', path)
+        if m:
+            inv = team_invite(con, m.group(1))
+            if not inv:
+                return self.send(panel.layout('Invitación', panel.notice('Esta invitación ya se usó o venció. Pide una nueva.', 'err')), 404)
+            ag = con.execute('SELECT * FROM agencies WHERE id=?', (inv['agency_id'],)).fetchone()
+            if method == 'POST':
+                f, _ = self.form()
+                try:
+                    uid2 = join_team(con, inv, f)
+                except ValueError as ex:
+                    return self.send(panel.join(ag, m.group(1), str(ex), f), 400)
+                return self.start_session(con, uid2, '/')
+            return self.send(panel.join(ag, m.group(1)))
         if not ctx:
             return self.redirect('/entrar') if path != '/' else self.send(panel.landing())
         f, files = ({}, {})
@@ -384,10 +473,39 @@ class Handler(BaseHTTPRequestHandler):
             if ctx['user']['role'] != 'admin':
                 return self.send(panel.layout('No encontrado', panel.notice('Página no encontrada.', 'err'), ctx), 404)
             return self.send(panel.admin(con, ctx))
+        if path == '/equipo':
+            link = ''
+            if method == 'POST':
+                if a['plan'] != 'agencia' or ctx['user']['role'] not in ('owner', 'admin'):
+                    return self.send(panel.team(con, ctx, error='Solo el dueño en plan Agencia puede invitar.'), 403)
+                tok = auth.new_session_token()
+                con.execute("CREATE TABLE IF NOT EXISTS team_invites (token TEXT PRIMARY KEY, agency_id INTEGER NOT NULL, created_by INTEGER, "
+                            "expires_at TEXT NOT NULL, used_at TEXT)")
+                con.execute("INSERT INTO team_invites(token, agency_id, created_by, expires_at) VALUES (?,?,?, datetime('now','+7 days'))",
+                            (tok, a['id'], uid))
+                db.audit(con, actor, 'team_invite', 'agency:%d' % a['id'])
+                con.commit()
+                link = '%s/unirse/%s' % (db.origin('app'), tok)
+            return self.send(panel.team(con, ctx, link))
+        if path == '/que-publicar':
+            from ..ai import social_kit
+            return self.send(panel.social_kit_page(ctx, social_kit.weekly_kit(con, a['id'])))
         if path == '/invitar':
             return self.send(panel.invite(con, ctx))
         if path == '/servicios':
-            return self.send(panel.services(ctx))
+            return self.send(panel.services(ctx, con))
+        m = re.match(r'^/servicios/canjear/([a-z0-9_]+)$', path)
+        if m and method == 'POST':
+            from .. import eco
+            try:
+                lid = int(f.get('listing') or 0) or None
+                if lid and not con.execute('SELECT 1 FROM listings WHERE id=? AND agency_id=?', (lid, a['id'])).fetchone():
+                    raise ValueError('Esa propiedad no es tuya.')
+                eco.redeem(con, a['id'], m.group(1), lid)
+                con.commit()
+                return self.send(panel.services(ctx, con, ok='Listo: canjeado.'))
+            except ValueError as ex:
+                return self.send(panel.services(ctx, con, error=str(ex)), 400)
         if path == '/academia':
             return self.send(panel.academy(ctx))
         if path == '/propiedades/importar':
@@ -438,6 +556,21 @@ class Handler(BaseHTTPRequestHandler):
                 con.commit()
                 msg = '%d fotos listas.' % ok + ((' %d no se pudieron usar: %s' % (len(bad), bad[0])) if bad else '')
                 return self.send(panel.listing_form(con, ctx, l, ok=msg))
+            if sub == '/ia-texto' and method == 'POST':
+                from ..ai import writer
+                c = db.canonical(con, l['id'])
+                es, en = writer.describe(c, 'es'), writer.describe(c, 'en')
+                es['en'] = en
+                note = 'Texto sugerido %s. Revísalo y toca Guardar.' % ('con IA' if es.get('source') == 'ia' else 'a partir de tus datos')
+                return self.send(panel.listing_form(con, ctx, l, ok=note, suggestion=es))
+            if sub == '/ordenar-fotos' and method == 'POST':
+                from ..ai import photo_qa
+                order = photo_qa.analyze(con, l['id']).get('suggested_order') or []
+                if order:
+                    photos.reorder(con, l['id'], order)
+                    touch(con, l['id'])
+                    con.commit()
+                return self.redirect('/propiedades/%d' % l['id'])
             mm = re.match(r'^/fotos/(\d+)/borrar$', sub)
             if mm and method == 'POST':
                 p = con.execute('SELECT id FROM photos WHERE id=? AND listing_id=?', (int(mm.group(1)), l['id'])).fetchone()
@@ -639,6 +772,75 @@ def signup(con, f):
     uid = con.execute('INSERT INTO users(agency_id, name, email, whatsapp, password_hash) VALUES (?,?,?,?,?)',
                       (aid, name, email, wa, auth.hash_password(pw))).lastrowid
     db.audit(con, 'user:%d' % uid, 'signup', 'agency:%d %s' % (aid, slug))
+    con.commit()
+    return uid
+
+
+def route_general_request(con, f):
+    """'Dinos qué buscas' from the public directory = the honest free-leads source: route to an agency with priority in
+    that zone (Ecosistema credits), else the agency with most public listings matching the text; otherwise keep it unassigned."""
+    if f.get('consent') != '1':
+        raise ValueError('Acepta el aviso de privacidad para enviar tu solicitud.')
+    phone = whatsapp.norm_phone(f.get('phone'))
+    if not phone:
+        raise ValueError('Revisa tu WhatsApp: 10 dígitos.')
+    msg = (f.get('message') or '').strip()[:1000]
+    con.execute("CREATE TABLE IF NOT EXISTS portal_requests (id INTEGER PRIMARY KEY, name TEXT, phone TEXT, message TEXT, "
+                "agency_id INTEGER, lead_id INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')))")
+    words = {w.strip('.,').lower() for w in msg.split() if len(w) > 3}
+    agency_id = None
+    try:
+        from .. import eco
+        zone_words = [w for w in words if con.execute("SELECT 1 FROM listings WHERE status IN ('activa','apartada') AND "
+                                                      "(lower(colonia) LIKE ? OR lower(municipio) LIKE ?)", ('%' + w + '%',) * 2).fetchone()]
+        for w in zone_words or [None]:
+            pr = eco.priority_agencies(con, colonia=w) if w else eco.priority_agencies(con)
+            if pr:
+                agency_id = pr[0]['agency_id']
+                break
+    except Exception:
+        agency_id = None
+    if agency_id is None:
+        best, best_n = None, 0
+        for r in con.execute("SELECT agency_id, colonia, municipio FROM listings WHERE status IN ('activa','apartada')"):
+            hit = any(w in ((r['colonia'] or '') + ' ' + (r['municipio'] or '')).lower() for w in words)
+            if hit:
+                n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status IN ('activa','apartada') AND (lower(colonia) LIKE ? OR lower(municipio) LIKE ?)",
+                                (r['agency_id'], '%' + (r['colonia'] or '').lower() + '%', '%' + (r['municipio'] or '').lower() + '%')).fetchone()[0]
+                if n > best_n:
+                    best, best_n = r['agency_id'], n
+        agency_id = best
+    lead_id = None
+    if agency_id:
+        lead_id = create_lead(con, agency_id, None, f.get('name', ''), phone, '', msg, 'portal', True)['id']
+    con.execute('INSERT INTO portal_requests(name, phone, message, agency_id, lead_id) VALUES (?,?,?,?,?)',
+                ((f.get('name') or '')[:80], phone, msg, agency_id, lead_id))
+    db.audit(con, 'portal', 'general_request', 'agency:%s lead:%s' % (agency_id, lead_id))
+    con.commit()
+    return agency_id
+
+
+def team_invite(con, token):
+    con.execute("CREATE TABLE IF NOT EXISTS team_invites (token TEXT PRIMARY KEY, agency_id INTEGER NOT NULL, created_by INTEGER, "
+                "expires_at TEXT NOT NULL, used_at TEXT)")
+    return con.execute("SELECT * FROM team_invites WHERE token=? AND used_at IS NULL AND expires_at > datetime('now')", (token,)).fetchone()
+
+
+def join_team(con, inv, f):
+    name, email = (f.get('name') or '').strip(), (f.get('email') or '').strip().lower()
+    wa = whatsapp.norm_phone(f.get('whatsapp'))
+    if len(name) < 3 or not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+        raise ValueError('Revisa tu nombre y tu correo.')
+    if not wa:
+        raise ValueError('Revisa tu WhatsApp: 10 dígitos.')
+    if len(f.get('password') or '') < 8:
+        raise ValueError('La contraseña debe tener al menos 8 caracteres.')
+    if con.execute('SELECT 1 FROM users WHERE email=?', (email,)).fetchone():
+        raise ValueError('Ya existe una cuenta con ese correo.')
+    uid = con.execute("INSERT INTO users(agency_id, name, email, whatsapp, password_hash, role) VALUES (?,?,?,?,?, 'agent')",
+                      (inv['agency_id'], name[:80], email, wa, auth.hash_password(f['password']))).lastrowid
+    con.execute("UPDATE team_invites SET used_at=datetime('now') WHERE token=?", (inv['token'],))
+    db.audit(con, 'user:%d' % uid, 'team_join', 'agency:%d' % inv['agency_id'])
     con.commit()
     return uid
 

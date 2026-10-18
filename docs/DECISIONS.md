@@ -58,3 +58,14 @@ Each line: the call, why, how to undo.
     - Agency → client first reply and follow-ups use "<first name>, <2–5 words>" (e.g. "Ana, 3 fotos de Roma 12"). With no real name, just the words.
     - Transactional emails are plain.
     - All subjects ≤ 40 characters, no emoji, ALL CAPS or "urgente/gratis/oferta" (`emails.check`). The sender name is the brand.
+38. **Overnight build (Josh: "beat EasyBroker… GHL for everything"):**
+    - Competitive matrix: `clients/mx-broker-platform/work/2026-10-18-COMPETITIVE-MATRIX.md`, internal only.
+    - GHL agent snapshot spec + dry-run setup script: `docs/GHL-AGENT-SNAPSHOT.md`, `tools/ghl_snapshot_setup.py`.
+    - AI layer (`llave/ai/`): live calls only with `LLAVE_AI_LIVE=1` + a key, Opus 5.5, structured JSON, server-side refusal fallback on. The writer rejects invented numbers and falls back to a template.
+    - Photo checks with one-tap reordering; comps-only price suggestion; FAQ + FAQPage JSON-LD; weekly "Qué publicar" kit.
+    - Seller valuation page `/vende` (comps or an honest "a human will follow up").
+    - Buyer alerts (agency gets the match + a forward link; we never message the buyer automatically).
+    - Public directory `fichaunica.mx/propiedades` (cards link to the agency's canonical page). "Dinos qué buscas" is the honest free-leads source.
+    - Team invites (Agencia plan).
+    - Ecosistema: credits for confirmed sister-brand events (RentaPóliza webhook contract, HMAC + 5-min replay window), redeem for featured listings, extra slots and lead priority, and an owner report in /admin. RentaPóliza itself is untouched (on hold).
+    - Fixed a timezone bug in the webhook replay check; schema init is now per database.

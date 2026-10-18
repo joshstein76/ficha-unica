@@ -84,6 +84,15 @@ def home(con, agency):
            'areaServed': agency['city'] or 'México', 'description': agency['about'] or ''}
     body = ('<main id="main"><section class="hero">%s<div class="cap"><div class="in"><h1>%s</h1><p>%s</p></div></div></section>'
             '<div class="in"><section class="sec"><h2>Propiedades</h2>%s</section>'
+            '<section class="sec" id="alerta"><h2>¿Buscas algo en especial?</h2><form class="box alertf" method="post" action="/alerta" style="position:static">'
+            '<input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">'
+            '<label class="vh" for="al-n">Tu nombre</label><input id="al-n" name="name" placeholder="Tu nombre" autocomplete="name">'
+            '<label class="vh" for="al-p">Tu WhatsApp</label><input id="al-p" name="phone" placeholder="Tu WhatsApp (10 dígitos)" inputmode="tel" required autocomplete="tel">'
+            '<label class="vh" for="al-o">Operación</label><select id="al-o" name="operation"><option value="">Venta o renta</option><option value="venta">Venta</option><option value="renta">Renta</option></select>'
+            '<label class="vh" for="al-c">Colonia</label><input id="al-c" name="colonia" placeholder="Colonia">'
+            '<label class="vh" for="al-m">Presupuesto máximo</label><input id="al-m" name="max" inputmode="numeric" placeholder="Presupuesto máximo (MXN)">'
+            '<label class="check"><input type="checkbox" name="consent" value="1" required> Acepto el <a href="/aviso-de-privacidad">aviso de privacidad</a>.</label>'
+            '<button type="submit">Avísenme cuando salga algo así</button></form></section>'
             '<section class="sec"><h2>Sobre nosotros</h2><p class="desc">%s</p>%s</section></div></main>') % (
         hero_img,
         e(agency['name']), e(agency['tagline'] or ''),
@@ -190,7 +199,7 @@ def listing(con, agency, c, shared_split=None, error=''):
         ('<p class="muted small">Precio confirmado el %s. Sujeto a cambio y disponibilidad.</p>' % nice_date(c['price_date']))
         if c['price_date'] and c['price'] is not None else '',
         e(c['description']), ('<div><h2>Amenidades</h2><ul class="am">%s</ul></div>' % am) if am else '',
-        (('<p class="notice">%s</p>' % e(rp)) if rp else '') + map_html,
+        (('<p class="notice">%s</p>' % e(rp)) if rp else '') + map_html + faq_html(c),
         avatar, e(contact_name), profile_link,
         ('<a class="wa" href="%s" rel="nofollow" aria-label="Escribir por WhatsApp a %s sobre esta propiedad">%s Escribir por WhatsApp</a>' % (e(wa), e(contact_name), WA_ICON)) if wa else '',
         c['id'], inv, inv, inv, inv, e(c['ref']), ('<p class="muted small" id="err" role="alert">%s</p>' % e(error)) if error else '',
@@ -200,7 +209,11 @@ def listing(con, agency, c, shared_split=None, error=''):
     og = ''.join('<meta property="%s" content="%s">' % (k, e(v)) for k, v in (
         ('og:title', c['title']), ('og:type', 'website'), ('og:url', canon),
         ('og:image', photos[0]['url'] if photos else ''), ('og:description', c['description'][:200])))
+    from ..ai import geo_seo
     ld = '<script type="application/ld+json">%s</script>' % json.dumps(listing_jsonld(c, canon), ensure_ascii=False)
+    faqs = geo_seo.listing_faq(c)
+    if faqs:
+        ld += '<script type="application/ld+json">%s</script>' % json.dumps(geo_seo.faq_jsonld(faqs), ensure_ascii=False)
     title = '%s · %s' % (c['title'], money(c['price'], c['currency']))
     return _page(agency, title, body, og + ld, canon, c['description'])
 
@@ -248,9 +261,10 @@ def ficha(agency, c):
         e(agency['name']), e(agency['whatsapp'] or ''), e(url), e(price_note))
 
 
-def thanks(agency, wa_link=''):
-    body = ('<main id="main" class="in sec" style="min-height:50vh"><h1>¡Gracias! Ya recibimos tu mensaje.</h1>'
-            '<p>Te escribimos por WhatsApp en breve.</p>%s<p><a href="/">Ver más propiedades</a></p></main>') % (
+def thanks(agency, wa_link='', message=''):
+    body = ('<main id="main" class="in sec" style="min-height:50vh"><h1>%s</h1>'
+            '<p>%s</p>%s<p><a href="/">Ver más propiedades</a></p></main>') % (
+        e(message) if message else '¡Gracias! Ya recibimos tu mensaje.', '' if message else 'Te escribimos por WhatsApp en breve.',
         ('<p><a class="wa" href="%s">%s Escribir ahora por WhatsApp</a></p>' % (e(wa_link), WA_ICON)) if wa_link else '')
     return _page(agency, 'Gracias · ' + agency['name'], body)
 
@@ -338,3 +352,46 @@ def agent_profile(con, agency, u):
         ('<div class="cards">%s</div>' % ''.join(_card(c) for c in cards)) if cards else '<p class="muted">Pronto publicará propiedades aquí.</p>')
     head = '<script type="application/ld+json">%s</script>' % json.dumps(ld, ensure_ascii=False)
     return _page(agency, '%s · %s' % (u['name'], agency['name']), body, head, url, u['bio'] or '%s, asesor inmobiliario en %s' % (u['name'], agency['name']))
+
+
+def faq_html(c):
+    from ..ai import geo_seo
+    faqs = geo_seo.listing_faq(c)
+    if not faqs:
+        return ''
+    return '<div><h2>Preguntas frecuentes</h2>%s</div>' % ''.join(
+        '<details class="faq"><summary>%s</summary><p>%s</p></details>' % (e(f['q']), e(f['a'])) for f in faqs)
+
+
+def valuation(con, agency, result=None, error=''):
+    """'¿Cuánto vale tu propiedad?' owner page: seller lead magnet. The estimate uses only public comparables in
+    Ficha Única; with fewer than 3 it promises nothing and an agent follows up."""
+    res = ''
+    if result is not None:
+        if result.get('ok'):
+            res = ('<div class="box" style="position:static"><h2>Rango orientativo: %s – %s</h2><p class="muted small">%s</p>'
+                   '<p>Un asesor de %s le escribe por WhatsApp para afinarlo con una visita.</p></div>') % (
+                e(money(result['range_low'], result['currency'])), e(money(result['range_high'], result['currency'])),
+                e(result['note']), e(agency['name']))
+        else:
+            res = ('<div class="box" style="position:static"><h2>Gracias, ya recibimos sus datos.</h2>'
+                   '<p>Aún no hay suficientes propiedades comparables públicas en su zona para dar un rango automático. '
+                   'Un asesor de %s le escribe por WhatsApp con una valuación.</p></div>') % e(agency['name'])
+    types = ''.join('<option value="%s">%s</option>' % (k, e(v)) for k, v in TYPES)
+    body = ('<main id="main" class="in sec"><div><h1>¿Cuánto vale su propiedad?</h1><p class="muted">Déjenos los datos básicos y le damos un '
+            'rango orientativo con propiedades comparables de su zona. Sin costo.</p></div>%s%s'
+            '<form class="box alertf" method="post" action="/vende" style="position:static">'
+            '<input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">'
+            '<label for="v-op">Operación<select id="v-op" name="operation"><option value="venta">Vender</option><option value="renta">Rentar</option></select></label>'
+            '<label for="v-ty">Tipo<select id="v-ty" name="property_type">%s</select></label>'
+            '<label for="v-col">Colonia<input id="v-col" name="colonia" required></label>'
+            '<label for="v-mun">Alcaldía o municipio<input id="v-mun" name="municipio" required></label>'
+            '<label for="v-m2">m² de construcción<input id="v-m2" name="m2" inputmode="decimal" required></label>'
+            '<label for="v-rec">Recámaras<input id="v-rec" name="bedrooms" inputmode="numeric"></label>'
+            '<label for="v-name">Su nombre<input id="v-name" name="name" required autocomplete="name"></label>'
+            '<label for="v-phone">Su WhatsApp<input id="v-phone" name="phone" inputmode="tel" required autocomplete="tel"></label>'
+            '<label class="check"><input type="checkbox" name="consent" value="1" required> Acepto el <a href="/aviso-de-privacidad">aviso de privacidad</a>.</label>'
+            '<button type="submit">Ver el rango</button></form></main>') % (
+        ('<p class="notice" role="alert">%s</p>' % e(error)) if error else '', res, types)
+    return _page(agency, '¿Cuánto vale su propiedad? · ' + agency['name'], body, '', db.site_url(agency) + '/vende',
+                 'Valuación orientativa sin costo con propiedades comparables de su zona.')

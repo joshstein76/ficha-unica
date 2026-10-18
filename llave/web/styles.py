@@ -123,10 +123,10 @@ text-decoration:none;font-weight:600;font-family:var(--body);font-size:15px;whit
 .facts div{background:var(--card);border:1px solid var(--line);border-radius:calc(var(--br)/2);padding:12px}
 .facts b{display:block;font-size:20px}.facts small{color:var(--muted)}
 .box{background:var(--card);border:1px solid var(--line);border-radius:var(--br);padding:20px;display:grid;gap:12px;position:sticky;top:84px}
-.box form{display:grid;gap:10px}.box input,.box textarea{font:16px var(--body);padding:11px;border:1px solid var(--field-border);border-radius:8px;width:100%;background:var(--bg);color:var(--fg)}
+.box form,.alertf{display:grid;gap:10px}.alertf input,.alertf select{font:16px var(--body);padding:11px;border:1px solid var(--line);border-radius:8px;width:100%;background:var(--bg);color:var(--fg)}.alertf button{min-height:46px;border:0;border-radius:var(--br);background:var(--accent);color:var(--on-accent);font:600 16px var(--body);cursor:pointer}.box input,.box textarea{font:16px var(--body);padding:11px;border:1px solid var(--field-border);border-radius:8px;width:100%;background:var(--bg);color:var(--fg)}
 .box button{min-height:46px;border:0;border-radius:var(--br);background:var(--accent);color:var(--on-accent);font:600 16px var(--body);cursor:pointer}
 .check{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--muted)}.check input{width:20px;height:20px;padding:0;margin-top:2px;flex:none}.box label{display:grid;gap:4px;font-size:14px;font-weight:600}.box label.check{display:flex;font-weight:400}
-.desc{white-space:pre-line;max-width:68ch}.muted{color:var(--muted)}
+.desc{white-space:pre-line;max-width:68ch}.faq{border-top:1px solid var(--line);padding:10px 0}.faq summary{cursor:pointer;font-weight:600}.muted{color:var(--muted)}
 .am{display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:0;list-style:none}.am li{border:1px solid var(--line);border-radius:99px;padding:4px 12px;font-size:14px}
 .agent{display:flex;gap:14px;align-items:center;text-decoration:none}.agent .av{width:56px;height:56px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-weight:700;object-fit:cover;flex:0 0 auto}
 .agent.big .av{width:120px;height:120px;font-size:40px}.team{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}

@@ -18,12 +18,13 @@ ICONS = {
     'academia': '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/>',
     'estadisticas': '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
     'invitar': '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/>',
+    'publicar': '<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/>',
 }
 TABS = [('inicio', 'Inicio', '/'), ('propiedades', 'Propiedades', '/propiedades'), ('clientes', 'Clientes', '/clientes'),
         ('portales', 'Portales', '/portales'), ('bolsa', 'Bolsa', '/bolsa'), ('sitio', 'Mi sitio', '/sitio'),
-        ('estadisticas', 'Estadísticas', '/estadisticas'), ('invitar', 'Invitar', '/invitar'), ('servicios', 'Servicios', '/servicios'),
+        ('estadisticas', 'Estadísticas', '/estadisticas'), ('publicar', 'Qué publicar', '/que-publicar'), ('invitar', 'Invitar', '/invitar'), ('servicios', 'Servicios', '/servicios'),
         ('academia', 'Academia', '/academia')]
-DESKTOP_ONLY = {'estadisticas', 'invitar', 'servicios', 'academia'}  # on phones they live on Inicio
+DESKTOP_ONLY = {'estadisticas', 'publicar', 'invitar', 'servicios', 'academia'}  # on phones they live on Inicio
 
 
 def _icon(k):
@@ -119,6 +120,8 @@ def dashboard(con, ctx, welcome=False):
             '%s'
             '<section class="card"><div class="row" style="justify-content:space-between"><h2>Últimos clientes</h2>'
             '<a href="/clientes">Ver todos</a></div>%s</section>'
+            '<a class="card" href="/que-publicar" style="text-decoration:none;color:inherit"><h2>Qué publicar esta semana</h2>'
+            '<span class="small muted">5 publicaciones listas para Instagram y Facebook.</span></a>'
             '<a class="card" href="/invitar" style="text-decoration:none;color:inherit"><h2>Invita a un colega · +%d propiedades</h2>'
             '<span class="small muted">Por cada colega que publique con tu enlace.</span></a>'
             '<section class="grid2"><a class="card" href="/estadisticas" style="text-decoration:none;color:inherit"><h2>Estadísticas</h2>'
@@ -169,8 +172,10 @@ def _opt(pairs, cur):
     return ''.join('<option value="%s"%s>%s</option>' % (e(k), ' selected' if k == cur else '', e(v)) for k, v in pairs)
 
 
-def listing_form(con, ctx, l=None, error='', ok=''):
+def listing_form(con, ctx, l=None, error='', ok='', suggestion=None):
     v = dict(l) if l else {}
+    if suggestion:
+        v['title'], v['description'] = suggestion['title'], suggestion['description']
     lid = v.get('id')
     price = '' if v.get('price_cents') is None else '%d' % (v['price_cents'] // 100)
     maint = '' if v.get('maintenance_cents') is None else '%d' % (v['maintenance_cents'] // 100)
@@ -193,6 +198,7 @@ def listing_form(con, ctx, l=None, error='', ok=''):
                     '<button class="btn ghost small" style="width:100%%">Quitar</button></form></figure>'
                     % (e(json.loads(p['sizes'])['400']), lid, p['id'], csrf_field(ctx)) for p in ph))
         problems = validate(db.canonical(con, lid))
+        ai_html = _ai_box(con, ctx, lid, suggestion)
     site_link = ''
     if lid and v.get('status') in db.PUBLIC_STATUSES:
         site_link = ('<span class="row small"><a href="%s" target="_blank" rel="noopener">Ver en mi sitio ↗</a>'
@@ -234,7 +240,7 @@ def listing_form(con, ctx, l=None, error='', ok=''):
             '<label>Tu parte si otro asesor la vende (%%)<input name="share_split_pct" value="%s" inputmode="numeric"></label>'
             '<label>Comisión total (%%), privada<input name="commission_pct" value="%s" inputmode="decimal"></label>%s'
             '<label>Nota interna (nunca se publica)<textarea name="internal_note" rows="2">%s</textarea></label></section>'
-            '<button class="btn">%s</button></form>%s') % (
+            '<button class="btn">%s</button></form>%s%s') % (
         notice(ok), notice(error, 'err'), 'Editar propiedad' if lid else 'Nueva propiedad', site_link,
         ('<div class="notice warn"><b>Para que se vea mejor en portales:</b><br>%s</div>' % '<br>'.join(e(p) for p in problems))
         if problems else '',
@@ -250,7 +256,7 @@ def listing_form(con, ctx, l=None, error='', ok=''):
         ('%s, %s' % (v['lat'], v['lng'])) if v.get('lat') is not None else '',
         ' checked' if v.get('show_exact_location') else '',
         ' checked' if v.get('share_in_bolsa') else '', e(v.get('share_split_pct', 50)), num('commission_pct'),
-        rp_box, e(v.get('internal_note')), 'Guardar' if lid else 'Crear y subir fotos', photos_html)
+        rp_box, e(v.get('internal_note')), 'Guardar' if lid else 'Crear y subir fotos', photos_html, ai_html if lid else '')
     return layout('Propiedad', body, ctx, 'propiedades')
 
 
@@ -479,7 +485,8 @@ def site_settings(con, ctx, ok='', error=''):
         if pro else '<p class="muted">Incluido en el plan <a href="/plan">Pro</a>. Mientras tanto tu sitio vive gratis en '
                     '<code>%s</code>.</p>' % e(db.site_url(a))))
     body = ('%s%s<div class="row" style="justify-content:space-between"><h1>Mi sitio</h1>'
-            '<span class="row"><a class="btn ghost small" href="/perfil">Mi perfil</a><a class="btn ghost small" href="/plan">Tu plan</a>'
+            '<span class="row"><a class="btn ghost small" href="/perfil">Mi perfil</a><a class="btn ghost small" href="/equipo">Equipo</a>'
+            '<a class="btn ghost small" href="/plan">Tu plan</a>'
             '<a class="btn ghost small" href="%s" target="_blank" rel="noopener">Ver sitio ↗</a></span></div>'
             '<form class="stack" method="post" action="/sitio" enctype="multipart/form-data">%s'
             '<section class="card"><h2>Diseño</h2><div class="grid2">%s</div>'
@@ -509,6 +516,7 @@ def landing(ref=''):
     body = ('<div class="auth" style="max-width:640px"><h1 style="font-size:34px">Tu sitio inmobiliario gratis. '
             'Tus propiedades en Google y en los portales. Tus clientes en WhatsApp.</h1>'
             '<p class="muted">Sube cada propiedad una vez y listo. Sin tarjeta para empezar.</p>'
+            '<p><a href="/propiedades">¿Buscas casa o departamento? Ver propiedades →</a></p>'
             '<div class="row"><a class="btn" href="%s">Crear mi sitio gratis</a><a class="btn ghost" href="%s/entrar">Entrar</a></div>'
             '%s</div>') % (reg, e(db.origin('app')), '' if db.ENV == 'production' else
                            '<p class="small muted">Versión local de prueba. Nada aquí es público todavía.</p>')
@@ -570,12 +578,28 @@ LESSONS = [
 ]
 
 
-def services(ctx):
+def services(ctx, con=None, ok='', error=''):
+    from .. import eco
+    a = ctx['agency']
+    bal = eco.balance(con, a['id']) if con else 0
     cards = ''.join('<div class="card"><span class="small muted">%s</span><h2>%s</h2><p style="margin:0">%s</p>%s</div>' % (
         e(brand), e(t), e(d), ('<a class="btn small ghost" href="%s" target="_blank" rel="noopener">%s</a>' % (e(url), e(cta)))
         if url else '<span class="pill pendiente">%s</span>' % e(cta)) for t, brand, d, url, cta in SERVICES)
-    body = ('<h1>Servicios</h1><p class="muted">Todo lo que tu negocio necesita, con empresas de la misma familia que Ficha Única.</p>'
-            '<div class="grid2 wide">%s</div>') % cards
+    earn = ''.join('<li>%s: <b>+%d</b></li>' % (e(r['label']), r['credits']) for r in eco.RULES.values())
+    mine = con.execute("SELECT id, title FROM listings WHERE agency_id=? AND status IN ('activa','apartada') ORDER BY title", (a['id'],)).fetchall() if con else []
+    opts = ''.join('<option value="%d">%s</option>' % (r['id'], e(r['title'])) for r in mine)
+    redeem = ''.join('<form class="row card" method="post" action="/servicios/canjear/%s" style="gap:8px">%s<div style="flex:1;min-width:200px"><b>%s</b>'
+                     '<br><span class="small muted">%d créditos</span></div>%s<button class="btn small"%s>Canjear</button></form>' % (
+                         k, csrf_field(ctx), e(v['label']), v['cost'],
+                         ('<label class="vh" for="r-%s">Propiedad</label><select id="r-%s" name="listing" style="max-width:240px">%s</select>' % (k, k, opts))
+                         if v['kind'] == 'destacada' else '', '' if bal >= v['cost'] else ' disabled') for k, v in eco.CATALOG.items())
+    body = ('%s%s<h1>Servicios y Ecosistema</h1><p class="muted">Empresas de la misma familia que Ficha Única. Úsalas y gana créditos.</p>'
+            '<div class="stats"><div class="stat"><b>%d</b><small>Tus créditos</small></div></div>'
+            '<div class="grid2 wide">%s</div>'
+            '<section class="card"><h2>Cómo ganas créditos</h2><ul class="small">%s</ul>'
+            '<p class="small muted">Los créditos se suman cuando la otra empresa confirma (no basta con avisarnos).</p></section>'
+            '<section class="card"><h2>Canjea tus créditos</h2>%s<p class="small muted"><b>Sobre los leads gratis:</b> %s</p></section>') % (
+        notice(ok), notice(error, 'err'), bal, cards, earn, redeem, e(eco.FREE_LEADS_DEFINITION))
     return layout('Servicios', body, ctx, 'servicios')
 
 
@@ -868,11 +892,95 @@ def admin(con, ctx):
             '<section class="card"><h2>Agencias</h2><div class="tbl" tabindex="0" role="region" aria-label="Agencias"><table><thead><tr>'
             '<th scope="col">Agencia</th><th scope="col">Plan</th><th scope="col">Públicas</th><th scope="col">Clientes 30 d</th>'
             '<th scope="col">En riesgo</th><th scope="col">Invitada por</th><th scope="col">Última actividad</th></tr></thead><tbody>%s</tbody></table></div></section>'
+            '<section class="card"><h2>Ecosistema (30 días)</h2>%s</section>'
             '<section class="card"><h2>Salida (modo prueba)</h2><p class="small">%s</p></section>') % (
         tot('SELECT COUNT(*) FROM agencies'), tot("SELECT COUNT(*) FROM listings WHERE status IN ('activa','apartada')"),
         tot("SELECT COUNT(*) FROM leads WHERE created_at >= datetime('now','-30 days')"), len(risk),
         ('<div class="tbl" tabindex="0" role="region" aria-label="Clientes en riesgo"><table><thead><tr><th scope="col">Agencia</th>'
          '<th scope="col">Cliente</th><th scope="col">Esperando</th><th scope="col">Origen</th></tr></thead><tbody>%s</tbody></table></div>' % risk_rows)
         if risk else notice('✓ Ningún cliente esperando más de 5 minutos.'),
-        ag_rows, e(' · '.join('%s/%s: %d' % (o['kind'], o['status'], o['n']) for o in ob) or 'Sin operaciones.'))
+        ag_rows, _eco_admin(con), e(' · '.join('%s/%s: %d' % (o['kind'], o['status'], o['n']) for o in ob) or 'Sin operaciones.'))
     return layout('Admin', body, ctx, 'admin')
+
+
+def _eco_admin(con):
+    from .. import eco
+    eco.ensure_tables(con)
+    rep = eco.owner_report(con)
+    if not rep['by_brand']:
+        return '<p class="muted small">Aún sin referidos entre empresas.</p>'
+    brands = ''.join('<tr><td>%s</td><td>%d</td><td>%d</td><td>%d</td></tr>' % (e(b), v['events'], v['confirmed'], v['credits'])
+                     for b, v in sorted(rep['by_brand'].items()))
+    pairs = ' · '.join('%s: %d' % kv for kv in sorted(rep['by_pair'].items()))
+    return ('<div class="tbl" tabindex="0" role="region" aria-label="Ecosistema"><table><thead><tr><th scope="col">Empresa</th>'
+            '<th scope="col">Eventos</th><th scope="col">Confirmados</th><th scope="col">Créditos</th></tr></thead><tbody>%s</tbody></table></div>'
+            '<p class="small">Referidos entre empresas: %s</p>') % (brands, e(pairs))
+
+
+# ---------- team (Agencia plan) ----------
+def team(con, ctx, link='', error=''):
+    a = ctx['agency']
+    users = con.execute('SELECT name, email, role, created_at FROM users WHERE agency_id=? ORDER BY id', (a['id'],)).fetchall()
+    can = a['plan'] == 'agencia'
+    rows = ''.join('<div class="item" style="grid-template-columns:1fr auto"><div><b>%s</b><br><span class="small muted">%s</span></div>'
+                   '<span class="pill %s">%s</span></div>' % (e(u['name']), e(u['email']), 'ok' if u['role'] in ('owner', 'admin') else '',
+                                                             'dueño' if u['role'] in ('owner', 'admin') else 'asesor') for u in users)
+    body = ('<h1>Equipo</h1>%s<p class="muted">Tus asesores comparten las propiedades, los clientes y el sitio de la inmobiliaria.</p>%s'
+            '<div class="list">%s</div>') % (
+        notice(error, 'err'),
+        ('<form method="post" action="/equipo">%s<button class="btn">Crear enlace de invitación</button></form>%s' % (
+            csrf_field(ctx), ('<section class="card"><label for="team-link">Enlace (vale 7 días, un solo uso)<input id="team-link" value="%s" readonly onclick="this.select()"></label>'
+                              '<a class="btn wa" href="%s" target="_blank" rel="noopener">Enviar por WhatsApp</a></section>' % (
+                                  e(link), e(whatsapp.wa_link('', 'Te invito a %s en Ficha Única: %s' % (a['name'], link))))) if link else ''))
+        if can and ctx['user']['role'] in ('owner', 'admin') else
+        ('<p class="notice">El equipo está incluido en el plan <a href="/plan">Agencia</a>.</p>' if not can else ''),
+        rows)
+    return layout('Equipo', body, ctx, 'sitio')
+
+
+def join(agency, token, error='', values=None):
+    v = values or {}
+    body = ('<div class="auth"><h1>Únete a %s</h1><p class="muted">Crea tu acceso de asesor en Ficha Única.</p>%s'
+            '<form class="stack card" method="post" action="/unirse/%s">'
+            '<label for="j-name">Tu nombre<input id="j-name" name="name" value="%s" required autocomplete="name"></label>'
+            '<label for="j-wa">Tu WhatsApp<input id="j-wa" name="whatsapp" value="%s" inputmode="tel" required autocomplete="tel"></label>'
+            '<label for="j-email">Correo<input id="j-email" name="email" type="email" value="%s" required autocomplete="email"></label>'
+            '<label for="j-pw">Contraseña<input id="j-pw" name="password" type="password" minlength="8" required autocomplete="new-password"></label>'
+            '<button class="btn">Unirme</button></form></div>') % (
+        e(agency['name']), notice(error, 'err'), e(token), e(v.get('name')), e(v.get('whatsapp')), e(v.get('email')))
+    return layout('Únete', body)
+
+
+# ---------- AI helpers in the listing editor ----------
+def _ai_box(con, ctx, lid, suggestion=None):
+    from ..ai import client, comps, photo_qa
+    qa = photo_qa.analyze(con, lid)
+    cp = comps.suggest_price(con, lid)
+    live = client.enabled()
+    tips = ''.join('<li>%s</li>' % e(t) for t in qa.get('tips', []))
+    price = ('<p><b>%s – %s</b> <span class="muted small">(%d comparables)</span></p><p class="small muted">%s</p>' % (
+        e(money(cp['range_low'], cp['currency'])), e(money(cp['range_high'], cp['currency'])), cp['n'], e(cp['note']))
+        if cp.get('ok') else '<p class="small muted">%s</p>' % e(cp.get('note')))
+    en = ''
+    if suggestion and suggestion.get('en'):
+        en = '<details><summary class="small">Versión en inglés</summary><p class="small"><b>%s</b><br>%s</p></details>' % (
+            e(suggestion['en']['title']), e(suggestion['en']['description']))
+    return ('<section class="card"><h2>Ayuda inteligente</h2>'
+            '<form method="post" action="/propiedades/%d/ia-texto">%s<button class="btn ghost small">Escribir título y descripción%s</button></form>'
+            '%s<h3 class="small" style="margin:0">Fotos</h3><ul class="small">%s</ul>%s'
+            '<h3 class="small" style="margin:0">Precio sugerido</h3>%s</section>') % (
+        lid, csrf_field(ctx), ' con IA' if live else '', en, tips or '<li>Tus fotos se ven bien.</li>',
+        ('<form method="post" action="/propiedades/%d/ordenar-fotos">%s<button class="btn ghost small">Usar el orden sugerido (portada primero, planos al final)</button></form>'
+         % (lid, csrf_field(ctx))) if qa.get('suggested_order') else '', price)
+
+
+def social_kit_page(ctx, kit):
+    items = ''.join('<div class="card" style="gap:8px"><span class="pill">%s</span><b>%s</b>%s<p class="small" style="margin:0;white-space:pre-line">%s</p>'
+                    '<p class="small muted" style="margin:0">%s</p><button class="btn ghost small" type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(this.dataset.t);this.textContent=\'Copiado ✓\'" data-t="%s">Copiar texto</button></div>' % (
+                        {'listing': 'Propiedad', 'market': 'Mercado', 'tip': 'Consejo'}.get(it['kind'], it['kind']), e(it['title']),
+                        ('<a href="%s" target="_blank" rel="noopener"><img src="%s" alt="" style="width:100%%;max-width:320px;border-radius:8px"></a>' % (e(it['image_url']), e(it['image_url'])))
+                        if it.get('image_url') else '', e(it['caption']), e(' '.join(it.get('hashtags') or [])),
+                        e(it['caption'] + ('\n\n' + ' '.join(it.get('hashtags') or []) if it.get('hashtags') else ''))) for it in kit['items'])
+    body = ('<h1>Qué publicar esta semana</h1><p class="muted">Semana %s. Borradores listos: copia el texto y descarga la imagen. '
+            'Nada se publica solo.</p><div class="grid2 wide">%s</div>') % (e(kit['week']), items or '<p class="muted">Publica una propiedad para recibir tu kit.</p>')
+    return layout('Qué publicar', body, ctx, 'publicar')

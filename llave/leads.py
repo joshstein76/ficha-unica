@@ -21,7 +21,7 @@ def create_lead(con, agency_id, listing_id=None, name='', phone='', email='', me
         raise ValueError('El correo no parece válido.')
     if phone and not phone_n and not email:
         raise ValueError('El teléfono no parece válido.')
-    if source == 'sitio' and not consent:
+    if source in ('sitio', 'vendedor', 'portal') and not consent:
         raise ValueError('Debes aceptar el aviso de privacidad para enviar tu solicitud.')
     owner_id = agency_id
     if listing_id is not None:

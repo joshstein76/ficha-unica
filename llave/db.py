@@ -159,4 +159,10 @@ def listing_limit(con, agency, plan=None):
     """Plan limit + referral bonus."""
     a = dict(agency)
     base = PLAN_LIMITS.get(plan or a.get('plan') or 'gratis', PLAN_LIMITS['gratis'])
-    return base + REFERRAL_BONUS_LISTINGS * qualified_referrals(con, a['id'])
+    extra = 0
+    try:
+        from . import eco
+        extra = eco.extra_listing_slots(con, a['id'])
+    except Exception:
+        extra = 0
+    return base + REFERRAL_BONUS_LISTINGS * qualified_referrals(con, a['id']) + extra
