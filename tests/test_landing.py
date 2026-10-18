@@ -56,6 +56,18 @@ class Landing(unittest.TestCase):
         self.assertEqual(h.count('<details>'), 5)
         self.assertEqual(h.count('<h1'), 1)
 
+    def test_live_name_preview(self):
+        h = self.raw
+        self.assertIn('id="marca"', h)
+        self.assertIn('id="url"', h)
+        self.assertIn('marca=', h)
+        for f in ('hero-sala.webp', 'mini-1.webp', 'mini-4.webp'):
+            self.assertEqual(get('/_s/' + f)[0], 200)
+
+    def test_signup_prefills_brand(self):
+        body = get('/registro?marca=Casa%20Roma')[1].decode()
+        self.assertIn('value="Casa Roma"', body)
+
     def test_static_demo_image(self):
         s, body, hd = get('/_s/agent-site-demo.webp')
         self.assertEqual((s, hd['Content-Type']), (200, 'image/webp'))

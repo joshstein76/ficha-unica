@@ -1,5 +1,5 @@
 """Public landing (app.<base>/) and public pricing (/planes, /precios when logged out).
-Server-rendered, inline CSS, no JS, no third-party images. Mexican Spanish, tú, mobile-first.
+Server-rendered, inline CSS, one tiny inline script (the live name preview), no third-party images. Mexican Spanish, tú, mobile-first.
 Never names competitors. Prices come from panel.PLANS so the landing, the pricing page and the panel never disagree."""
 import json
 
@@ -7,17 +7,17 @@ from .. import db
 from .common import e
 from .styles import PRECONNECT
 
-FONTS = 'https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&family=Fraunces:opsz,wght@9..144,600&display=swap'
+FONTS = 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600;700&display=swap'
 
 CSS = r"""
 :root{--bg:#fbf7f0;--card:#fff;--fg:#1d2b25;--muted:#56625b;--line:#e8dfd0;--brand:#0f5c4c;--brand-2:#e3f1ec;--on-brand:#fff;
---accent:#b4452b;--sand:#f3ead9;--ok:#1d6b45;--r:18px;--f:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;--h:"Fraunces",Georgia,serif}
+--accent:#b4452b;--sand:#f3ead9;--ok:#1d6b45;--r:18px;--f:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--h:"Bricolage Grotesque","Avenir Next",system-ui,sans-serif}
 @media (prefers-color-scheme:dark){:root{--bg:#10171a;--card:#182126;--fg:#eef2ee;--muted:#a9b6ae;--line:#2a3a40;--brand:#4cc3a3;--brand-2:#173a33;
 --on-brand:#0b1f1a;--accent:#f09a82;--sand:#1b2a2a;--ok:#6fd39f}}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:70px}
 body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.55 var(--f);padding-bottom:76px}
-a{color:var(--brand)}h1,h2,h3{margin:0;line-height:1.12;text-wrap:balance;font-family:var(--h);font-weight:600;letter-spacing:-.01em}
-h1{font-size:clamp(34px,8.6vw,60px)}h2{font-size:clamp(27px,6vw,38px)}h3{font-size:21px;font-family:var(--f);font-weight:700;letter-spacing:0}
+a{color:var(--brand)}h1,h2,h3{margin:0;line-height:1.05;text-wrap:balance;font-family:var(--h);font-weight:800;letter-spacing:-.025em}
+h1{font-size:clamp(40px,9vw,84px);line-height:.98}h2{font-size:clamp(27px,6vw,38px)}h3{font-size:21px;font-family:var(--f);font-weight:700;letter-spacing:0}
 p{margin:0}.muted{color:var(--muted)}.small{font-size:14px}
 .skip{position:absolute;left:-999px}.skip:focus{left:8px;top:8px;background:var(--card);padding:8px 12px;z-index:20}
 .w{max-width:1080px;margin:0 auto;padding:0 max(18px,env(safe-area-inset-left))}
@@ -35,7 +35,7 @@ section{padding:56px 0}.sec-h{display:grid;gap:10px;margin-bottom:28px;max-width
 .hero .t{display:grid;gap:20px;max-width:560px}.lead{font-size:19px;color:var(--muted)}
 .eyebrow{font:700 13px var(--f);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
 .phone{justify-self:center;border-radius:42px;padding:10px;background:#16201c;box-shadow:0 30px 60px -20px rgba(15,92,76,.45),0 0 0 2px #2b3a34;position:relative}
-.phone .scr{border-radius:33px;overflow:hidden;aspect-ratio:500/1083;background:#111}
+.phone .scr{border-radius:33px;overflow:hidden;aspect-ratio:500/1083;background:#fff}
 .phone img{display:block;width:100%;height:100%;object-fit:cover}
 .phone::before{content:"";position:absolute;top:18px;left:50%;width:74px;height:20px;margin-left:-37px;background:#16201c;border-radius:99px;z-index:2}
 .cap{text-align:center;margin-top:12px}
@@ -67,8 +67,22 @@ footer{padding:36px 0 24px;border-top:1px solid var(--line);margin-top:56px}foot
 background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(8px);border-top:1px solid var(--line)}
 .sticky .btn{width:100%}
 
-.hero-bg{background:radial-gradient(900px 500px at 85% -10%,rgba(180,69,43,.16),transparent 60%),radial-gradient(800px 500px at 0% 10%,rgba(15,92,76,.16),transparent 60%)}
-.hero h1 em{font-style:italic;color:var(--accent)}
+.hero-bg{background:var(--bg)}
+.real{display:grid;gap:28px;align-items:center}.real .phone{width:min(64vw,280px)}@media(min-width:760px){.real{grid-template-columns:.8fr 1.2fr}}
+.hero h1 em{font-style:normal;color:var(--brand)}
+.namebox{display:grid;gap:8px;max-width:440px}.namebox label{font:700 14px var(--f)}
+.namebox input{font:600 19px var(--f);padding:15px 18px;border-radius:14px;border:2px solid var(--line);background:var(--card);color:var(--fg);width:100%}
+.namebox input:focus{border-color:var(--brand);outline:none}
+.url{font:700 15px var(--f);color:var(--brand);word-break:break-all;display:flex;gap:8px;align-items:center}
+.url::before{content:"";width:9px;height:9px;border-radius:50%;background:#1fbf6a;box-shadow:0 0 0 4px rgba(31,191,106,.18)}
+.live{height:100%;display:flex;flex-direction:column;background:#fff;color:#14221d;text-align:left}
+.live .lb{display:flex;justify-content:space-between;align-items:center;padding:34px 14px 10px;font:800 14px var(--h);border-bottom:1px solid #eee}
+.live .lb i{font:700 11px var(--f);font-style:normal;background:#1fa855;color:#fff;padding:5px 10px;border-radius:99px}
+.live .lh{flex:1.15;display:flex;align-items:flex-end;padding:16px;color:#fff;background:linear-gradient(180deg,transparent 35%,rgba(0,0,0,.62)),url(/_s/hero-sala.webp) center/cover}
+.live .lh b{font:800 23px/1.05 var(--h)}
+.live .lg{flex:1;padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start}
+.live .lg figure{margin:0;border:1px solid #eee;border-radius:10px;overflow:hidden;font:700 10.5px var(--f)}
+.live .lg figure div{height:58px;background-size:cover;background-position:center}.live .lg figcaption{padding:5px 7px}
 .fine{font-size:14px;color:var(--muted);display:flex;gap:6px 16px;flex-wrap:wrap}.fine span::before{content:"✓ ";color:var(--ok);font-weight:700}
 .stage{position:relative;justify-self:center;width:100%;display:grid;justify-items:center}
 .phone{width:min(74vw,330px)}
@@ -97,6 +111,8 @@ _I = {
     'share': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="m8.6 10.5 6.8-3.9M8.6 13.5l6.8 3.9"/></svg>',
     'cap': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/></svg>',
 }
+
+JS = "<script>(function(){var i=document.getElementById('marca');if(!i)return;var u=document.getElementById('url'),n=document.getElementById('pn'),h=document.getElementById('ph'),g=document.getElementById('go'),base=g.getAttribute('href'),dom=u.textContent.split('.').slice(1).join('.');\nfunction slug(s){return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'tu-inmobiliaria'}\nfunction up(){var v=i.value.trim()||'Tu inmobiliaria';u.textContent=slug(v)+'.'+dom;n.textContent=v;h.textContent='Encuentra tu casa con '+v;g.setAttribute('href',base+(base.indexOf('?')<0?'?':'&')+'marca='+encodeURIComponent(i.value.trim()))}\ni.addEventListener('input',up);up()})();</script>"
 
 FAQ = [
     ('¿De verdad es gratis?',
@@ -186,16 +202,23 @@ def landing(ref=''):
            ('cap', 'Academia', 'Clases cortas para vender y rentar más. Dentro de tu cuenta.')]
     main = ('<main id="main">'
             '<div class="hero-bg"><div class="w hero"><div class="t"><span class="eyebrow rise">Para asesores inmobiliarios en México</span>'
-            '<h1 class="rise d1">Que tus clientes te encuentren, te vean y te <em>escriban</em>. Hoy.</h1>'
-            '<p class="lead rise d2">Tu propio sitio inmobiliario, bonito y gratis. Sube cada propiedad una sola vez: sale en tu sitio, en Google y en los portales, y tus clientes llegan directo a tu WhatsApp.</p>'
-            '<div class="row rise d3"><a class="btn big" href="%s">Crear mi sitio gratis</a></div>'
+            '<h1 class="rise d1">Tu inmobiliaria merece un sitio <em>así de bonito.</em></h1>'
+            '<p class="lead rise d2">Escribe el nombre de tu inmobiliaria y míralo en vivo. Tu sitio, tus propiedades en Google y los portales, y tus clientes en WhatsApp. Gratis.</p>'
+            '<div class="namebox rise d2"><label for="marca">¿Cómo se llama tu inmobiliaria?</label><input id="marca" value="Casa Coyoacán" maxlength="40" autocomplete="organization">'
+            '<span class="url" id="url">casa-coyoacan.%s</span></div>'
+            '<div class="row rise d3"><a class="btn big" id="go" href="%s">Crear mi sitio gratis</a></div>'
             '<p class="fine rise d3"><span>Sin tarjeta</span><span>Sin plazo forzoso</span><span>Hecho en México</span></p>'
             '<p class="small muted">¿Buscas casa o departamento? <a href="/propiedades">Ver propiedades</a></p></div>'
-            '<figure style="margin:0" class="stage rise d2"><div class="chip a" aria-hidden="true"><i>@@wa@@</i><span><b>Nuevo mensaje</b>Hola, me interesa el departamento. ¿Sigue disponible?</span></div>'
-            '<div class="phone"><div class="scr"><img src="/_s/agent-site-demo.webp" width="500" height="1083" '
-            'alt="Sitio de ejemplo de un asesor en Polanco, con foto grande, botón de WhatsApp y lista de propiedades" fetchpriority="high"></div></div>'
-            '<div class="chip b" aria-hidden="true"><i>@@google@@</i><span><b>Tu propiedad en Google</b>Con ficha y datos para buscadores</span></div>'
-            '<figcaption class="small muted cap">Un sitio real hecho con Ficha Única (ejemplo: VIVE Polanco).</figcaption></figure></div></div>'
+            '<figure style="margin:0" class="stage rise d2"><div class="phone" aria-hidden="true"><div class="scr"><div class="live">'
+            '<div class="lb"><span id="pn">Casa Coyoacán</span><i>WhatsApp</i></div><div class="lh"><b id="ph">Encuentra tu casa con Casa Coyoacán</b></div>'
+            '<div class="lg"><figure><div style="background-image:url(/_s/mini-1.webp)"></div><figcaption>Departamento con vista</figcaption></figure>'
+            '<figure><div style="background-image:url(/_s/mini-2.webp)"></div><figcaption>Recámara principal</figcaption></figure>'
+            '<figure><div style="background-image:url(/_s/mini-3.webp)"></div><figcaption>Sala y cocina</figcaption></figure>'
+            '<figure><div style="background-image:url(/_s/mini-4.webp)"></div><figcaption>Torre en Polanco</figcaption></figure></div>'
+            '</div></div></div><figcaption class="small muted cap">Así se vería tu sitio. Fotos del sitio de ejemplo.</figcaption></figure></div></div>'
+            '<section><div class="w real"><div class="phone"><div class="scr"><img src="/_s/agent-site-demo.webp" width="500" height="1083" loading="lazy" '
+            'alt="Sitio de ejemplo de un asesor en Polanco, con foto grande, botón de WhatsApp y lista de propiedades"></div></div>'
+            '<div class="sec-h"><span class="eyebrow">Un sitio real</span><h2>Así se ve un sitio hecho con Ficha Única</h2><p class="muted">Ejemplo: VIVE Polanco. Foto grande, sus propiedades y un botón de WhatsApp que siempre está a la mano.</p></div></div></section>'
             '<section class="alt"><div class="w"><div class="sec-h"><h2>Todo lo que necesitas para vender más, sin complicarte</h2></div><div class="cards c3">%s</div></div></section>'
             '<section id="como"><div class="w"><div class="sec-h"><span class="eyebrow">Cómo funciona</span><h2>De cero a tu sitio en línea en tres pasos</h2></div>'
             '<ol class="steps">%s</ol><div class="row" style="margin-top:28px;justify-content:center"><a class="btn big" href="%s">Crear mi sitio gratis</a></div></div></section>'
@@ -208,7 +231,7 @@ def landing(ref=''):
             '<section><div class="w"><div class="final"><h2>Hoy puede ser el día que tu sitio salga al aire</h2>'
             '<p>Gratis, sin tarjeta y sin compromiso. Empieza con una propiedad.</p><a class="btn big" href="%s">Crear mi sitio gratis</a></div></div></section>'
             '</main>') % (
-        e(reg),
+        e(db.BASE_DOMAIN), e(reg),
         ''.join('<div class="card"><div class="ico">%s</div><h3>%s</h3><p class="muted">%s</p></div>' % (_I[i], e(t), e(d)) for i, t, d in promises),
         ''.join('<li><h3>%s</h3><p class="muted">%s</p></li>' % (e(t), e(d)) for t, d in steps),
         e(reg),
@@ -216,7 +239,7 @@ def landing(ref=''):
         ''.join('<div class="card"><div class="ico">%s</div><h3>%s</h3><p class="muted">%s</p></div>' % (_I[i], e(t), e(d)) for i, t, d in eco),
         ''.join('<details><summary>%s</summary><p>%s</p></details>' % (e(q), e(a)) for q, a in FAQ),
         e(reg))
-    return _head('Ficha Única · Tu sitio inmobiliario gratis', desc, '<script type="application/ld+json">%s</script>' % ld) + _top(reg) + main.replace('@@wa@@', _I['wa']).replace('@@google@@', _I['google']) + _foot(reg, local)
+    return _head('Ficha Única · Tu sitio inmobiliario gratis', desc, '<script type="application/ld+json">%s</script>' % ld) + _top(reg) + main.replace('@@wa@@', _I['wa']).replace('@@google@@', _I['google']) + JS + _foot(reg, local)
 
 
 def public_plans(ref=''):

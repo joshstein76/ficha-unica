@@ -373,7 +373,7 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError as ex:
                     return self.send(panel.signup(str(ex), f), 400)
                 return self.start_session(con, uid, '/nueva?bienvenida=1')
-            return self.send(panel.signup(ref=(query.get('ref') or '')[:60]))
+            return self.send(panel.signup(values={'agency': (query.get('marca') or '')[:40]}, ref=(query.get('ref') or '')[:60]))
         if path == '/entrar':
             if method == 'POST':
                 f, _ = self.form()
