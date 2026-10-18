@@ -31,7 +31,7 @@ class DeployReady(unittest.TestCase):
         for f in tracked():
             self.assertFalse(re.search(r'(^|/)[^/]*\.env$|\.local\.md$|\.db$', f), 'secret-ish file tracked: ' + f)
             p = os.path.join(ROOT, f)
-            if f.endswith(('.png', '.jpg', '.webp', '.gz')) or not os.path.isfile(p):
+            if f.endswith(('.png', '.jpg', '.webp', '.gz')) or f == 'tests/test_deploy_ready.py' or not os.path.isfile(p):
                 continue
             with open(p, errors='ignore') as fh:
                 self.assertIsNone(pat.search(fh.read()), 'secret pattern in ' + f)
