@@ -21,7 +21,7 @@ import threading
 from .. import auth, cards, db, geo, importer, lead_watch, media, ml_oauth, photo_fetch, photos, price_check, replies, stats, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
-from . import panel, portal, site
+from . import landing, panel, portal, site
 from .common import csrf_ok, to_cents, to_num
 
 MAX_UPLOAD = 40 * 1024 * 1024
@@ -108,6 +108,17 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length).decode('utf-8', 'replace')
         return {k: v[-1] for k, v in urllib.parse.parse_qs(raw, keep_blank_values=True).items()}, {}
 
+    def static(self, name):
+        """Tiny allow-list static server for the landing (files in llave/web/static/, flat names only)."""
+        d = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+        path = os.path.join(d, name)
+        if not re.match(r'^[a-z0-9][a-z0-9._-]*$', name) or not os.path.isfile(path):
+            return self.send('No encontrado', 404, 'text/plain; charset=utf-8')
+        with open(path, 'rb') as fh:
+            data = fh.read()
+        return self.send(data, ctype='image/webp' if name.endswith('.webp') else (mimetypes.guess_type(path)[0] or 'application/octet-stream'),
+                         headers={'Cache-Control': 'public, max-age=86400'})
+
     def media(self, rel):
         rel = posixpath.normpath(urllib.parse.unquote(rel)).lstrip('/')
         if rel.startswith('..') or '\\' in rel:
@@ -165,6 +176,8 @@ class Handler(BaseHTTPRequestHandler):
             path, query = u.path, {k: v[-1] for k, v in urllib.parse.parse_qs(u.query).items()}
             if path.startswith('/media/'):
                 return self.media(path[len('/media/'):])
+            if path.startswith('/_s/'):
+                return self.static(path[4:])
             if path == '/healthz':
                 return self.send(json.dumps(health(con)), ctype='application/json', headers={'Cache-Control': 'no-store'})
             if path == '/_tls/ask':
@@ -388,8 +401,14 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(panel.join(ag, m.group(1), str(ex), f), 400)
                 return self.start_session(con, uid2, '/')
             return self.send(panel.join(ag, m.group(1)))
+        if path == '/planes':
+            return self.send(landing.public_plans())
         if not ctx:
-            return self.redirect('/entrar') if path != '/' else self.send(panel.landing())
+            if path == '/':
+                return self.send(landing.landing((query.get('ref') or '')[:60]))
+            if path == '/precios':
+                return self.send(landing.public_plans())
+            return self.redirect('/entrar')
         f, files = ({}, {})
         if method == 'POST':
             try:

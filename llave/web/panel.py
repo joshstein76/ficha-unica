@@ -512,15 +512,8 @@ def site_settings(con, ctx, ok='', error=''):
 
 
 def landing(ref=''):
-    reg = '%s/registro%s' % (db.origin('app'), ('?ref=' + e(ref)) if ref else '')
-    body = ('<div class="auth" style="max-width:640px"><h1 style="font-size:34px">Tu sitio inmobiliario gratis. '
-            'Tus propiedades en Google y en los portales. Tus clientes en WhatsApp.</h1>'
-            '<p class="muted">Sube cada propiedad una vez y listo. Sin tarjeta para empezar.</p>'
-            '<p><a href="/propiedades">¿Buscas casa o departamento? Ver propiedades →</a></p>'
-            '<div class="row"><a class="btn" href="%s">Crear mi sitio gratis</a><a class="btn ghost" href="%s/entrar">Entrar</a></div>'
-            '%s</div>') % (reg, e(db.origin('app')), '' if db.ENV == 'production' else
-                           '<p class="small muted">Versión local de prueba. Nada aquí es público todavía.</p>')
-    return layout('Bienvenido', body)
+    from . import landing as _l
+    return _l.landing(ref)
 
 
 # ---------- import ----------
