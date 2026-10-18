@@ -32,15 +32,43 @@ class AIUnavailable(AIError):
     pass
 
 
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+KEY_FILES = (os.path.join(ROOT, 'config', 'anthropic.env'),  # dedicated Ficha Única key (gitignored), preferred
+             os.path.join(os.path.dirname(ROOT), 'josh-command-center', 'clients', 'idx-bloom', 'config', 'anthropic.env'))
+
+
+def _key_from_file():
+    for path in ([os.environ['LLAVE_AI_KEY_FILE']] if os.environ.get('LLAVE_AI_KEY_FILE') else []) + list(KEY_FILES):
+        try:
+            for line in open(path, encoding='utf-8'):
+                if line.startswith('ANTHROPIC_API_KEY='):
+                    v = line.split('=', 1)[1].strip().strip('"').strip("'")
+                    if len(v) > 20:
+                        return v
+        except OSError:
+            continue
+    return None
+
+
 def _creds():
-    key = os.environ.get('ANTHROPIC_API_KEY')
+    key = os.environ.get('ANTHROPIC_API_KEY') or _key_from_file()
     tok = os.environ.get('ANTHROPIC_AUTH_TOKEN')
     return key, tok
 
 
-def enabled():
+def enabled(con=None):
+    """Live AI only with LLAVE_AI_LIVE=1, a credential, and room under the monthly cap (budget.py)."""
     key, tok = _creds()
-    return os.environ.get('LLAVE_AI_LIVE') == '1' and bool(key or tok)
+    if not (os.environ.get('LLAVE_AI_LIVE') == '1' and (key or tok)):
+        return False
+    from . import budget
+    from .. import db
+    c = con or db.connect()
+    try:
+        return budget.allow(c, MODEL, 2000, MAX_TOKENS)
+    finally:
+        if con is None:
+            c.close()
 
 
 def build_request(system, user, schema, effort='medium'):
@@ -94,10 +122,25 @@ def parse_response(raw):
         raise AIError('La respuesta no es JSON válido')
 
 
-def complete_json(system, user, schema, effort='medium', transport=None):
+def complete_json(system, user, schema, effort='medium', transport=None, budget_con=None):
+    """Real calls (no injected transport) always go through the monthly cap: checked before, recorded after."""
     headers, body = build_request(system, user, schema, effort)
     payload = json.dumps(body).encode('utf-8')
     send = transport or _urllib_transport
+    from . import budget
+    from .. import db
+    bcon = budget_con or (db.connect() if transport is None else None)
+    if bcon is not None and not budget.allow(bcon, MODEL, len(payload) // 3 + 500, MAX_TOKENS):
+        raise AIUnavailable('Se alcanzó el límite mensual de IA; usamos el texto automático.')
+    try:
+        return _send(send, headers, payload, bcon)
+    finally:
+        if bcon is not None and budget_con is None:
+            bcon.close()
+
+
+def _send(send, headers, payload, bcon):
+    from . import budget
     last = None
     for attempt in range(RETRIES + 1):
         try:
@@ -106,6 +149,12 @@ def complete_json(system, user, schema, effort='medium', transport=None):
             last = AIError('Error de red: %s' % type(ex).__name__)
         else:
             if status == 200:
+                if bcon is not None:
+                    try:
+                        data = json.loads(raw.decode('utf-8') if isinstance(raw, bytes) else raw)
+                        budget.record(bcon, data.get('model') or MODEL, data.get('usage'))
+                    except ValueError:
+                        pass
                 return parse_response(raw)
             if status in (400, 401, 403, 404):
                 raise AIError('La API respondió HTTP %d' % status)

@@ -1030,7 +1030,21 @@ def check_production_config():
     return problems
 
 
+def load_local_env():
+    """config/local.env (gitignored) -> os.environ, without overriding real environment variables."""
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config', 'local.env')
+    try:
+        for line in open(path, encoding='utf-8'):
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                k, v = line.split('=', 1)
+                os.environ.setdefault(k.strip(), v.strip())
+    except OSError:
+        pass
+
+
 def main():
+    load_local_env()
     bad = check_production_config()
     if bad:
         sys.exit('Ficha Única no arranca: ' + '; '.join(bad))

@@ -796,7 +796,10 @@ PLANS = [
     ('gratis', 'Gratis', 0, ['Tu sitio en una dirección gratis', '10 propiedades', 'Portales y buscadores gratuitos', 'Clientes por WhatsApp']),
     ('pro', 'Pro', 299, ['Todo lo de Gratis', 'Tu propio dominio', '50 propiedades', 'Respuesta automática por WhatsApp', 'Estadísticas completas']),
     ('agencia', 'Agencia', 799, ['Todo lo de Pro', '200 propiedades', 'Equipo de asesores', 'Bandeja de clientes compartida']),
+    ('pro_crm', 'Pro + CRM', 999, ['Todo lo de Pro', 'Tu propio CRM con automatizaciones y WhatsApp', 'Asistente con IA que responde por ti',
+                                   'Redes sociales, newsletter y reseñas en un solo lugar']),
 ]
+COMING_SOON = {'pro_crm'}  # needs GHL Agency Pro (SaaS mode); Josh 10-18: plan for it, show as Próximamente
 
 
 def plans(con, ctx, ok=''):
@@ -808,6 +811,7 @@ def plans(con, ctx, ok=''):
             '' if not price else ' <span class="muted small">al mes, IVA incluido</span>',
             ''.join('<li>%s</li>' % e(f) for f in feats),
             '<span class="pill ok">Tu plan</span>' if k == a['plan'] else
+            '<span class="pill pendiente">Próximamente</span>' if k in COMING_SOON else
             '<a class="btn %s" href="/plan/%s">%s</a>' % ('' if price else 'ghost', k, 'Cambiar a %s' % name))
         for k, name, price, feats in PLANS)
     body = ('%s<h1>Tu plan</h1><p class="muted">Usas %d de %d propiedades.</p><div class="grid2 wide plans">%s</div>'
