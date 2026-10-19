@@ -437,7 +437,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(landing.public_plans())
         if not ctx:
             if path == '/':
-                return self.send(landing.landing((query.get('ref') or '')[:60]))
+                ref = (query.get('ref') or '')[:60]
+                if db.MARKETING_URL and not query.get('marca'):  # WordPress owns the home page; ?marca= keeps the live-preview CTA
+                    return self.redirect(db.MARKETING_URL + ('/?ref=' + urllib.parse.quote(ref) if ref else '/'))
+                return self.send(landing.landing(ref))
             if path == '/precios':
                 return self.send(landing.public_plans())
             return self.redirect('/entrar')

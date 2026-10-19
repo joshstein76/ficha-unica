@@ -9,6 +9,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.environ.get('LLAVE_DB', os.path.join(ROOT, 'data', 'llave.db'))
 MEDIA_DIR = os.environ.get('LLAVE_MEDIA', os.path.join(ROOT, 'data', 'media'))
 BASE_DOMAIN = os.environ.get('LLAVE_BASE_DOMAIN', 'fichaunica.localhost')  # prod: the public brand domain
+MARKETING_URL = os.environ.get('LLAVE_MARKETING_URL', '').rstrip('/')  # WordPress marketing site; set => logged-out app '/' redirects there
 PORT = int(os.environ.get('LLAVE_PORT', '8640'))
 ENV = os.environ.get('LLAVE_ENV', 'local')               # local | production
 # Public URLs: behind the reverse proxy in production they are https on 443 (no port in links).

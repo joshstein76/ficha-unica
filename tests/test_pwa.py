@@ -12,6 +12,7 @@ os.environ.setdefault('LLAVE_MEDIA', os.path.join(TMP, 'media'))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from http.server import ThreadingHTTPServer  # noqa: E402
+from llave import db  # noqa: E402
 from llave.web.server import Handler  # noqa: E402
 from tests.test_landing import get  # noqa: E402
 import tests.test_landing as tl  # noqa: E402
@@ -20,8 +21,9 @@ import tests.test_landing as tl  # noqa: E402
 class Pwa(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        tl.PORT = 8693
-        cls.srv = ThreadingHTTPServer(('127.0.0.1', 8693), Handler)
+        db.init(db.connect())
+        tl.PORT = 8701
+        cls.srv = ThreadingHTTPServer(('127.0.0.1', 8701), Handler)
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
 
     @classmethod
