@@ -46,9 +46,12 @@ def layout(title, body, ctx=None, tab=None, flash=''):
                      % (e(db.site_url(ctx['agency'])), csrf_field(ctx)))
     return ('<!doctype html><html lang="es-MX"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
-            '<title>%s · Ficha Única</title>%s<link rel="stylesheet" href="%s"><style>%s</style></head><body>'
+            '<title>%s · Ficha Única</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f5c4c">'
+            '<link rel="apple-touch-icon" href="/_s/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes">'
+            '%s<link rel="stylesheet" href="%s"><style>%s</style></head><body>'
             '<a class="skip" href="#main">Saltar al contenido</a><header class="top"><a class="logo" href="/">Ficha <span>Única</span></a>%s</header>%s'
-            '<main id="main" class="wrap">%s%s</main><footer class="wrap small muted" style="padding-top:0;display:block">Ficha Única es un servicio de %s · <a href="/terminos">Términos</a> · <a href="/privacidad">Privacidad</a></footer></body></html>') % (
+            '<main id="main" class="wrap">%s%s</main><footer class="wrap small muted" style="padding-top:0;display:block">Ficha Única es un servicio de %s · <a href="/terminos">Términos</a> · <a href="/privacidad">Privacidad</a></footer>'
+            '<script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js").catch(function(){})</script></body></html>') % (
         e(title), PRECONNECT, FONTS, PANEL, top_right, nav, flash, body, e(db.OWNER))
 
 

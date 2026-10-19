@@ -33,6 +33,30 @@ class Ctx(dict):
     pass
 
 
+PWA_MANIFEST = {
+    'name': 'Ficha Única', 'short_name': 'Ficha Única', 'lang': 'es-MX', 'dir': 'ltr',
+    'description': 'Tu sitio, tus propiedades y tus clientes de WhatsApp, en tu celular.',
+    'start_url': '/?from=app', 'scope': '/', 'display': 'standalone', 'orientation': 'portrait',
+    'background_color': '#ffffff', 'theme_color': '#0f5c4c',
+    'icons': [{'src': '/_s/icon-192.png', 'sizes': '192x192', 'type': 'image/png', 'purpose': 'any'},
+              {'src': '/_s/icon-512.png', 'sizes': '512x512', 'type': 'image/png', 'purpose': 'any'}],
+    'shortcuts': [{'name': 'Nueva propiedad', 'url': '/nueva'}, {'name': 'Clientes', 'url': '/clientes'}],
+}
+# Offline shell only: static files are cached; panel pages (logged-in, private) are never stored.
+PWA_SW = """const V='fu-v1';
+self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(['/offline','/_s/icon-192.png'])));self.skipWaiting();});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==V).map(x=>caches.delete(x)))));self.clients.claim();});
+self.addEventListener('fetch',e=>{const r=e.request;if(r.method!=='GET')return;
+if(r.mode==='navigate'){e.respondWith(fetch(r).catch(()=>caches.match('/offline')));return;}
+const u=new URL(r.url);if(u.pathname.startsWith('/_s/')){e.respondWith(caches.match(r).then(m=>m||fetch(r).then(x=>{const c=x.clone();caches.open(V).then(h=>h.put(r,c));return x;})));}});
+"""
+PWA_OFFLINE = ('<!doctype html><html lang="es-MX"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+               '<title>Sin conexión · Ficha Única</title><style>body{font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;'
+               'text-align:center;padding:24px;color:#14302a}h1{font-size:1.4rem}button{background:#0f5c4c;color:#fff;border:0;border-radius:10px;padding:12px 20px;font-size:1rem}</style></head>'
+               '<body><main><h1>Sin conexión</h1><p>Revisa tu internet y vuelve a intentar. Tus propiedades y clientes están seguros.</p>'
+               '<button onclick="location.reload()">Reintentar</button></main></body></html>')
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = 'FichaUnica/0.1'
     protocol_version = 'HTTP/1.1'
@@ -189,6 +213,14 @@ class Handler(BaseHTTPRequestHandler):
             h = self.host()
             base = db.BASE_DOMAIN
             if h == 'app.' + base:
+                if path == '/manifest.webmanifest':
+                    return self.send(json.dumps(PWA_MANIFEST), ctype='application/manifest+json',
+                                     headers={'Cache-Control': 'public, max-age=86400'})
+                if path == '/sw.js':  # served from the root so its scope covers the whole panel
+                    return self.send(PWA_SW, ctype='application/javascript; charset=utf-8',
+                                     headers={'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/'})
+                if path == '/offline':
+                    return self.send(PWA_OFFLINE, headers={'Cache-Control': 'public, max-age=3600'})
                 return self.panel(con, method, path, query)
             if h.endswith('.' + base):
                 a = con.execute('SELECT * FROM agencies WHERE slug=?', (h[:-len(base) - 1],)).fetchone()
