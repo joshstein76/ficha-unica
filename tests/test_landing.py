@@ -14,6 +14,7 @@ os.environ.setdefault('LLAVE_MEDIA', os.path.join(TMP, 'media'))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from http.server import ThreadingHTTPServer  # noqa: E402
+from llave import db  # noqa: E402
 from llave.web.server import Handler  # noqa: E402
 
 PORT = 8692
@@ -36,6 +37,9 @@ def main(h):
 class Landing(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        con = db.connect()
+        db.init(con)  # so the file also runs on its own, not only after other tests created the schema
+        con.close()
         cls.srv = ThreadingHTTPServer(('127.0.0.1', PORT), Handler)
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
         cls.land = main(get('/')[1].decode())
