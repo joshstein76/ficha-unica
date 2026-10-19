@@ -16,8 +16,19 @@ SCHEME = os.environ.get('LLAVE_PUBLIC_SCHEME', 'https' if ENV == 'production' el
 PUBLIC_PORT = os.environ.get('LLAVE_PUBLIC_PORT')         # None = same as PORT locally, none in production
 
 
+# Test tunnels only (never in production): {"app": "https://x.trycloudflare.com", "<slug>": "https://y..."} overrides the links we generate.
+TEST_ORIGINS = {}
+if ENV != 'production':
+    try:
+        TEST_ORIGINS = json.loads(os.environ.get('LLAVE_TEST_ORIGINS') or '{}')
+    except ValueError:
+        TEST_ORIGINS = {}
+
+
 def origin(host_prefix=''):
     """'https://app.fichaunica.mx' style origin for app./<slug>./'' (bare brand domain)."""
+    if TEST_ORIGINS.get(host_prefix or ''):
+        return TEST_ORIGINS[host_prefix or '']
     host = ('%s.%s' % (host_prefix, BASE_DOMAIN)) if host_prefix else BASE_DOMAIN
     pp = int(PUBLIC_PORT) if PUBLIC_PORT else (None if ENV == 'production' else PORT)
     port = '' if pp in (None, 80, 443) else ':%d' % pp
