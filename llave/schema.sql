@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS agencies (
   about TEXT,
   custom_domain TEXT UNIQUE,              -- Pro: own domain (Wix model)
   domain_verified_at TEXT,
-  plan TEXT NOT NULL DEFAULT 'gratis',    -- gratis | pro | agencia
+  plan TEXT NOT NULL DEFAULT 'gratis',    -- gratis | pro | ia  (10-19; agencia/pro_crm retired → ia)
   ghl_location_id TEXT,                   -- set only when a GHL sub-account exists for the agency
   first_reply TEXT,                       -- NULL = default approved by Josh 10-17 (llave/replies.py)
   first_reply_noname TEXT,

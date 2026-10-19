@@ -118,8 +118,11 @@ class ProfilePlan(unittest.TestCase):
     def test_plan_change_test_mode(self):
         cookie, csrf = self.signup('Plan Prueba', 'plan@ejemplo.test')
         s, page, _ = req('app.fichaunica.localhost', '/plan', cookie=cookie)
-        self.assertIn('$299 MXN', page)
-        self.assertIn('$799 MXN', page)
+        self.assertIn('$499 MXN', page)
+        self.assertIn('$999 MXN', page)
+        self.assertNotIn('Agencia', page)
+        s, _, _ = req('app.fichaunica.localhost', '/plan/agencia', cookie=cookie)
+        self.assertEqual(s, 404)                                  # retired 10-19
         s, page, _ = req('app.fichaunica.localhost', '/plan/pro', cookie=cookie)
         self.assertIn('MODO PRUEBA', page)
         s, page, _ = req('app.fichaunica.localhost', '/plan/pro', {'csrf': csrf}, cookie)

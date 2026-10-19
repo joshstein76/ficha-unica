@@ -35,9 +35,17 @@ def origin(host_prefix=''):
     port = '' if pp in (None, 80, 443) else ':%d' % pp
     return '%s://%s%s' % (SCHEME, host, port)
 
-PLAN_LIMITS = {'gratis': 10, 'pro': 50, 'agencia': 200}
+PLAN_LIMITS = {'gratis': 1, 'pro': 5, 'ia': 25}  # Josh 10-19: Gratis 1 · Pro MXN 499 = 5 · Pro + IA MXN 999 = 25
+LEGACY_PLANS = {'agencia': 'ia', 'pro_crm': 'ia'}  # retired 10-19 (Agencia dropped; Pro + CRM became Pro + IA)
+# What each plan unlocks (Claude's split of Josh's 10-19 plans, logged in docs/DECISIONS.md).
+PLAN_FEATURES = {
+    'domain': ('pro', 'ia'),  # own domain
+    'tools': ('pro', 'ia'),   # Instagram images, printable sheet, Excel/CSV import, Bolsa 50/50, full stats
+    'ai': ('ia',),            # AI writer, photo review + order, suggested price, weekly social kit
+    'team': (),               # team invites: off until teams come back (Josh 10-19: drop Agencia)
+}
 PUBLIC_STATUSES = ('activa', 'apartada')  # shown on sites + fed to portals
-REFERRAL_BONUS_LISTINGS = 5  # extra listings per invited colleague who publishes (Claude's call 10-17; Josh can change)
+REFERRAL_BONUS_LISTINGS = 1  # extra listing per invited colleague who publishes (Claude's call; was 5 until the 10-19 plans, when 5 = the whole Pro plan)
 
 BRAND = 'Ficha Única'                 # public name (Josh 10-17); LLAVE = internal code name
 OWNER = 'Ciao Bella Marketing'        # legal owner of the platform (Josh 10-17)
@@ -64,6 +72,7 @@ def init(con):
     for col in ('slug', 'bio', 'zones'):  # agent public profile
         if col not in ucols:
             con.execute('ALTER TABLE users ADD COLUMN %s TEXT' % col)
+    con.execute("UPDATE agencies SET plan='ia' WHERE plan IN ('agencia','pro_crm')")  # 10-19 plans
     con.commit()
 
 
@@ -167,10 +176,19 @@ def qualified_referrals(con, agency_id):
                        "WHERE a.referred_by=? AND l.status IN ('activa','apartada')", (agency_id,)).fetchone()[0]
 
 
+def plan_of(agency, plan=None):
+    p = plan or dict(agency).get('plan') or 'gratis'
+    return LEGACY_PLANS.get(p, p)
+
+
+def plan_has(agency, feature):
+    return plan_of(agency) in PLAN_FEATURES.get(feature, ())
+
+
 def listing_limit(con, agency, plan=None):
     """Plan limit + referral bonus."""
     a = dict(agency)
-    base = PLAN_LIMITS.get(plan or a.get('plan') or 'gratis', PLAN_LIMITS['gratis'])
+    base = PLAN_LIMITS.get(plan_of(a, plan), PLAN_LIMITS['gratis'])
     extra = 0
     try:
         from . import eco

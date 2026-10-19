@@ -77,3 +77,14 @@ Each line: the call, why, how to undo.
 - Why Python stays: multi-tenant product (accounts, listings DB, photo pipeline, feeds, per-agent free sites on subdomains, inbox). WordPress is the shop window, the app is the product.
 - Built: `LLAVE_MARKETING_URL` (logged-out app home redirects to WordPress, `?ref=` carried). Copy-ready WordPress pages: clients/mx-broker-platform/work/2026-10-19-WORDPRESS-MARKETING-SITE-PLAN.md.
 - Open: public directory `/propiedades` and `/busco` live on the bare domain today; with WordPress there they move to `propiedades.<domain>` (or app./directorio). Decide at deploy.
+
+## 2026-10-19 — New plans (Josh: "free is 1 property only, 499 is 5 properties and domain name access and tools… 999 is the ai package"; taps: drop Agencia, 999 = 25 properties, sell 999 from launch day)
+41. **Gratis MXN 0 = 1 propiedad · Pro MXN 499/mes = 5 propiedades · Pro + IA MXN 999/mes = 25 propiedades**, IVA incluido. `db.PLAN_LIMITS`, `panel.PLANS`. Agencia (799) is gone; old `agencia`/`pro_crm` rows become `ia` on `db.init` (`db.LEGACY_PLANS`). Pro + CRM (GHL SaaS mode) is no longer a plan; it can come back as an add-on.
+42. **What each plan unlocks** (`db.PLAN_FEATURES`, Claude's split of Josh's words; change the map to move a tool):
+    - Gratis: site on a free address, 1 listing, WhatsApp leads + client inbox with the 5-minute alert, portals/search feeds, profile, referral link, Academia, Servicios.
+    - Pro (`tools` + `domain`): own domain (now also checked server-side; it was UI-only), Instagram post/story images + printable sheet (404 on the agent site for Gratis), Excel/CSV import, Bolsa 50/50 (page, sharing, the listing checkbox), full stats.
+    - Pro + IA (`ai`): AI title + description ES/EN (Claude when `LLAVE_AI_LIVE` + a key, template otherwise), photo review + suggested order, suggested price from comparables, weekly "Qué publicar" kit. Locked screens show a short upsell to `/plan`, never an error.
+    - Teams (`team`): off until teams come back; `/equipo` says "llegan pronto", the invite flow stays tested.
+    - Dropped from the Pro card: "Respuesta automática por WhatsApp" (the app only has the one-tap first reply; auto-reply needs GHL).
+43. **Referral bonus 5 → 1 listing** per colleague who publishes (`db.REFERRAL_BONUS_LISTINGS`): with Pro at 5 listings, +5 per invite would have given away the paid plan. Claude's call; Josh can change it.
+44. **Before charging for Pro + IA:** an Anthropic API key in `config/anthropic.env` (today the writer runs in template mode), and Stripe products for MXN 499 and MXN 999.

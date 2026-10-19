@@ -102,7 +102,7 @@ class AIEcoWeb(unittest.TestCase):
         return lid
 
     def test_ai_helpers_and_kit(self):
-        c, k = self.agency('ia-ayuda', 'ia@ejemplo.test')
+        c, k = self.agency('ia-ayuda', 'ia@ejemplo.test', plan='ia')
         lid = self.publish(c, k)
         s, page, _ = req('app.fichaunica.localhost', '/propiedades/%d' % lid, cookie=c)
         self.assertIn('Ayuda inteligente', page)
@@ -117,7 +117,7 @@ class AIEcoWeb(unittest.TestCase):
         self.assertIn('tarjeta-post.jpg', page)
 
     def test_valuation(self):
-        c, k = self.agency('valua-ya', 'valua@ejemplo.test')
+        c, k = self.agency('valua-ya', 'valua@ejemplo.test', plan='ia')
         for i, (p, m) in enumerate((('4000000', '100'), ('4400000', '110'), ('5200000', '120'))):
             self.publish(c, k, 'Narvarte', p, m)
         s, page, _ = req('valua-ya.fichaunica.localhost', '/vende')
@@ -171,7 +171,13 @@ class AIEcoWeb(unittest.TestCase):
         con.close()
 
     def test_team_invite(self):
-        c, k = self.agency('equipo-grande', 'jefa@ejemplo.test', plan='agencia')
+        c, k = self.agency('equipo-grande', 'jefa@ejemplo.test', plan='ia')
+        s, page, _ = req('app.fichaunica.localhost', '/equipo', {'csrf': k}, cookie=c)
+        self.assertEqual(s, 403)                                  # teams are off since the 10-19 plans
+        self.assertIn('llegan pronto', page)
+        saved = db.PLAN_FEATURES['team']
+        db.PLAN_FEATURES['team'] = ('ia',)                        # the flow still works for when teams come back
+        self.addCleanup(db.PLAN_FEATURES.__setitem__, 'team', saved)
         s, page, _ = req('app.fichaunica.localhost', '/equipo', {'csrf': k}, cookie=c)
         link = re.search(r'/unirse/([A-Za-z0-9_-]+)', page).group(1)
         s, page, _ = req('app.fichaunica.localhost', '/unirse/' + link)

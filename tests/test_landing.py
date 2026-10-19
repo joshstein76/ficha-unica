@@ -77,15 +77,17 @@ class Landing(unittest.TestCase):
 
     def test_prices_consistent_everywhere(self):
         for h in (self.land, self.prec, self.planes):
-            self.assertEqual(sorted(set(re.findall(r'\$(\d+) MXN', h))), ['299', '799', '999'])
+            self.assertEqual(sorted(set(re.findall(r'\$(\d+) MXN', h))), ['499', '999'])
             self.assertIn('Gratis', h)
 
-    def test_999_only_proximamente(self):
+    def test_999_ia_on_sale(self):
         for h in (self.land, self.prec):
-            card = [c for c in h.split('<div class="card plan') if 'Pro + CRM' in c][0]
-            self.assertIn('Próximamente', card)
-            self.assertNotIn('<a class="btn', card.split('</div>')[0])
+            card = [c for c in h.split('<div class="card plan') if 'Pro + IA' in c][0]
+            self.assertNotIn('Próximamente', card)
+            self.assertIn('<a class="btn', card)
+            self.assertIn('25 propiedades', card)
             self.assertEqual(h.count('999'), h.count('$999 MXN'))
+            self.assertNotIn('Agencia', h)
 
     def test_no_competitor_names(self):
         for h in (self.land, self.prec, self.planes):

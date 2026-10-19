@@ -113,9 +113,10 @@ class GrowthAdmin(unittest.TestCase):
         a1 = con.execute("SELECT * FROM agencies WHERE slug='invita-mucho'").fetchone()
         a2 = con.execute("SELECT * FROM agencies WHERE slug='colega-nuevo'").fetchone()
         self.assertEqual(a2['referred_by'], a1['id'])
-        self.assertEqual(db.listing_limit(con, a1), 10)          # not yet: colleague hasn't published
+        base = db.PLAN_LIMITS['gratis']
+        self.assertEqual(db.listing_limit(con, a1), base)        # not yet: colleague hasn't published
         self.publish(c2, k2, 'Santa Catarina')
-        self.assertEqual(db.listing_limit(con, a1), 15)          # +5 once the colleague publishes
+        self.assertEqual(db.listing_limit(con, a1), base + db.REFERRAL_BONUS_LISTINGS)  # bonus once the colleague publishes
         s, page, _ = req('app.fichaunica.localhost', '/invitar', cookie=c1)
         self.assertIn('publicó ✓', page)
         con.close()
@@ -125,6 +126,12 @@ class GrowthAdmin(unittest.TestCase):
         lid = self.publish(c, k, 'Del Carmen')
         con = db.connect()
         slug = con.execute('SELECT slug FROM listings WHERE id=?', (lid,)).fetchone()['slug']
+        s, _, _ = req('tarjetas-pro.fichaunica.localhost', '/propiedad/%s/tarjeta-post.jpg' % slug)
+        self.assertEqual(s, 404)                                  # Instagram images are a Pro tool
+        s, _, _ = req('tarjetas-pro.fichaunica.localhost', '/propiedad/%s/ficha' % slug)
+        self.assertEqual(s, 404)                                  # so is the printable sheet
+        con.execute("UPDATE agencies SET plan='pro' WHERE slug='tarjetas-pro'")
+        con.commit()
         for kind, size in (('post', (1080, 1350)), ('historia', (1080, 1920))):
             r = OPENER.open(urllib.request.Request(BASE + '/propiedad/%s/tarjeta-%s.jpg' % (slug, kind),
                                                    headers={'Host': 'tarjetas-pro.fichaunica.localhost'}))

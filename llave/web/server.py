@@ -357,6 +357,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(body, ctype=ctype)
         m = re.match(r'^/propiedad/([a-z0-9-]+)/tarjeta-(post|historia)\.jpg$', path)
         if m:
+            if not db.plan_has(a, 'tools'):
+                return self.send('No encontrada', 404, 'text/plain; charset=utf-8')
             row = con.execute("SELECT id FROM listings WHERE agency_id=? AND slug=? AND status IN ('activa','apartada')",
                               (a['id'], m.group(1))).fetchone()
             if not row:
@@ -371,6 +373,8 @@ class Handler(BaseHTTPRequestHandler):
                     if not m.group(2) and method == 'GET' and not stats.is_bot(self.headers.get('User-Agent')):
                         stats.record_view(con, lid)
                         con.commit()
+                    if m.group(2) and not db.plan_has(a, 'tools'):
+                        return self.send(site.not_found(a), 404)
                     return self.send(site.ficha(a, c) if m.group(2) else site.listing(con, a, c))
             return self.send(site.not_found(a), 404)
         return self.send(site.not_found(a), 404)
@@ -530,8 +534,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/equipo':
             link = ''
             if method == 'POST':
-                if a['plan'] != 'agencia' or ctx['user']['role'] not in ('owner', 'admin'):
-                    return self.send(panel.team(con, ctx, error='Solo el dueño en plan Agencia puede invitar.'), 403)
+                if not db.plan_has(a, 'team') or ctx['user']['role'] not in ('owner', 'admin'):
+                    return self.send(panel.team(con, ctx, error='Los equipos de asesores llegan pronto.'), 403)
                 tok = auth.new_session_token()
                 con.execute("CREATE TABLE IF NOT EXISTS team_invites (token TEXT PRIMARY KEY, agency_id INTEGER NOT NULL, created_by INTEGER, "
                             "expires_at TEXT NOT NULL, used_at TEXT)")
@@ -542,6 +546,8 @@ class Handler(BaseHTTPRequestHandler):
                 link = '%s/unirse/%s' % (db.origin('app'), tok)
             return self.send(panel.team(con, ctx, link))
         if path == '/que-publicar':
+            if not db.plan_has(a, 'ai'):
+                return self.send(panel.upsell(ctx, 'ai', 'Qué publicar esta semana', 'publicar'))
             from ..ai import social_kit
             return self.send(panel.social_kit_page(ctx, social_kit.weekly_kit(con, a['id'])))
         if path == '/invitar':
@@ -563,6 +569,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/academia':
             return self.send(panel.academy(ctx))
         if path == '/propiedades/importar':
+            if not db.plan_has(a, 'tools'):
+                return self.send(panel.upsell(ctx, 'tools', 'Importar desde Excel', 'propiedades'))
             if method != 'POST':
                 return self.send(panel.import_page(ctx))
             text = (files.get('archivo') or [b''])[0].decode('utf-8-sig', 'replace') or f.get('csv', '')
@@ -610,6 +618,8 @@ class Handler(BaseHTTPRequestHandler):
                 con.commit()
                 msg = '%d fotos listas.' % ok + ((' %d no se pudieron usar: %s' % (len(bad), bad[0])) if bad else '')
                 return self.send(panel.listing_form(con, ctx, l, ok=msg))
+            if sub in ('/ia-texto', '/ordenar-fotos') and not db.plan_has(a, 'ai'):
+                return self.send(panel.upsell(ctx, 'ai', 'Ayuda inteligente', 'propiedades'))
             if sub == '/ia-texto' and method == 'POST':
                 from ..ai import writer
                 c = db.canonical(con, l['id'])
@@ -671,7 +681,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(panel.profile(ctx))
         if path == '/plan':
             return self.send(panel.plans(con, ctx))
-        m = re.match(r'^/plan/(gratis|pro|agencia)$', path)
+        m = re.match(r'^/plan/(gratis|pro|ia)$', path)
         if m:
             key = m.group(1)
             if method == 'POST':
@@ -686,6 +696,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(panel.plans(con, ctx, ok='Listo: ahora tienes el plan %s (modo prueba, sin cobro).' % key))
             return self.send(panel.plan_checkout(ctx, key))
         if path == '/estadisticas':
+            if not db.plan_has(a, 'tools'):
+                return self.send(panel.upsell(ctx, 'tools', 'Estadísticas', 'estadisticas'))
             return self.send(panel.stats_page(ctx, stats.agency_stats(con, a['id'])))
         if path == '/portales':
             return self.send(panel.portals(con, ctx))
@@ -728,6 +740,9 @@ class Handler(BaseHTTPRequestHandler):
             db.audit(con, actor, 'portal_toggle', '%s listing:%d -> %d' % (key, l['id'], on))
             con.commit()
             return self.redirect('/portales')
+        if path == '/bolsa' or path.startswith('/bolsa/'):
+            if not db.plan_has(a, 'tools'):
+                return self.send(panel.upsell(ctx, 'tools', 'Bolsa 50/50', 'bolsa'))
         if path == '/bolsa':
             return self.send(panel.bolsa(con, ctx, query))
         m = re.match(r'^/bolsa/(\d+)/(compartir|retirar)$', path)
@@ -753,6 +768,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(panel.site_settings(con, ctx, ok='Guardado. Tu sitio ya se ve así.'))
             return self.send(panel.site_settings(con, ctx))
         if path == '/sitio/dominio' and method == 'POST':
+            if not db.plan_has(a, 'domain'):
+                return self.send(panel.site_settings(con, ctx, error='Tu propio dominio viene en el plan Pro.'), 403)
             d = (f.get('domain') or '').strip().lower().replace('https://', '').replace('http://', '').strip('/')
             if d.startswith('www.'):
                 d = d[4:]
@@ -970,7 +987,7 @@ def save_listing(con, a, uid, f, existing=None):
         street=(f.get('street') or '').strip(), ext_number=(f.get('ext_number') or '').strip(),
         colonia=f['colonia'].strip(), municipio=f['municipio'].strip(), estado=f['estado'].strip(),
         cp=(f.get('cp') or '').strip(), show_exact_location=int(f.get('show_exact_location') == '1'),
-        share_in_bolsa=int(f.get('share_in_bolsa') == '1'), share_split_pct=split if split is not None else 50,
+        share_in_bolsa=int(f.get('share_in_bolsa') == '1' and db.plan_has(a, 'tools')), share_split_pct=split if split is not None else 50,
         commission_pct=to_num(f.get('commission_pct')), rentapoliza_offer=int(f.get('rentapoliza_offer') == '1' and op == 'renta'),
         internal_note=(f.get('internal_note') or '').strip()[:2000])
     raw_maps = (f.get('maps') or '').strip()

@@ -7,6 +7,7 @@ import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+from llave import db  # noqa: E402
 from llave.web import panel  # noqa: E402
 
 COMPETITORS = re.compile(r'easy\s*broker|idxboost|wiggot', re.I)
@@ -47,14 +48,14 @@ class DeployReady(unittest.TestCase):
 
     def test_plan_prices_and_coming_soon(self):
         prices = {k: p for k, _, p, _ in panel.PLANS}
-        self.assertEqual(prices, {'gratis': 0, 'pro': 299, 'agencia': 799, 'pro_crm': 999})
-        self.assertEqual(panel.COMING_SOON, {'pro_crm'})
+        self.assertEqual(prices, {'gratis': 0, 'pro': 499, 'ia': 999})  # Josh 10-19
+        self.assertEqual(panel.COMING_SOON, set())
+        self.assertEqual(db.PLAN_LIMITS, {'gratis': 1, 'pro': 5, 'ia': 25})
 
     def test_prices_consistent_in_docs(self):
         with open(os.path.join(ROOT, 'docs/DECISIONS.md')) as fh:
             txt = fh.read()
-        self.assertIn('MXN 299', txt)
-        self.assertIn('MXN 799', txt)
+        self.assertIn('MXN 499', txt)
         self.assertIn('MXN 999', txt)
         # no other MXN plan price in user-facing code
         for sub in ('llave/web', 'llave/emails.py', 'llave/cards.py'):
@@ -63,7 +64,7 @@ class DeployReady(unittest.TestCase):
             for p in files:
                 with open(p) as fh:
                     for m in re.finditer(r'\$\s?(\d{3,4})\s?MXN', fh.read()):
-                        self.assertIn(int(m.group(1)), (299, 799, 999), p)
+                        self.assertIn(int(m.group(1)), (499, 999), p)
 
     def test_no_competitor_names_in_user_facing_code(self):
         for d, _, ns in os.walk(os.path.join(ROOT, 'llave')):

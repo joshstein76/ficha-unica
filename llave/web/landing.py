@@ -116,7 +116,7 @@ JS = "<script>(function(){var i=document.getElementById('marca');if(!i)return;va
 
 FAQ = [
     ('¿De verdad es gratis?',
-     'Sí. El plan Gratis incluye tu sitio en una dirección de Ficha Única y hasta 10 propiedades. No pedimos tarjeta para empezar. '
+     'Sí. El plan Gratis incluye tu sitio en una dirección de Ficha Única y 1 propiedad. No pedimos tarjeta para empezar. '
      'Si luego quieres tu propio dominio o más propiedades, hay planes de pago.'),
     ('¿Necesito saber de computadoras?',
      'No. Se hace desde el celular: subes las fotos, escribes los datos una sola vez y listo. Si ya tienes tus propiedades en una hoja de Excel o CSV, también las puedes importar.'),
@@ -249,7 +249,6 @@ def public_plans(ref=''):
             '<h1 style="font-size:clamp(32px,7vw,48px)">Empieza gratis. Crece cuando quieras.</h1>'
             '<p class="lead">Precios en pesos mexicanos, con IVA incluido. Sin plazo forzoso: cambias o cancelas cuando quieras.</p></div>'
             '<div class="plans">%s</div>'
-            '<p class="small muted" style="margin-top:18px">Pro + CRM llega pronto. Todavía no se puede contratar.</p>'
             '<div class="row" style="margin-top:24px"><a class="btn" href="%s">Crear mi sitio gratis</a><a class="btn ghost" href="/">Volver al inicio</a></div>'
             '</div></section></main>') % (_plan_cards(reg), e(reg))
-    return _head('Planes · Ficha Única', 'Gratis, Pro $299 MXN, Agencia $799 MXN al mes. Sin plazo forzoso.') + _top(reg) + main + _foot(reg, local)
+    return _head('Planes · Ficha Única', 'Gratis con 1 propiedad, Pro $499 MXN y Pro + IA $999 MXN al mes. Sin plazo forzoso.') + _top(reg) + main + _foot(reg, local)

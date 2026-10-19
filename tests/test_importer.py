@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from llave import db, importer  # noqa: E402
 
 
-def make(plan='gratis', slug='vive-polanco'):
+def make(plan='ia', slug='vive-polanco'):  # import is a paid tool (10-19 plans)
     path = os.path.join(tempfile.mkdtemp(), 't.db')
     con = db.connect(path)
     db.init(con)
@@ -135,17 +135,17 @@ class ImporterTests(unittest.TestCase):
         self.assertEqual(res['skipped'][0][0], 4)
 
     def test_plan_limit_stops(self):
-        con, aid, uid = make('gratis')
+        con, aid, uid = make('pro')
         lines = ['titulo,precio,colonia,municipio,estado']
-        for i in range(13):
+        for i in range(8):
             lines.append('Propiedad numero %d en Polanco,%d,Polanco,Miguel Hidalgo,' % (i, 1000000 + i))
         res = importer.commit(con, aid, uid, '\n'.join(lines))
-        self.assertEqual(len(res['created']), db.PLAN_LIMITS['gratis'])
+        self.assertEqual(len(res['created']), db.PLAN_LIMITS['pro'])
         self.assertEqual(len(res['skipped']), 3)
         self.assertTrue(all(s[1] == 'Límite de tu plan' for s in res['skipped']))
 
     def test_plan_limit_ignores_sold(self):
-        con, aid, uid = make('gratis')
+        con, aid, uid = make('pro')
         for i in range(10):
             con.execute("INSERT INTO listings(agency_id,ref,slug,title,status,colonia,municipio,estado) VALUES (?,?,?,?,?,?,?,?)",
                         (aid, 'R%d' % i, 's%d' % i, 'Vendida numero %d' % i, 'vendida', 'a', 'b', 'c'))
@@ -154,7 +154,7 @@ class ImporterTests(unittest.TestCase):
         self.assertEqual(len(res['created']), 2)
 
     def test_tab_delimiter_and_row_cap(self):
-        con, aid, uid = make('agencia')
+        con, aid, uid = make('ia')
         rows = ['titulo\tcolonia\tmunicipio\testado'] + ['Propiedad %04d de prueba\tX\tY\tZ' % i for i in range(1100)]
         p = importer.preview(con, aid, '\n'.join(rows))
         self.assertEqual(p['total'], 1000)

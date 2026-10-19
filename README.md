@@ -8,7 +8,7 @@ Free website for every real estate agent in Mexico + listings typed once that re
 ```bash
 python3 seed/seed_vive.py --reset      # demo: VIVE Polanco (8 listings, 2 public) + Agencia Ejemplo (Bolsa test)
 python3 -m llave.web.server            # panel: http://app.fichaunica.localhost:8640 · VIVE site: http://vive-polanco.fichaunica.localhost:8640
-python3 -m unittest discover -s tests  # 177 tests
+python3 -m unittest discover -s tests  # 190 tests
 ```
 Demo logins are in `seed/DEMO-CREDENTIALS.local.md` (gitignored). `*.localhost` resolves to 127.0.0.1 in Chrome/Safari.
 

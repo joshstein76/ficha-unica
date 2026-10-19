@@ -20,6 +20,10 @@ ICONS = {
     'invitar': '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/>',
     'publicar': '<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/>',
 }
+def props(n):
+    return '1 propiedad' if n == 1 else '%d propiedades' % n
+
+
 TABS = [('inicio', 'Inicio', '/'), ('propiedades', 'Propiedades', '/propiedades'), ('clientes', 'Clientes', '/clientes'),
         ('portales', 'Portales', '/portales'), ('bolsa', 'Bolsa', '/bolsa'), ('sitio', 'Mi sitio', '/sitio'),
         ('estadisticas', 'Estadísticas', '/estadisticas'), ('publicar', 'Qué publicar', '/que-publicar'), ('invitar', 'Invitar', '/invitar'), ('servicios', 'Servicios', '/servicios'),
@@ -125,7 +129,7 @@ def dashboard(con, ctx, welcome=False):
             '<a href="/clientes">Ver todos</a></div>%s</section>'
             '<a class="card" href="/que-publicar" style="text-decoration:none;color:inherit"><h2>Qué publicar esta semana</h2>'
             '<span class="small muted">5 publicaciones listas para Instagram y Facebook.</span></a>'
-            '<a class="card" href="/invitar" style="text-decoration:none;color:inherit"><h2>Invita a un colega · +%d propiedades</h2>'
+            '<a class="card" href="/invitar" style="text-decoration:none;color:inherit"><h2>Invita a un colega · +%s</h2>'
             '<span class="small muted">Por cada colega que publique con tu enlace.</span></a>'
             '<section class="grid2"><a class="card" href="/estadisticas" style="text-decoration:none;color:inherit"><h2>Estadísticas</h2>'
             '<span class="small muted">Visitas, clientes y tu tiempo de respuesta.</span></a>'
@@ -141,7 +145,7 @@ def dashboard(con, ctx, welcome=False):
             '<a class="row" href="%s" style="text-decoration:none;color:inherit"><span class="pill %s">%s</span>%s</a>'
             % (href, 'ok' if ok else 'pendiente', '✓' if ok else '•', e(t)) for ok, t, href in steps)))
         if done < 5 else '<div class="notice">✓ Tu sitio está completo. <a href="/nueva">Sube otra propiedad</a></div>',
-        _leads_list(con, leads) if leads else '<p class="muted">Aún no tienes clientes. Cuando alguien escriba desde tu sitio, aparece aquí y en WhatsApp.</p>', db.REFERRAL_BONUS_LISTINGS)
+        _leads_list(con, leads) if leads else '<p class="muted">Aún no tienes clientes. Cuando alguien escriba desde tu sitio, aparece aquí y en WhatsApp.</p>', props(db.REFERRAL_BONUS_LISTINGS))
     return layout('Inicio', body, ctx, 'inicio')
 
 
@@ -204,11 +208,15 @@ def listing_form(con, ctx, l=None, error='', ok='', suggestion=None):
         ai_html = _ai_box(con, ctx, lid, suggestion)
     site_link = ''
     if lid and v.get('status') in db.PUBLIC_STATUSES:
-        site_link = ('<span class="row small"><a href="%s" target="_blank" rel="noopener">Ver en mi sitio ↗</a>'
-                     '<a href="%s/ficha" target="_blank" rel="noopener">Ficha para imprimir ↗</a>'
-                     '<a href="%s/tarjeta-post.jpg" target="_blank" rel="noopener">Tarjeta Instagram ↗</a>'
-                     '<a href="%s/tarjeta-historia.jpg" target="_blank" rel="noopener">Historia ↗</a></span>') % (
-            (e(db.listing_url(ctx['agency'], v)),) * 4)
+        if db.plan_has(ctx['agency'], 'tools'):
+            site_link = ('<span class="row small"><a href="%s" target="_blank" rel="noopener">Ver en mi sitio ↗</a>'
+                         '<a href="%s/ficha" target="_blank" rel="noopener">Ficha para imprimir ↗</a>'
+                         '<a href="%s/tarjeta-post.jpg" target="_blank" rel="noopener">Tarjeta Instagram ↗</a>'
+                         '<a href="%s/tarjeta-historia.jpg" target="_blank" rel="noopener">Historia ↗</a></span>') % (
+                (e(db.listing_url(ctx['agency'], v)),) * 4)
+        else:
+            site_link = ('<span class="row small"><a href="%s" target="_blank" rel="noopener">Ver en mi sitio ↗</a>'
+                         '<a href="/plan">Ficha para imprimir e imágenes para Instagram: plan Pro</a></span>') % e(db.listing_url(ctx['agency'], v))
     rp_box = ('<label class="check"><input type="checkbox" name="rentapoliza_offer" value="1"%s> '
               'Ofrecer póliza jurídica RentaPóliza (rentas)</label>' % (' checked' if v.get('rentapoliza_offer') else ''))
     body = ('%s%s<div class="row" style="justify-content:space-between"><h1>%s</h1>%s</div>%s'
@@ -239,7 +247,7 @@ def listing_form(con, ctx, l=None, error='', ok='', suggestion=None):
             '<label>Ubicación en el mapa: pega el enlace de Google Maps<input name="maps" value="%s" placeholder="https://www.google.com/maps/@19.43,-99.19,17z"></label>'
             '<label class="check"><input type="checkbox" name="show_exact_location" value="1"%s> Mostrar la dirección exacta (si no, solo la colonia y un punto aproximado)</label></section>'
             '<section class="card"><h2>Compartir y extras</h2>'
-            '<label class="check"><input type="checkbox" name="share_in_bolsa" value="1"%s> Compartir en la Bolsa con otros asesores</label>'
+            '<label class="check"><input type="checkbox" name="share_in_bolsa" value="1"%s> Compartir en la Bolsa con otros asesores%s</label>'
             '<label>Tu parte si otro asesor la vende (%%)<input name="share_split_pct" value="%s" inputmode="numeric"></label>'
             '<label>Comisión total (%%), privada<input name="commission_pct" value="%s" inputmode="decimal"></label>%s'
             '<label>Nota interna (nunca se publica)<textarea name="internal_note" rows="2">%s</textarea></label></section>'
@@ -258,7 +266,9 @@ def listing_form(con, ctx, l=None, error='', ok='', suggestion=None):
         e(v.get('estado') or ('Ciudad de México' if not lid else '')), e(v.get('cp')),
         ('%s, %s' % (v['lat'], v['lng'])) if v.get('lat') is not None else '',
         ' checked' if v.get('show_exact_location') else '',
-        ' checked' if v.get('share_in_bolsa') else '', e(v.get('share_split_pct', 50)), num('commission_pct'),
+        ' checked' if v.get('share_in_bolsa') else '',
+        '' if db.plan_has(ctx['agency'], 'tools') else ' <a class="small" href="/plan">(plan Pro)</a>',
+        e(v.get('share_split_pct', 50)), num('commission_pct'),
         rp_box, e(v.get('internal_note')), 'Guardar' if lid else 'Crear y subir fotos', photos_html, ai_html if lid else '')
     return layout('Propiedad', body, ctx, 'propiedades')
 
@@ -475,7 +485,7 @@ def site_settings(con, ctx, ok='', error=''):
     designs = ''.join('<label class="check card" style="gap:6px"><input type="radio" name="design" value="%s"%s> '
                       '<span><b>%s</b><br><span class="small muted">%s</span></span></label>'
                       % (k, ' checked' if a['design'] == k else '', n, d) for k, n, d in DESIGNS)
-    pro = a['plan'] in ('pro', 'agencia')
+    pro = db.plan_has(a, 'domain')
     domain = ('<section class="card"><h2>Tu propio dominio</h2>%s</section>' % (
         ('<form class="stack" method="post" action="/sitio/dominio">%s<label>Dominio<input name="domain" value="%s" '
          'placeholder="micasa.mx"></label><button class="btn ghost">Guardar dominio</button></form>%s' % (
@@ -722,8 +732,10 @@ def wizard_done(ctx, l):
             '<p class="muted">Ya está en tu sitio. Compártela con tus clientes.</p>'
             '<a class="btn" href="%s" target="_blank" rel="noopener">Ver en mi sitio</a>'
             '<a class="btn wa" href="%s" target="_blank" rel="noopener">Compartir por WhatsApp</a>'
-            '<a class="btn ghost" href="%s/tarjeta-post.jpg" target="_blank" rel="noopener">Tarjeta para Instagram</a>'
-            '<a class="btn ghost" href="/nueva">Subir otra</a></div>') % (e(url), e(share), e(url))
+            '%s'
+            '<a class="btn ghost" href="/nueva">Subir otra</a></div>') % (e(url), e(share),
+        ('<a class="btn ghost" href="%s/tarjeta-post.jpg" target="_blank" rel="noopener">Tarjeta para Instagram</a>' % e(url))
+        if db.plan_has(ctx['agency'], 'tools') else '')
     return layout('¡Publicada!', body, ctx, 'propiedades')
 
 
@@ -789,13 +801,13 @@ def profile(ctx, ok='', error=''):
 
 # ---------- plans (TEST MODE: no payment is taken anywhere) ----------
 PLANS = [
-    ('gratis', 'Gratis', 0, ['Tu sitio en una dirección gratis', '10 propiedades', 'Portales y buscadores gratuitos', 'Clientes por WhatsApp']),
-    ('pro', 'Pro', 299, ['Todo lo de Gratis', 'Tu propio dominio', '50 propiedades', 'Respuesta automática por WhatsApp', 'Estadísticas completas']),
-    ('agencia', 'Agencia', 799, ['Todo lo de Pro', '200 propiedades', 'Equipo de asesores', 'Bandeja de clientes compartida']),
-    ('pro_crm', 'Pro + CRM', 999, ['Todo lo de Pro', 'Tu propio CRM con automatizaciones y WhatsApp', 'Asistente con IA que responde por ti',
-                                   'Redes sociales, newsletter y reseñas en un solo lugar']),
+    ('gratis', 'Gratis', 0, ['Tu sitio en una dirección gratis', '1 propiedad', 'Portales y buscadores gratuitos', 'Clientes directo a tu WhatsApp']),
+    ('pro', 'Pro', 499, ['Todo lo de Gratis', '5 propiedades', 'Tu propio dominio', 'Imágenes para Instagram y ficha para imprimir',
+                         'Importa tus propiedades desde Excel', 'Bolsa 50/50 con otros asesores', 'Estadísticas completas']),
+    ('ia', 'Pro + IA', 999, ['Todo lo de Pro', '25 propiedades', 'Títulos y descripciones con IA, en español e inglés', 'Revisión y orden de tus fotos',
+                             'Precio sugerido con propiedades parecidas', 'Qué publicar cada semana en tus redes']),
 ]
-COMING_SOON = {'pro_crm'}  # needs GHL Agency Pro (SaaS mode); Josh 10-18: plan for it, show as Próximamente
+COMING_SOON = set()  # Josh 10-19: Pro + IA is on sale from launch day
 
 
 def plans(con, ctx, ok=''):
@@ -814,6 +826,21 @@ def plans(con, ctx, ok=''):
             '<p class="small muted">Precios en pesos mexicanos con IVA. Sin plazo forzoso: cambias o cancelas cuando quieras.</p>') % (
         notice(ok), n, db.listing_limit(con, a), cards)
     return layout('Tu plan', body, ctx, 'sitio')
+
+
+UPSELL = {
+    'tools': ('Pro', 'Esta herramienta viene en el plan Pro: imágenes para Instagram, ficha para imprimir, importar desde Excel, '
+                     'Bolsa 50/50 y estadísticas completas, con 5 propiedades y tu propio dominio.'),
+    'ai': ('Pro + IA', 'Esta herramienta viene en el plan Pro + IA: textos con IA en español e inglés, revisión y orden de fotos, '
+                       'precio sugerido y qué publicar cada semana, con 25 propiedades.'),
+}
+
+
+def upsell(ctx, feature, title, tab='inicio'):
+    plan, text = UPSELL[feature]
+    body = ('<div class="auth"><h1>%s</h1><p class="muted">%s</p><a class="btn" href="/plan">Ver el plan %s</a>'
+            '<a class="btn ghost" href="/">Volver al inicio</a></div>') % (e(title), e(text), e(plan))
+    return layout(title, body, ctx, tab)
 
 
 def plan_checkout(ctx, key, error=''):
@@ -840,13 +867,13 @@ def invite(con, ctx):
                   '<span class="pill %s">%s</span></div>' % (e(r['name']), e(nice_date(r['created_at'])), 'ok' if r['pub'] else 'pendiente',
                                                             'publicó ✓' if r['pub'] else 'aún sin publicar') for r in rows)
     body = ('<h1>Invita a un colega</h1><p class="muted">Por cada colega que cree su sitio con tu enlace y publique su primera propiedad, '
-            'te damos <b>%d propiedades más</b> en tu plan, para siempre.</p>'
+            'te damos <b>%s más</b> en tu plan, para siempre.</p>'
             '<section class="card"><label for="ref-link">Tu enlace<input id="ref-link" value="%s" readonly onclick="this.select()"></label>'
             '<div class="row"><a class="btn wa" href="%s" target="_blank" rel="noopener">Compartir por WhatsApp</a>'
             '<button class="btn ghost" type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById(\'ref-link\').value);this.textContent=\'Copiado ✓\'">Copiar enlace</button></div></section>'
             '<div class="stats"><div class="stat"><b>%d</b><small>Colegas invitados</small></div><div class="stat"><b>%d</b><small>Ya publicaron</small></div>'
             '<div class="stat"><b>+%d</b><small>Propiedades extra ganadas</small></div></div><div class="list">%s</div>') % (
-        db.REFERRAL_BONUS_LISTINGS, e(link), e(whatsapp.wa_link('', msg)), len(rows), q, q * db.REFERRAL_BONUS_LISTINGS,
+        props(db.REFERRAL_BONUS_LISTINGS), e(link), e(whatsapp.wa_link('', msg)), len(rows), q, q * db.REFERRAL_BONUS_LISTINGS,
         lst or '<p class="muted">Aún no invitas a nadie. Comparte tu enlace en tus grupos de asesores.</p>')
     return layout('Invita a un colega', body, ctx, 'invitar')
 
@@ -921,7 +948,7 @@ def _eco_admin(con):
 def team(con, ctx, link='', error=''):
     a = ctx['agency']
     users = con.execute('SELECT name, email, role, created_at FROM users WHERE agency_id=? ORDER BY id', (a['id'],)).fetchall()
-    can = a['plan'] == 'agencia'
+    can = db.plan_has(a, 'team')
     rows = ''.join('<div class="item" style="grid-template-columns:1fr auto"><div><b>%s</b><br><span class="small muted">%s</span></div>'
                    '<span class="pill %s">%s</span></div>' % (e(u['name']), e(u['email']), 'ok' if u['role'] in ('owner', 'admin') else '',
                                                              'dueño' if u['role'] in ('owner', 'admin') else 'asesor') for u in users)
@@ -933,7 +960,7 @@ def team(con, ctx, link='', error=''):
                               '<a class="btn wa" href="%s" target="_blank" rel="noopener">Enviar por WhatsApp</a></section>' % (
                                   e(link), e(whatsapp.wa_link('', 'Te invito a %s en Ficha Única: %s' % (a['name'], link))))) if link else ''))
         if can and ctx['user']['role'] in ('owner', 'admin') else
-        ('<p class="notice">El equipo está incluido en el plan <a href="/plan">Agencia</a>.</p>' if not can else ''),
+        ('<p class="notice">Los equipos de asesores llegan pronto.</p>' if not can else ''),
         rows)
     return layout('Equipo', body, ctx, 'sitio')
 
@@ -953,6 +980,10 @@ def join(agency, token, error='', values=None):
 
 # ---------- AI helpers in the listing editor ----------
 def _ai_box(con, ctx, lid, suggestion=None):
+    if not db.plan_has(ctx['agency'], 'ai'):
+        return ('<section class="card"><h2>Ayuda inteligente</h2><p class="small muted">Con <b>Pro + IA</b> escribimos el título y la descripción '
+                'en español e inglés, revisamos y ordenamos tus fotos y te sugerimos un precio con propiedades parecidas.</p>'
+                '<a class="btn ghost small" href="/plan">Ver Pro + IA</a></section>')
     from ..ai import client, comps, photo_qa
     qa = photo_qa.analyze(con, lid)
     cp = comps.suggest_price(con, lid)

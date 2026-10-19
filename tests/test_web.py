@@ -86,12 +86,14 @@ class WebFlow(unittest.TestCase):
     def tearDownClass(cls):
         cls.srv.shutdown()
 
-    def signup(self, agency, email):
+    def signup(self, agency, email, plan='ia'):
         s, body, h = req('app.fichaunica.localhost', '/registro', {
             'name': 'María López', 'agency': agency, 'whatsapp': '55 1234 5678', 'email': email,
             'password': 'segura1234', 'terms': '1'})
         self.assertEqual(s, 303, body[:300])
         cookie = h['Set-Cookie'].split(';')[0]
+        if plan != 'gratis':  # functional tests run on the top plan; plan gates have their own test
+            con = db.connect(); con.execute('UPDATE agencies SET plan=? WHERE id=(SELECT agency_id FROM users WHERE email=?)', (plan, email)); con.commit(); con.close()
         s, body, _ = req('app.fichaunica.localhost', '/', cookie=cookie)
         csrf = re.search(r'name="csrf" value="([0-9a-f]+)"', body).group(1)
         return cookie, csrf
