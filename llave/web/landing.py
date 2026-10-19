@@ -100,7 +100,7 @@ box-shadow:0 14px 30px -12px rgba(0,0,0,.35);font-size:13.5px;line-height:1.3;ma
 @media(min-width:760px){body{padding-bottom:0}.sticky{display:none}.nav{display:flex}.cards.c3{grid-template-columns:repeat(3,1fr)}
 .steps{grid-template-columns:repeat(3,1fr)}.steps li{padding:70px 22px 22px}.steps li::before{left:22px;top:22px}
 .plans{grid-template-columns:repeat(2,1fr)}.hero{grid-template-columns:1.1fr .9fr;padding-block:64px 56px}section{padding:80px 0}}
-@media(min-width:1040px){.plans{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:900px){.plans{grid-template-columns:repeat(3,1fr)}}
 """
 
 _I = {
