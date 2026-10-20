@@ -852,6 +852,13 @@ def upsell(ctx, feature, title, tab='inicio'):
     return layout(title, body, ctx, tab)
 
 
+def payments_soon(ctx, key):
+    name = next((x[1] for x in PLANS if x[0] == key), key)
+    body = ('<div class="auth"><h1>%s llega muy pronto</h1><p class="muted">Estamos activando los pagos con tarjeta. '
+            'Mientras tanto sigues en tu plan actual, con todo lo que ya tienes.</p><a class="btn ghost" href="/plan">Volver a planes</a></div>') % e(name)
+    return layout('Pagos muy pronto', body, ctx, 'sitio')
+
+
 def plan_checkout(ctx, key, error=''):
     p = next((x for x in PLANS if x[0] == key), None)
     if billing.enabled():

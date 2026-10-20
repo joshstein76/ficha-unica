@@ -87,6 +87,19 @@ class PlanGates(unittest.TestCase):
         for txt in ('$499 MXN', '$999 MXN', '5 propiedades', '25 propiedades', '1 propiedad'):
             self.assertIn(txt, page)
 
+    def test_production_without_stripe_never_gives_a_paid_plan(self):
+        c, k = self.signup('Sin Pagos', 'sinpagos@ejemplo.test')
+        saved = db.ENV
+        db.ENV = 'production'
+        self.addCleanup(setattr, db, 'ENV', saved)
+        for key in ('pro', 'ia'):
+            s, page, _ = req('app.fichaunica.localhost', '/plan/' + key, {'csrf': k}, cookie=c)
+            self.assertEqual(s, 503, key)
+            self.assertIn('llega muy pronto', page)
+        con = db.connect()
+        self.assertEqual(con.execute("SELECT plan FROM agencies WHERE slug='sin-pagos'").fetchone()[0], 'gratis')
+        con.close()
+
     def test_ia_has_everything(self):
         c, _ = self.signup('Con Ia', 'ia@ejemplo.test', 'ia')
         for path in ('/estadisticas', '/bolsa', '/que-publicar', '/propiedades/importar'):

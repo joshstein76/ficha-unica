@@ -752,6 +752,8 @@ class Handler(BaseHTTPRequestHandler):
             key = m.group(1)
             if billing.enabled():
                 return self.plan_billing(con, ctx, key, method)
+            if db.ENV == 'production' and key != 'gratis':  # no Stripe yet: never hand out a paid plan for free
+                return self.send(panel.payments_soon(ctx, key), 503 if method == 'POST' else 200)
             if method == 'POST':
                 n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
                 if n > db.listing_limit(con, a, key):
@@ -1193,7 +1195,7 @@ def main():
     db.init(con)
     con.close()
     if db.ENV == 'production' and not billing.enabled():
-        print('AVISO: Stripe no está configurado (config/stripe.env): los cambios de plan son de prueba y NO cobran.', file=sys.stderr)
+        print('AVISO: Stripe no está configurado (config/stripe.env): los planes de pago están cerrados ("pagos muy pronto").', file=sys.stderr)
     bind = os.environ.get('LLAVE_BIND', '127.0.0.1')  # always behind the reverse proxy; never expose directly
     srv = ThreadingHTTPServer((bind, db.PORT), Handler)
     print('Ficha Única (LLAVE) %s: panel %s · sitios %s' % (db.ENV, db.origin('app'), db.origin('<slug>')))
