@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import threading
 
-from .. import auth, cards, db, geo, importer, lead_watch, media, ml_oauth, photo_fetch, photos, price_check, replies, stats, whatsapp
+from .. import auth, billing, cards, db, geo, importer, lead_watch, media, ml_oauth, photo_fetch, photos, price_check, replies, stats, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
@@ -262,6 +262,24 @@ class Handler(BaseHTTPRequestHandler):
         con.commit()
         return self.send(json.dumps(res), 200 if res.get('ok') else 422, 'application/json')
 
+    def stripe_webhook(self, con, method):
+        """Stripe -> plan changes (llave/billing.py). 200 handled/duplicate/ignored · 400 bad signature or body · 503 not configured."""
+        if method != 'POST':
+            return self.send(json.dumps({'ok': False, 'code': 'metodo'}), 405, 'application/json', headers={'Allow': 'POST'})
+        try:
+            length = int(self.headers.get('Content-Length') or 0)
+        except ValueError:
+            length = -1
+        if length < 0 or length > billing.MAX_WEBHOOK_BYTES:  # body left unread: send() closes the connection
+            return self.send(json.dumps({'ok': False, 'code': 'tamano_invalido'}), 413 if length > 0 else 400, 'application/json')
+        raw = self.rfile.read(length)
+        self._body_read = True
+        try:
+            res = billing.handle_event(con, raw, self.headers.get('Stripe-Signature', ''))
+        except billing.BillingError as ex:
+            return self.send(json.dumps({'ok': False, 'code': ex.code or 'error'}), 503 if ex.code == 'no_configurado' else 400, 'application/json')
+        return self.send(json.dumps({'ok': True, 'status': res['status']}), 200, 'application/json')
+
     # ---------- brand domain: agent landing + public directory ----------
     def brand_site(self, con, method, path, query):
         if path == '/propiedades':
@@ -379,6 +397,41 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(site.not_found(a), 404)
         return self.send(site.not_found(a), 404)
 
+    # ---------- plans with real payment (only when billing.enabled()) ----------
+    def billing_failed(self, ex, path):
+        sys.stderr.write('[llave] stripe %s: %s (%s)\n' % (path, ex, ex.code))  # message is key-free by construction
+        try:
+            from .. import alerts
+            alerts.report(ex, {'path': path, 'host': self.host(), 'method': self.command})
+        except Exception:
+            pass
+
+    def plan_billing(self, con, ctx, key, method):
+        """GET: the plan page. POST: Stripe Checkout for a paid plan, the Billing Portal for agents who already pay
+        (change plan / cancel there), or a direct move to Gratis for an agent with no subscription."""
+        a, uid = ctx['agency'], ctx['user']['id']
+        if method != 'POST':
+            return self.send(panel.plan_checkout(ctx, key))
+        if key == db.plan_of(a):
+            return self.redirect('/plan')
+        n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
+        if n > db.listing_limit(con, a, key):
+            return self.send(panel.plan_checkout(ctx, key, 'Tienes %d propiedades; este plan permite %d. Marca algunas como vendidas primero.'
+                                                  % (n, db.listing_limit(con, a, key))), 400)
+        if key == 'gratis' and not billing.is_paying(a):
+            con.execute("UPDATE agencies SET plan='gratis' WHERE id=?", (a['id'],))
+            db.audit(con, 'user:%d' % uid, 'plan_change_downgrade', '%s -> gratis (no subscription)' % a['plan'])
+            con.commit()
+            ctx['agency'] = con.execute('SELECT * FROM agencies WHERE id=?', (a['id'],)).fetchone()
+            return self.send(panel.plans(con, ctx, ok='Listo: ahora tienes el plan Gratis.'))
+        try:
+            if billing.is_paying(a):
+                return self.redirect(billing.portal_url(a))
+            return self.redirect(billing.checkout_url(con, a, ctx['user'], key))
+        except billing.BillingError as ex:
+            self.billing_failed(ex, '/plan/' + key)
+            return self.send(panel.plan_checkout(ctx, key, 'No pudimos abrir el pago. Intenta de nuevo en un momento.'), 502)
+
     # ---------- panel ----------
     def session(self, con):
         tok = self.cookie('llave_s')
@@ -423,6 +476,8 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r'^/api/eco/(rentapoliza)$', path)
         if m and method == 'POST':
             return self.eco_webhook(con, m.group(1))
+        if path == '/stripe/webhook':  # signed by Stripe: no session, no CSRF
+            return self.stripe_webhook(con, method)
         m = re.match(r'^/unirse/([A-Za-z0-9_-]{20,60})$', path)
         if m:
             inv = team_invite(con, m.group(1))
@@ -680,10 +735,23 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(panel.profile(ctx, ok='Perfil guardado.'))
             return self.send(panel.profile(ctx))
         if path == '/plan':
-            return self.send(panel.plans(con, ctx))
+            pago = query.get('pago') if billing.enabled() else None
+            ok = ('Gracias: tu plan se activa en unos segundos.' if pago == 'ok' else
+                  'No se hizo ningún cobro. Cuando quieras, lo intentas de nuevo.' if pago == 'cancelado' else '')
+            return self.send(panel.plans(con, ctx, ok=ok))
+        if path == '/plan/portal' and billing.enabled():
+            if method != 'POST':
+                return self.redirect('/plan')
+            try:
+                return self.redirect(billing.portal_url(a))
+            except billing.BillingError as ex:
+                self.billing_failed(ex, path)
+                return self.send(panel.plans(con, ctx, error='No pudimos abrir tu pago. Intenta de nuevo en un momento.'), 502)
         m = re.match(r'^/plan/(gratis|pro|ia)$', path)
         if m:
             key = m.group(1)
+            if billing.enabled():
+                return self.plan_billing(con, ctx, key, method)
             if method == 'POST':
                 n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
                 if n > db.listing_limit(con, a, key):
@@ -1098,6 +1166,7 @@ def check_production_config():
             problems.append('LLAVE_BASE_DOMAIN must be the real domain (e.g. fichaunica.mx)')
         if os.environ.get('LLAVE_GHL_LIVE') == '1' and not os.environ.get('LLAVE_GHL_APPROVED_BY_JOSH'):
             problems.append('LLAVE_GHL_LIVE=1 needs LLAVE_GHL_APPROVED_BY_JOSH set (Josh\'s written yes)')
+        problems.extend(billing.config_problems())  # live Stripe key without LLAVE_STRIPE_LIVE=1, missing price ids / webhook secret
     return problems
 
 
@@ -1123,6 +1192,8 @@ def main():
     con = db.connect()
     db.init(con)
     con.close()
+    if db.ENV == 'production' and not billing.enabled():
+        print('AVISO: Stripe no está configurado (config/stripe.env): los cambios de plan son de prueba y NO cobran.', file=sys.stderr)
     bind = os.environ.get('LLAVE_BIND', '127.0.0.1')  # always behind the reverse proxy; never expose directly
     srv = ThreadingHTTPServer((bind, db.PORT), Handler)
     print('Ficha Única (LLAVE) %s: panel %s · sitios %s' % (db.ENV, db.origin('app'), db.origin('<slug>')))

@@ -24,11 +24,12 @@ def tracked():
 class DeployReady(unittest.TestCase):
     def test_templates_present(self):
         for f in ('deploy/app.env.example', 'deploy/target.env.example', 'deploy/Caddyfile', 'deploy/deploy.sh',
-                  'deploy/fichaunica.service', 'deploy/crontab.example', 'config/anthropic.env.example'):
+                  'deploy/fichaunica.service', 'deploy/crontab.example', 'config/anthropic.env.example', 'config/stripe.env.example',
+                  'docs/STRIPE-SETUP.md'):
             self.assertTrue(os.path.isfile(os.path.join(ROOT, f)), f)
 
     def test_no_secrets_or_env_files_committed(self):
-        pat = re.compile(r'sk-ant-[A-Za-z0-9_-]{20,}|sk_live_|AKIA[0-9A-Z]{16}|pit-[0-9a-f]{8}-[0-9a-f]{4}')
+        pat = re.compile(r'sk-ant-[A-Za-z0-9_-]{20,}|sk_live_|(?:sk|rk)_test_[A-Za-z0-9]{20,}|rk_live_|whsec_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|pit-[0-9a-f]{8}-[0-9a-f]{4}')
         for f in tracked():
             self.assertFalse(re.search(r'(^|/)[^/]*\.env$|\.local\.md$|\.db$', f), 'secret-ish file tracked: ' + f)
             p = os.path.join(ROOT, f)
@@ -45,6 +46,16 @@ class DeployReady(unittest.TestCase):
             app = fh.read()
         self.assertIn('LLAVE_AI_LIVE', app)
         self.assertIn('anthropic.env', app)
+
+    def test_stripe_placeholder_documented_and_empty(self):
+        with open(os.path.join(ROOT, 'config/stripe.env.example')) as fh:
+            txt = fh.read()
+        for k in ('STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PRICE_PRO', 'STRIPE_PRICE_IA'):
+            self.assertRegex(txt, r'(?m)^%s=$' % k)
+        with open(os.path.join(ROOT, 'deploy/app.env.example')) as fh:
+            app = fh.read()
+        self.assertIn('LLAVE_STRIPE_LIVE', app)
+        self.assertIn('stripe.env', app)
 
     def test_plan_prices_and_coming_soon(self):
         prices = {k: p for k, _, p, _ in panel.PLANS}

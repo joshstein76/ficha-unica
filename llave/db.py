@@ -72,6 +72,11 @@ def init(con):
     for col in ('slug', 'bio', 'zones'):  # agent public profile
         if col not in ucols:
             con.execute('ALTER TABLE users ADD COLUMN %s TEXT' % col)
+    for col in ('stripe_customer_id', 'stripe_subscription_id'):  # Stripe billing (llave/billing.py)
+        if col not in cols:
+            con.execute('ALTER TABLE agencies ADD COLUMN %s TEXT' % col)
+    con.execute("CREATE TABLE IF NOT EXISTS stripe_events ("  # one row per Stripe event id we processed: replays are no-ops
+                "event_id TEXT PRIMARY KEY, type TEXT NOT NULL, outcome TEXT, received_at TEXT NOT NULL DEFAULT (datetime('now')))")
     con.execute("UPDATE agencies SET plan='ia' WHERE plan IN ('agencia','pro_crm')")  # 10-19 plans
     con.commit()
 
