@@ -291,7 +291,7 @@ FAQ = [
      'Sí, con el plan Pro. El dominio lo compras tú con el proveedor que quieras y lo conectas desde tu panel. '
      'Mientras, tu sitio funciona en tu dirección gratis de Ficha Única.'),
     ('¿Mis propiedades salen en los portales?',
-     'Salen en tu sitio y en Google. Los portales los conectamos conforme cada uno nos da su acceso; en tu panel ves cuáles están activos y cuáles no. '
+     'Salen en tu sitio y en Google. Los portales los conectamos conforme cada uno nos da su acceso; en tu panel ves cuáles están activos y cuáles vienen en camino. '
      'Nunca te prometemos un portal que todavía no funciona.'),
     ('¿Necesito saber de computadoras?',
      'No. Se hace desde el celular: subes las fotos, escribes los datos una sola vez y listo. '
@@ -332,7 +332,7 @@ _HERO = r"""
         </div>
       </div>
       <div class="fc pubc"><div class="t">Publicada en <em>Hoy</em></div>
-        <ul class="chk"><li><i><svg><use href="#i-ok"/></svg></i>Tu sitio</li><li><i><svg><use href="#i-ok"/></svg></i>Google</li><li class="wait"><i></i>Portales, cuando se activen</li></ul></div>
+        <ul class="chk"><li><i><svg><use href="#i-ok"/></svg></i>Tu sitio</li><li><i><svg><use href="#i-ok"/></svg></i>Google</li><li class="wait"><i></i>Portales, en camino</li></ul></div>
       <div class="fc inc float">
         <div class="who"><span class="av">L</span><span><b>Laura</b><small>Ejemplo · hace 2 min</small></span><span class="wa"><svg><use href="#i-wa"/></svg></span></div>
         <p class="bub">Hola, ¿sigue disponible el depa con balcón?</p>
@@ -379,7 +379,7 @@ _PILLARS = r"""
           <li><i><svg><use href="#i-ok"/></svg></i>Tu sitio</li>
           <li><i><svg><use href="#i-ok"/></svg></i>Google</li>
           <li><i><svg><use href="#i-ok"/></svg></i>ChatGPT y la IA</li>
-          <li class="wait"><i></i>Portales, cuando se activen</li>
+          <li class="wait"><i></i>Portales, en camino</li>
         </ul>
       </article>
     </div>
