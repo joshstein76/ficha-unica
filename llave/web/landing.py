@@ -124,7 +124,7 @@ h1{margin-top:18px;font-size:clamp(40px,10.4vw,66px);line-height:1.04;font-weigh
 .bub{margin-top:9px;background:var(--ok-soft);border-radius:4px 14px 14px 14px;padding:9px 11px;font-size:14px;line-height:1.45;color:var(--ink)}
 .anim .fc{animation:pop .7s cubic-bezier(.2,.8,.2,1.1) both}
 .anim .fc.pubc{animation-delay:.3s}.anim .fc.inc{animation-delay:.55s}
-@keyframes pop{from{opacity:0;transform:translateY(18px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes pop{from{transform:translateY(18px) scale(.97)}to{transform:none}}
 .anim .float{animation:pop .7s cubic-bezier(.2,.8,.2,1.1) .55s both,bob 7s ease-in-out 1.4s infinite}
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
 @media(min-width:960px){
