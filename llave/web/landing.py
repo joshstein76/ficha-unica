@@ -306,7 +306,7 @@ _HERO = r"""
     <div>
       <span class="pill">@@PILLMARK@@Para todos los asesores de México</span>
       <h1 id="h1">Tu sitio gratis. Tus clientes, <mark>directo a tu WhatsApp.</mark></h1>
-      <p class="lead">Sube cada propiedad una vez. Sale en tu sitio, en Google y en la IA, y quien la ve te escribe a tu WhatsApp.</p>
+      <p class="lead">Sube cada propiedad una vez. Sale en tu sitio y en Google, lista para la IA, y quien la ve te escribe a tu WhatsApp.</p>
       <div class="namebox" id="crear">
         <label for="marca">¿Cómo se llama tu inmobiliaria?</label>
         <div class="field"><input id="marca" value="Casa Coyoacán" maxlength="40" autocomplete="organization" spellcheck="false"></div>
@@ -374,11 +374,11 @@ _PILLARS = r"""
       <article class="pl">
         <span class="ic" style="background:var(--lilac)"><svg><use href="#i-share"/></svg></span>
         <h3>Publica una vez, sale en todas partes</h3>
-        <p>Tu sitio, Google y la IA desde el primer día. Los portales los vamos conectando; en tu panel ves cuáles están activos.</p>
+        <p>Tu sitio y Google desde el primer día, y cada ficha lista para la IA. Los portales los vamos conectando; en tu panel ves cuáles están activos.</p>
         <ul class="where">
           <li><i><svg><use href="#i-ok"/></svg></i>Tu sitio</li>
           <li><i><svg><use href="#i-ok"/></svg></i>Google</li>
-          <li><i><svg><use href="#i-ok"/></svg></i>ChatGPT y la IA</li>
+          <li><i><svg><use href="#i-ok"/></svg></i>Lista para ChatGPT</li>
           <li class="wait"><i></i>Portales, cuando se activen</li>
         </ul>
       </article>
@@ -499,7 +499,7 @@ def _reg(ref=''):
 def landing(ref=''):
     reg = _reg(ref)
     local = db.ENV != 'production'
-    desc = 'Tu sitio inmobiliario gratis y tus clientes directo a tu WhatsApp. Sube cada propiedad una vez: sale en tu sitio, en Google y en la IA. Hecho en México.'
+    desc = 'Tu sitio inmobiliario gratis y tus clientes directo a tu WhatsApp. Sube cada propiedad una vez: sale en tu sitio y en Google, lista para la IA. Hecho en México.'
     ld = json.dumps({'@context': 'https://schema.org', '@graph': [
         {'@type': 'Organization', 'name': db.BRAND, 'parentOrganization': {'@type': 'Organization', 'name': db.OWNER}},
         {'@type': 'FAQPage', 'mainEntity': [{'@type': 'Question', 'name': q, 'acceptedAnswer': {'@type': 'Answer', 'text': a}} for q, a in FAQ]}]},
