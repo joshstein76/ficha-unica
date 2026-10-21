@@ -5,7 +5,7 @@ import json
 from .. import billing, db, geo, lead_watch, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS)
-from .styles import FONTS, PANEL, PRECONNECT
+from .styles import BRAND_COLOR, FONTS, PANEL, PRECONNECT, logo
 
 ICONS = {
     'inicio': '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -50,13 +50,13 @@ def layout(title, body, ctx=None, tab=None, flash=''):
                      % (e(db.site_url(ctx['agency'])), csrf_field(ctx)))
     return ('<!doctype html><html lang="es-MX"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
-            '<title>%s · Ficha Única</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f5c4c">'
+            '<title>%s · Ficha Única</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="%s">'
             '<link rel="apple-touch-icon" href="/_s/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes">'
             '%s<link rel="stylesheet" href="%s"><style>%s</style></head><body>'
-            '<a class="skip" href="#main">Saltar al contenido</a><header class="top"><a class="logo" href="/">Ficha <span>Única</span></a>%s</header>%s'
+            '<a class="skip" href="#main">Saltar al contenido</a><header class="top"><a class="logo" href="/">%s</a>%s</header>%s'
             '<main id="main" class="wrap">%s%s</main><footer class="wrap small muted" style="padding-top:0;display:block">Ficha Única es un servicio de %s · <a href="/terminos">Términos</a> · <a href="/privacidad">Privacidad</a></footer>'
             '<script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js").catch(function(){})</script></body></html>') % (
-        e(title), PRECONNECT, FONTS, PANEL, top_right, nav, flash, body, e(db.OWNER))
+        e(title), BRAND_COLOR, PRECONNECT, FONTS, PANEL, logo('fu-top'), top_right, nav, flash, body, e(db.OWNER))
 
 
 def csrf_field(ctx):
@@ -71,9 +71,9 @@ def notice(msg, kind=''):
 def signup(error='', values=None, ref=''):
     v = values or {}
     ref = v.get('ref') or ref
-    body = ('<div class="auth"><div><h1>Tu sitio inmobiliario gratis, hoy.</h1>'
-            '<p class="muted">Sube tus propiedades una vez. Aparecen en tu sitio, en Google y en los portales. '
-            'Tus clientes te llegan por WhatsApp.</p></div>%s'
+    body = ('<div class="auth pub"><div class="intro"><h1>Crea tu sitio gratis.</h1>'
+            '<p class="muted">Sube cada propiedad una vez. Sale en tu sitio, en Google y en la IA, y quien la ve te escribe a tu WhatsApp.</p>'
+            '<p class="micro"><span>Sin tarjeta</span><span>Sin plazo forzoso</span><span>Desde tu celular</span></p></div>%s'
             '<form class="stack card" method="post" action="/registro"><input type="hidden" name="ref" value="%s">'
             '<label>Tu nombre<input name="name" value="%s" autocomplete="name" required></label>'
             '<label>Nombre de tu inmobiliaria o marca<input name="agency" value="%s" placeholder="Ej. Casas Roma" required></label>'
@@ -88,7 +88,8 @@ def signup(error='', values=None, ref=''):
 
 
 def login(error=''):
-    body = ('<div class="auth"><h1>Entrar</h1>%s<form class="stack card" method="post" action="/entrar">'
+    body = ('<div class="auth pub"><div class="intro"><h1>Entrar</h1><p class="muted">Tu sitio, tus propiedades y tus clientes de WhatsApp.</p></div>%s'
+            '<form class="stack card" method="post" action="/entrar">'
             '<label>Correo<input name="email" type="email" autocomplete="email" required></label>'
             '<label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>'
             '<button class="btn">Entrar</button><p class="small muted">¿Nuevo? <a href="/registro">Crea tu sitio gratis</a></p>'
@@ -629,7 +630,7 @@ def legal(kind):
             '%s es responsable de los datos de tu cuenta (nombre, correo, WhatsApp, datos de tu inmobiliaria). Los usamos para '
             'darte el servicio, soporte y avisos de tu cuenta. Los datos de los clientes que te escriben desde tu sitio los tratamos '
             'por cuenta tuya, como encargado. Derechos ARCO: escríbenos desde tu cuenta.' % db.OWNER)
-    body = ('<div class="auth" style="max-width:720px"><h1>%s</h1><p>%s</p><p class="notice warn"><b>BORRADOR</b>: texto de trabajo; '
+    body = ('<div class="auth pub" style="max-width:720px"><h1>%s</h1><p>%s</p><p class="notice warn"><b>BORRADOR</b>: texto de trabajo; '
             'lo revisa un abogado (Ley Federal de Protección de Datos Personales en Posesión de los Particulares, 2025) antes de publicarse.</p></div>') % (
         e(title), e(text))
     return layout(title, body)
@@ -754,7 +755,7 @@ def map_block(pins, height=280):
             '<noscript><p class="muted small">El mapa necesita JavaScript. Las ubicaciones son aproximadas.</p></noscript>'
             '<script>document.addEventListener("DOMContentLoaded",function(){var P=%s;if(!window.L)return;var m=L.map("map",{scrollWheelZoom:false});'
             'L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18,attribution:"© OpenStreetMap"}).addTo(m);'
-            'var g=[];P.forEach(function(p){var c=L.circleMarker([p.lat,p.lng],{radius:9,weight:2,color:"#0f5c4c",fillOpacity:.6}).addTo(m);'
+            'var g=[];P.forEach(function(p){var c=L.circleMarker([p.lat,p.lng],{radius:9,weight:2,color:"#F2501F",fillOpacity:.6}).addTo(m);'
             'var d=document.createElement("div");var b=document.createElement("b");b.textContent=p.t;d.appendChild(b);'
             'd.appendChild(document.createElement("br"));d.appendChild(document.createTextNode(p.p+" · "+p.a));c.bindPopup(d);g.push([p.lat,p.lng]);});'
             'm.fitBounds(g,{padding:[30,30],maxZoom:15});});</script>') % (LEAFLET, height, json.dumps(pins, ensure_ascii=False).replace('</', '<\\/'))
@@ -1006,7 +1007,7 @@ def team(con, ctx, link='', error=''):
 
 def join(agency, token, error='', values=None):
     v = values or {}
-    body = ('<div class="auth"><h1>Únete a %s</h1><p class="muted">Crea tu acceso de asesor en Ficha Única.</p>%s'
+    body = ('<div class="auth pub"><h1>Únete a %s</h1><p class="muted">Crea tu acceso de asesor en Ficha Única.</p>%s'
             '<form class="stack card" method="post" action="/unirse/%s">'
             '<label for="j-name">Tu nombre<input id="j-name" name="name" value="%s" required autocomplete="name"></label>'
             '<label for="j-wa">Tu WhatsApp<input id="j-wa" name="whatsapp" value="%s" inputmode="tel" required autocomplete="tel"></label>'

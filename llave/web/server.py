@@ -23,6 +23,7 @@ from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
 from .common import csrf_ok, to_cents, to_num
+from .styles import BRAND_COLOR
 
 MAX_UPLOAD = 40 * 1024 * 1024
 _SCHEMA_OK = set()
@@ -37,13 +38,13 @@ PWA_MANIFEST = {
     'name': 'Ficha Única', 'short_name': 'Ficha Única', 'lang': 'es-MX', 'dir': 'ltr',
     'description': 'Tu sitio, tus propiedades y tus clientes de WhatsApp, en tu celular.',
     'start_url': '/?from=app', 'scope': '/', 'display': 'standalone', 'orientation': 'portrait',
-    'background_color': '#ffffff', 'theme_color': '#0f5c4c',
+    'background_color': '#ffffff', 'theme_color': BRAND_COLOR,
     'icons': [{'src': '/_s/icon-192.png', 'sizes': '192x192', 'type': 'image/png', 'purpose': 'any'},
               {'src': '/_s/icon-512.png', 'sizes': '512x512', 'type': 'image/png', 'purpose': 'any'}],
     'shortcuts': [{'name': 'Nueva propiedad', 'url': '/nueva'}, {'name': 'Clientes', 'url': '/clientes'}],
 }
 # Offline shell only: static files are cached; panel pages (logged-in, private) are never stored.
-PWA_SW = """const V='fu-v1';
+PWA_SW = """const V='fu-v2';
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(['/offline','/_s/icon-192.png'])));self.skipWaiting();});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==V).map(x=>caches.delete(x)))));self.clients.claim();});
 self.addEventListener('fetch',e=>{const r=e.request;if(r.method!=='GET')return;
@@ -51,8 +52,11 @@ if(r.mode==='navigate'){e.respondWith(fetch(r).catch(()=>caches.match('/offline'
 const u=new URL(r.url);if(u.pathname.startsWith('/_s/')){e.respondWith(caches.match(r).then(m=>m||fetch(r).then(x=>{const c=x.clone();caches.open(V).then(h=>h.put(r,c));return x;})));}});
 """
 PWA_OFFLINE = ('<!doctype html><html lang="es-MX"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-               '<title>Sin conexión · Ficha Única</title><style>body{font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;'
-               'text-align:center;padding:24px;color:#14302a}h1{font-size:1.4rem}button{background:#0f5c4c;color:#fff;border:0;border-radius:10px;padding:12px 20px;font-size:1rem}</style></head>'
+               '<meta name="theme-color" content="#FF6B1A"><title>Sin conexión · Ficha Única</title>'
+               '<style>:root{color-scheme:light}body{font-family:"Onest",system-ui,-apple-system,"Segoe UI",sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;'
+               'text-align:center;padding:24px;color:#1A1A22;background:#fff}h1{font-size:1.5rem;letter-spacing:-.02em}p{color:#464653;max-width:30em}'
+               'button{background:#FF6B1A;color:#1A1A22;border:0;border-radius:99px;min-height:48px;padding:0 26px;font-weight:800;font-size:1rem;font-family:inherit;cursor:pointer}'
+               'button:focus-visible{outline:3px solid #B83F0A;outline-offset:3px}</style></head>'
                '<body><main><h1>Sin conexión</h1><p>Revisa tu internet y vuelve a intentar. Tus propiedades y clientes están seguros.</p>'
                '<button onclick="location.reload()">Reintentar</button></main></body></html>')
 

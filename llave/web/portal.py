@@ -5,9 +5,26 @@ import json
 
 from .. import db, geo
 from .common import e, money, facts_line, label, TYPES
-from .styles import site_css, fonts_url
+from .styles import BRAND_COLOR, BRAND_TOKENS, FONTS, MARK_CSS, PRECONNECT, logo, site_css
 
 PER_PAGE = 24
+
+# The directory is a brand page (not an agent's site): Ficha Única v7 look, light only. It reuses the site layout classes,
+# so the brand tokens are laid over them (agent sites keep their own designs and dark mode; this page has none).
+BRAND_CSS = BRAND_TOKENS + MARK_CSS + (
+    ':root{--bg:#fff;--card:#fff;--fg:#1A1A22;--muted:#636371;--line:#E6E6EE;--hdr:#fff;--br:22px;'
+    '--display:"Onest",system-ui,sans-serif;--dw:800;--body:"Onest",system-ui,sans-serif;'
+    '--accent:#FF6B1A;--on-accent:#1A1A22;--accent-text:#B83F0A;--field-border:#8B8B99}'
+    'body{background:var(--soft);-webkit-font-smoothing:antialiased}header.sh{background:rgba(255,255,255,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}'
+    'h1,h2,h3{letter-spacing:-.025em}.brand.logo{font-size:20px}.sh .btn-s{display:inline-flex;align-items:center;min-height:44px;padding:0 18px;border-radius:99px;'
+    'background:var(--card);color:var(--fg);font-weight:700;text-decoration:none;box-shadow:inset 0 0 0 1.5px var(--line)}'
+    '.tag{font-weight:800}.lc h3{font-size:19px;font-weight:800;line-height:1.25}.lc{box-shadow:none}'
+    '.filters{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}'
+    '.filters input,.filters select,.box input,.box textarea,.alertf input,.alertf select{font:16px var(--body);padding:12px 14px;border:1.5px solid var(--field-border);border-radius:14px;background:#fff;color:var(--fg)}'
+    '.filters button,.box button{min-height:48px;border:0;border-radius:99px;background:var(--accent);color:var(--on-accent);font:800 16px var(--body);cursor:pointer;box-shadow:0 10px 22px -12px rgba(255,107,26,.75)}'
+    '.notice{padding:13px 16px;border-radius:16px;background:var(--ok-soft);box-shadow:inset 0 0 0 1px rgba(15,111,80,.18)}'
+    '::placeholder{color:var(--muted);opacity:1}'
+    '@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}')
 
 
 def _boost_order_sql(con):
@@ -87,21 +104,20 @@ def page(con, q, notice=''):
            '<button type="submit">Quiero que me contacten</button></form></section>') % (
         e(label(TYPES, q.get('property_type')) if q.get('property_type') else 'propiedad'), e(q.get('colonia') or 'CDMX'),
         e(q.get('max') or 'mi presupuesto'))
-    body = ('<a class="skip" href="#main">Saltar al contenido</a><header class="sh"><div class="in"><a class="brand" href="/propiedades">Ficha Única</a>'
-            '<a class="small" href="/">Soy asesor</a></div></header><main id="main" class="in sec">'
+    body = ('<a class="skip" href="#main">Saltar al contenido</a><header class="sh"><div class="in"><a class="brand logo" href="/propiedades">%s</a>'
+            '<a class="btn-s" href="/">Soy asesor</a></div></header><main id="main" class="in sec">'
             '<div><h1>Propiedades en México</h1><p class="muted">Cada propiedad la publica un asesor; te atiende directo por WhatsApp.</p></div>'
             '%s%s<p class="muted small">%d resultado%s</p>%s<div class="cards">%s</div>%s</main>'
             '<footer class="sf"><div class="in"><span>© Ficha Única · un servicio de %s</span><a href="/aviso-de-privacidad">Aviso de privacidad</a></div></footer>') % (
-        ('<p class="notice" role="status">%s</p>' % e(notice)) if notice else '', form, len(ids), '' if len(ids) == 1 else 's',
+        logo('fu-top'), ('<p class="notice" role="status">%s</p>' % e(notice)) if notice else '', form, len(ids), '' if len(ids) == 1 else 's',
         map_block(pins), ''.join(cards) or '<p class="muted">No hay propiedades con ese filtro. Cuéntanos qué buscas abajo.</p>', ask, e(db.OWNER))
     ld = {'@context': 'https://schema.org', '@type': 'WebSite', 'name': 'Ficha Única', 'url': db.origin() + '/propiedades',
           'potentialAction': {'@type': 'SearchAction', 'target': db.origin() + '/propiedades?colonia={q}', 'query-input': 'required name=q'}}
     return ('<!doctype html><html lang="es-MX"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
             '<title>Propiedades en venta y renta · Ficha Única</title><meta name="description" content="Busca casas y departamentos publicados por asesores en México. Te atienden directo por WhatsApp.">'
-            '<link rel="canonical" href="%s/propiedades"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-            '<link rel="stylesheet" href="%s"><style>%s .filters{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}'
-            '.filters input,.filters select{font:16px var(--body);padding:11px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg)}'
-            '.filters button{min-height:46px;border:0;border-radius:var(--br);background:var(--accent);color:var(--on-accent);font:600 16px var(--body)}'
-            '.notice{padding:12px;border-radius:8px;background:var(--card)}</style>'
+            '<meta name="theme-color" content="%s"><link rel="icon" type="image/png" href="/_s/icon-192.png"><link rel="apple-touch-icon" href="/_s/apple-touch-icon.png">'
+            '<link rel="canonical" href="%s/propiedades">%s'
+            '<link rel="stylesheet" href="%s"><style>%s%s</style>'
             '<script type="application/ld+json">%s</script></head><body>%s</body></html>') % (
-        e(db.origin()), fonts_url('ciudad'), site_css('ciudad', '#0f5c4c'), json.dumps(ld, ensure_ascii=False), body)
+        BRAND_COLOR, e(db.origin()), PRECONNECT, FONTS, site_css('ciudad', BRAND_COLOR, dark_mode=False), BRAND_CSS,
+        json.dumps(ld, ensure_ascii=False), body)

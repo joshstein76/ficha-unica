@@ -34,6 +34,10 @@ def main(h):
     return re.search(r'<main.*</main>', h, re.S).group(0)
 
 
+def text(h):
+    return re.sub(r'<[^>]+>', '', h)
+
+
 class Landing(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -53,12 +57,16 @@ class Landing(unittest.TestCase):
 
     def test_sections_present(self):
         h = self.land
-        for s in ('Crear mi sitio gratis', 'Tu sitio, gratis', 'En Google y en los portales', 'Tus clientes, en WhatsApp',
-                  'Cómo funciona', 'RentaPóliza', 'Bolsa 50/50', 'Academia', 'Preguntas frecuentes',
-                  'Ficha Única es un servicio de Ciao Bella Marketing', '/terminos', '/privacidad', 'agent-site-demo.webp'):
+        # v7 home (owner-approved 2026-10-20): hero, the 4 pillars, 3 steps, plans, FAQ, final CTA
+        for s in ('Crear mi sitio gratis', 'Tu sitio gratis. Tus clientes,', 'directo a tu WhatsApp.',
+                  'Cada cliente, directo a tu WhatsApp', 'Tu sitio web, gratis', '¿Tu propio dominio? Con Pro', 'Publica una vez, sale en todas partes',
+                  'Tu sitio en línea en 3 pasos', 'Crea tu cuenta', 'Sube tu primera propiedad', 'Listo, ya estás en línea',
+                  'Empieza gratis. Crece cuando quieras.', 'Bolsa 50/50', 'Lo que todos preguntan.', 'Empieza hoy. Es gratis.',
+                  'Ficha Única es un servicio de Ciao Bella Marketing', '/terminos', '/privacidad'):
             self.assertIn(s, self.raw if s in ('/terminos', '/privacidad') or s.startswith('Ficha Única es') else h)
         self.assertEqual(h.count('<details>'), 5)
         self.assertEqual(h.count('<h1'), 1)
+        self.assertNotIn('en camino', self.raw)  # never promise a portal that is not live
 
     def test_live_name_preview(self):
         h = self.raw
@@ -81,16 +89,16 @@ class Landing(unittest.TestCase):
 
     def test_prices_consistent_everywhere(self):
         for h in (self.land, self.prec, self.planes):
-            self.assertEqual(sorted(set(re.findall(r'\$(\d+) MXN', h))), ['499', '999'])
+            self.assertEqual(sorted(set(re.findall(r'\$(\d+) MXN', text(h)))), ['499', '999'])  # v7 price = big "$499" + small "MXN al mes"
             self.assertIn('Gratis', h)
 
     def test_999_ia_on_sale(self):
         for h in (self.land, self.prec):
-            card = [c for c in h.split('<div class="card plan') if 'Pro + IA' in c][0]
+            card = [c for c in h.split('<div class="card plan') if 'data-k="ia"' in c][0]
             self.assertNotIn('Próximamente', card)
             self.assertIn('<a class="btn', card)
             self.assertIn('25 propiedades', card)
-            self.assertEqual(h.count('999'), h.count('$999 MXN'))
+            self.assertEqual(text(h).count('999'), text(h).count('$999 MXN'))
             self.assertNotIn('Agencia', h)
 
     def test_no_competitor_names(self):
