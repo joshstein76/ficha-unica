@@ -24,6 +24,7 @@ create table public.agencies (
   custom_domain      text unique,
   domain_verified_at timestamptz,
   plan               text not null default 'gratis',
+  plan_until         date,                      -- pilot: plan given free until this date
   ghl_location_id    text,                      -- internal, never public
   first_reply        text,
   first_reply_noname text,

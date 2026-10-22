@@ -1,4 +1,5 @@
 """SQLite access + the canonical listing contract every module (site, feeds, GHL) reads from."""
+import datetime
 import json
 import os
 import re
@@ -75,6 +76,8 @@ def init(con):
     for col in ('stripe_customer_id', 'stripe_subscription_id'):  # Stripe billing (llave/billing.py)
         if col not in cols:
             con.execute('ALTER TABLE agencies ADD COLUMN %s TEXT' % col)
+    if 'plan_until' not in cols:  # pilot: plan given free until this date (tools/set_plan.py)
+        con.execute('ALTER TABLE agencies ADD COLUMN plan_until TEXT')
     con.execute("CREATE TABLE IF NOT EXISTS stripe_events ("  # one row per Stripe event id we processed: replays are no-ops
                 "event_id TEXT PRIMARY KEY, type TEXT NOT NULL, outcome TEXT, received_at TEXT NOT NULL DEFAULT (datetime('now')))")
     con.execute("UPDATE agencies SET plan='ia' WHERE plan IN ('agencia','pro_crm')")  # 10-19 plans
@@ -188,6 +191,15 @@ def plan_of(agency, plan=None):
 
 def plan_has(agency, feature):
     return plan_of(agency) in PLAN_FEATURES.get(feature, ())
+
+
+def plan_days_left(agency, today=None):
+    """Days until a free pilot plan ends (None = no end date). 0 = ends today, negative = already ended."""
+    until = dict(agency).get('plan_until')
+    if not until:
+        return None
+    today = today or datetime.date.today()
+    return (datetime.date.fromisoformat(until[:10]) - today).days
 
 
 def listing_limit(con, agency, plan=None):
