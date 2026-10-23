@@ -98,6 +98,20 @@ def login(error=''):
 
 
 # ---------- dashboard ----------
+PILOT_WARN_DAYS = 7
+
+
+def pilot_notice(agency, today=None):
+    """Reminder in the last week of a free pilot plan (plan_until, set by tools/set_plan.py) and after it ends."""
+    left = db.plan_days_left(agency, today)
+    if left is None or left > PILOT_WARN_DAYS:
+        return ''
+    if left < 0:
+        return '<div class="notice warn">Tu piloto terminó. <a href="/plan">Elige tu plan</a> para seguir con todo.</div>'
+    when = 'hoy' if left == 0 else ('mañana' if left == 1 else 'en %d días' % left)
+    return '<div class="notice warn">Tu piloto termina %s. <a href="/plan">Elige tu plan</a> para no perder nada.</div>' % when
+
+
 def dashboard(con, ctx, welcome=False):
     a = ctx['agency']
     n_list = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status IN ('activa','apartada')", (a['id'],)).fetchone()[0]
@@ -118,7 +132,7 @@ def dashboard(con, ctx, welcome=False):
     leads = con.execute('SELECT * FROM leads WHERE agency_id=? ORDER BY id DESC LIMIT 5', (a['id'],)).fetchall()
     n_stale = len(price_check.stale_listings(con, a['id']))
     n_late = late_count(con, a['id'])
-    body = (('<div class="notice err">⏰ %d cliente%s sin respuesta hace más de 5 minutos. <a href="/clientes?estado=nuevo">Respóndeles ya</a></div>'
+    body = pilot_notice(a) + (('<div class="notice err">⏰ %d cliente%s sin respuesta hace más de 5 minutos. <a href="/clientes?estado=nuevo">Respóndeles ya</a></div>'
              % (n_late, '' if n_late == 1 else 's')) if n_late else '') + (('<div class="notice warn">%d precio%s sin confirmar en 30 días. <a href="/precios">Confírmalos con un toque</a></div>'
              % (n_stale, '' if n_stale == 1 else 's')) if n_stale else '') + ('%s<div><h1>Hola, %s</h1><p class="muted">Tu sitio: <a href="%s" target="_blank" rel="noopener">%s</a></p></div>'
             '<div class="stats"><div class="stat"><b>%d</b><small>Propiedades publicadas</small></div>'

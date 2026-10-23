@@ -57,5 +57,19 @@ class SetPlan(unittest.TestCase):
         self.assertIsNone(db.plan_days_left(a))
 
 
+    def test_panel_reminder_last_week_only(self):
+        from llave.web import panel
+        self.run_tool('piloto-uno', 'pro', '--reason', 'piloto', '--until', '2026-11-30')
+        a = self.agency()
+        self.assertEqual(panel.pilot_notice(a, datetime.date(2026, 11, 22)), '')          # 8 days left
+        self.assertIn('en 7 días', panel.pilot_notice(a, datetime.date(2026, 11, 23)))
+        self.assertIn('mañana', panel.pilot_notice(a, datetime.date(2026, 11, 29)))
+        self.assertIn('hoy', panel.pilot_notice(a, datetime.date(2026, 11, 30)))
+        self.assertIn('terminó', panel.pilot_notice(a, datetime.date(2026, 12, 1)))
+        self.assertIn('href="/plan"', panel.pilot_notice(a, datetime.date(2026, 12, 1)))
+        self.run_tool('piloto-uno', 'gratis', '--reason', 'fin del piloto')
+        self.assertEqual(panel.pilot_notice(self.agency(), datetime.date(2026, 12, 1)), '')
+
+
 if __name__ == '__main__':
     unittest.main()
