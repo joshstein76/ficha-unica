@@ -387,5 +387,14 @@ class SocialTest(DbCase):
         self.assertEqual(k['items'][1]['caption'], 'Texto pulido para WhatsApp.')
 
 
+class LessonCopyTest(unittest.TestCase):
+    def test_lessons_never_promise_portals(self):
+        # Portals are not connected yet: Academia and the weekly social kit must not say listings reach them.
+        from llave.web import panel
+        self.assertEqual(panel.LESSONS, social_kit.LESSONS)
+        for title, desc in panel.LESSONS:
+            self.assertNotIn('portales', (title + desc).lower())
+
+
 if __name__ == '__main__':
     unittest.main()

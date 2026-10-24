@@ -590,7 +590,7 @@ SERVICES = [
      'https://ciaobellamarketing.com', 'Conocer Ciao Bella'),
 ]
 LESSONS = [
-    ('Tu primera propiedad en 10 minutos', 'Del celular a tu sitio y a los portales.'),
+    ('Tu primera propiedad en 10 minutos', 'Del celular a tu sitio y a Google.'),
     ('Fotos que venden con tu celular', 'Luz, ángulos y orden: lo que más cambia una ficha.'),
     ('Aparecer en Google y en ChatGPT', 'Qué lee un buscador en tu ficha y cómo ayudarle.'),
     ('Responder en 5 minutos por WhatsApp', 'El primer mensaje y cómo agendar la visita.'),
