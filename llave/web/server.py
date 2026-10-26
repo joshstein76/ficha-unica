@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import threading
 
-from .. import auth, billing, cards, db, geo, importer, lead_watch, media, ml_oauth, photo_fetch, photos, price_check, replies, stats, whatsapp
+from .. import auth, billing, cards, db, geo, importer, lead_watch, media, ml_oauth, novedades, photo_fetch, photos, price_check, replies, stats, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
@@ -625,6 +625,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(panel.services(ctx, con, ok='Listo: canjeado.'))
             except ValueError as ex:
                 return self.send(panel.services(ctx, con, error=str(ex)), 400)
+        if path == '/novedades':
+            con.execute('UPDATE users SET novedades_seen=? WHERE id=?', (novedades.NOVEDADES[0][0], ctx['user']['id']))
+            con.commit()
+            return self.send(panel.novedades_page(ctx))
         if path == '/academia':
             return self.send(panel.academy(ctx))
         if path == '/propiedades/importar':

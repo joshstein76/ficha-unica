@@ -2,7 +2,7 @@
 Pages are plain functions returning HTML; server.py handles routing, sessions and POSTs."""
 import json
 
-from .. import billing, db, geo, lead_watch, ml_oauth, price_check, replies, whatsapp
+from .. import billing, db, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS)
 from .styles import BRAND_COLOR, FONTS, PANEL, PRECONNECT, logo
@@ -112,6 +112,58 @@ def pilot_notice(agency, today=None):
     return '<div class="notice warn">Tu piloto termina %s. <a href="/plan">Elige tu plan</a> para no perder nada.</div>' % when
 
 
+def novedades_card(ctx):
+    n = novedades.unread(dict(ctx['user']).get('novedades_seen'))
+    rows = ''.join('<a class="row" href="%s" style="text-decoration:none;color:inherit;justify-content:space-between"><span><b>%s</b>'
+                   '<br><span class="small muted">%s</span></span></a>' % (href or '/novedades', e(t), e(b)) for d, t, b, href in novedades.latest(2))
+    return ('<section class="card"><div class="row" style="justify-content:space-between"><h2>Novedades%s</h2>'
+            '<a href="/novedades">Ver todas</a></div><div class="list">%s</div></section>'
+            % ((' <span class="pill pendiente">%d nueva%s</span>' % (n, '' if n == 1 else 's')) if n else '', rows))
+
+
+def novedades_page(ctx):
+    items = ''.join('<div class="card" style="gap:4px"><b>%s</b><span class="small muted">%s · %s</span><span>%s</span>%s</div>'
+                    % (e(t), e(nice_date(d)), 'Ficha Única', e(b), ('<a href="%s">Verlo</a>' % href) if href else '')
+                    for d, t, b, href in novedades.NOVEDADES)
+    return layout('Novedades', '<h1>Novedades</h1><p class="muted">Lo nuevo en Ficha Única, en pocas líneas.</p>%s' % items, ctx, 'inicio')
+
+
+def greeting(now=None):
+    """Buenos días / tardes / noches by Mexico City time."""
+    if now is None:
+        try:
+            from datetime import datetime
+            from zoneinfo import ZoneInfo
+            now = datetime.now(ZoneInfo('America/Mexico_City'))
+        except Exception:
+            from datetime import datetime
+            now = datetime.utcnow()
+    h = now.hour
+    return 'Buenos días' if h < 12 else ('Buenas tardes' if h < 19 else 'Buenas noches')
+
+
+# (icon, label, href, tag): tag '' = ready, text = shown as a small pill
+HOME_TILES = [('propiedades', 'Mis propiedades', '/propiedades', ''), ('clientes', 'Mis clientes', '/clientes', ''),
+              ('sitio', 'Mi sitio', '/sitio', ''), ('portales', 'Portales', '/portales', 'en camino'),
+              ('publicar', 'Qué publicar', '/que-publicar', ''), ('academia', 'Academia', '/academia', 'pronto'),
+              ('servicios', 'Servicios', '/servicios', ''), ('estadisticas', 'Estadísticas', '/estadisticas', '')]
+
+
+def home_tiles():
+    return '<nav class="tiles" aria-label="Tus herramientas">%s</nav>' % ''.join(
+        '<a class="tile" href="%s">%s<b>%s</b>%s</a>' % (href, _icon(k), e(lab), ('<small>%s</small>' % e(tag)) if tag else '')
+        for k, lab, href, tag in HOME_TILES)
+
+
+def first_week(done, total, steps):
+    pct = int(100 * done / total)
+    return ('<section class="card"><div class="row" style="justify-content:space-between"><h2>Tu primera semana</h2><b>%d/%d</b></div>'
+            '<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="%d" aria-valuenow="%d"><i style="width:%d%%"></i></div>'
+            '<div class="list">%s</div></section>') % (done, total, total, done, pct, ''.join(
+        '<a class="row" href="%s" style="text-decoration:none;color:inherit"><span class="pill %s">%s</span>%s</a>'
+        % (href, 'ok' if ok else 'pendiente', '✓' if ok else '•', e(t)) for ok, t, href in steps))
+
+
 def dashboard(con, ctx, welcome=False):
     a = ctx['agency']
     n_list = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status IN ('activa','apartada')", (a['id'],)).fetchone()[0]
@@ -125,8 +177,8 @@ def dashboard(con, ctx, welcome=False):
         (con.execute('SELECT COUNT(*) FROM photos p JOIN listings l ON l.id=p.listing_id WHERE l.agency_id=?', (a['id'],)).fetchone()[0] >= 5,
          'Agrega al menos 5 fotos', '/propiedades'),
         (n_list > 0, 'Publícala (estado: Activa)', '/propiedades'),
-        (n_feed > 0, 'Actívala en los portales', '/portales'),
         (bool(a['tagline'] and a['about']), 'Personaliza tu sitio', '/sitio'),
+        (bool(a['whatsapp']), 'Agrega tu WhatsApp para recibir clientes', '/perfil'),
     ]
     done = sum(1 for s in steps if s[0])
     leads = con.execute('SELECT * FROM leads WHERE agency_id=? ORDER BY id DESC LIMIT 5', (a['id'],)).fetchall()
@@ -134,12 +186,12 @@ def dashboard(con, ctx, welcome=False):
     n_late = late_count(con, a['id'])
     body = pilot_notice(a) + (('<div class="notice err">⏰ %d cliente%s sin respuesta hace más de 5 minutos. <a href="/clientes?estado=nuevo">Respóndeles ya</a></div>'
              % (n_late, '' if n_late == 1 else 's')) if n_late else '') + (('<div class="notice warn">%d precio%s sin confirmar en 30 días. <a href="/precios">Confírmalos con un toque</a></div>'
-             % (n_stale, '' if n_stale == 1 else 's')) if n_stale else '') + ('%s<div><h1>Hola, %s</h1><p class="muted">Tu sitio: <a href="%s" target="_blank" rel="noopener">%s</a></p></div>'
+             % (n_stale, '' if n_stale == 1 else 's')) if n_stale else '') + ('%s<div><h1>%s, %s</h1><p class="muted">Tu sitio: <a href="%s" target="_blank" rel="noopener">%s</a></p></div>'
             '<div class="stats"><div class="stat"><b>%d</b><small>Propiedades publicadas</small></div>'
             '<a class="stat" href="/plan" style="text-decoration:none;color:inherit"><b>%d/%d</b><small>Usadas en plan %s · cambiar</small></a>'
             '<div class="stat"><b>%d</b><small>Clientes nuevos</small></div>'
             '<div class="stat"><b>%d</b><small>Publicaciones en portales</small></div></div>'
-            '%s'
+            '%s%s%s'
             '<section class="card"><div class="row" style="justify-content:space-between"><h2>Últimos clientes</h2>'
             '<a href="/clientes">Ver todos</a></div>%s</section>'
             '<a class="card" href="/que-publicar" style="text-decoration:none;color:inherit"><h2>Qué publicar esta semana</h2>'
@@ -153,13 +205,11 @@ def dashboard(con, ctx, welcome=False):
             '<a class="card" href="/academia" style="text-decoration:none;color:inherit"><h2>Academia</h2>'
             '<span class="small muted">Clases cortas para vender y rentar más.</span></a></section>') % (
         notice('¡Listo! Tu sitio ya existe. Ahora sube tu primera propiedad.') if welcome else '',
-        e(a['name'] if ctx['user']['name'].split(' ')[0].lower() in replies.GENERIC_ACCOUNT else ctx['user']['name'].split(' ')[0]),
+        greeting(), e(a['name'] if ctx['user']['name'].split(' ')[0].lower() in replies.GENERIC_ACCOUNT else ctx['user']['name'].split(' ')[0]),
         e(db.site_url(a)), e(db.site_url(a).split('//')[1]),
         n_list, n_all, limit, e(a['plan']), n_new, n_feed,
-        ('<section class="card"><h2>Tu sitio listo en 5 pasos (%d/5)</h2><div class="list">%s</div></section>' % (done, ''.join(
-            '<a class="row" href="%s" style="text-decoration:none;color:inherit"><span class="pill %s">%s</span>%s</a>'
-            % (href, 'ok' if ok else 'pendiente', '✓' if ok else '•', e(t)) for ok, t, href in steps)))
-        if done < 5 else '<div class="notice">✓ Tu sitio está completo. <a href="/nueva">Sube otra propiedad</a></div>',
+        home_tiles(), novedades_card(ctx),
+        first_week(done, len(steps), steps) if done < len(steps) else '<div class="notice">✓ Tu primera semana está completa. <a href="/nueva">Sube otra propiedad</a></div>',
         _leads_list(con, leads) if leads else '<p class="muted">Aún no tienes clientes. Cuando alguien escriba desde tu sitio, aparece aquí y en WhatsApp.</p>', props(db.REFERRAL_BONUS_LISTINGS))
     return layout('Inicio', body, ctx, 'inicio')
 

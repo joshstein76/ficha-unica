@@ -98,6 +98,16 @@ class WebFlow(unittest.TestCase):
         csrf = re.search(r'name="csrf" value="([0-9a-f]+)"', body).group(1)
         return cookie, csrf
 
+    def test_novedades_unread_clears(self):
+        cookie, _ = self.signup('Casas Novedades', 'nov@ejemplo.test')
+        s, home, _ = req('app.fichaunica.localhost', '/', cookie=cookie)
+        self.assertIn('nuevas', home)
+        s, page, _ = req('app.fichaunica.localhost', '/novedades', cookie=cookie)
+        self.assertEqual(s, 200)
+        self.assertIn('Tu panel, más fácil', page)
+        s, home, _ = req('app.fichaunica.localhost', '/', cookie=cookie)
+        self.assertNotIn('nuevas', home)
+
     def test_full_flow(self):
         cookie, csrf = self.signup('Casas Roma', 'maria@ejemplo.test')
         con = db.connect()
