@@ -75,7 +75,7 @@ background:rgba(255,255,255,.92);backdrop-filter:blur(14px);-webkit-backdrop-fil
 .tile{position:relative;display:grid;justify-items:center;gap:8px;text-align:center;padding:16px 8px;background:var(--card);border:1px solid var(--line);border-radius:20px;color:var(--ink);text-decoration:none;min-height:104px}
 .tile svg{width:30px;height:30px;color:var(--brand,#FF6B1A)}.tile b{font-size:14px;font-weight:700}
 .tile small{position:absolute;top:8px;right:10px;font-size:11px;color:var(--muted)}
-.bar{height:10px;border-radius:99px;background:var(--line);overflow:hidden}.bar i{display:block;height:100%;background:#FF6B1A;border-radius:99px}
+.progress{height:10px;border-radius:99px;background:var(--line);overflow:hidden}.progress i{display:block;height:100%;background:#FF6B1A;border-radius:99px}
 .grid2{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
 .grid2.wide{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
 .stats{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}

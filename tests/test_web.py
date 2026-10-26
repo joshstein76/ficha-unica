@@ -108,6 +108,28 @@ class WebFlow(unittest.TestCase):
         s, home, _ = req('app.fichaunica.localhost', '/', cookie=cookie)
         self.assertNotIn('nuevas', home)
 
+    def test_formatos_gate_and_doc(self):
+        import os
+        cookie, csrf = self.signup('Casas Formatos', 'fmt@ejemplo.test')
+        os.environ.pop('LLAVE_FORMATOS', None)
+        s, page, _ = req('app.fichaunica.localhost', '/formatos', cookie=cookie)
+        self.assertEqual(s, 200)
+        self.assertIn('abogado', page)
+        self.assertNotIn('Recibo de apartado', page)
+        os.environ['LLAVE_FORMATOS'] = '1'
+        try:
+            s, page, _ = req('app.fichaunica.localhost', '/formatos', cookie=cookie)
+            self.assertIn('Recibo de apartado', page)
+            s, form, _ = req('app.fichaunica.localhost', '/formatos/apartado', cookie=cookie)
+            self.assertIn('María López', form)  # prefilled agent
+            s, doc, _ = req('app.fichaunica.localhost', '/formatos/apartado', {'csrf': csrf, 'comprador': 'Ana <b>', 'monto': '50,000'}, cookie)
+            self.assertEqual(s, 200)
+            self.assertIn('50,000 MXN', doc)
+            self.assertIn('Ana &lt;b&gt;', doc)
+            self.assertIn('No sustituye asesoría legal', doc)
+        finally:
+            os.environ.pop('LLAVE_FORMATOS', None)
+
     def test_full_flow(self):
         cookie, csrf = self.signup('Casas Roma', 'maria@ejemplo.test')
         con = db.connect()
