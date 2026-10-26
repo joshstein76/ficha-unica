@@ -2,7 +2,7 @@
 Pages are plain functions returning HTML; server.py handles routing, sessions and POSTs."""
 import json
 
-from .. import billing, db, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
+from .. import billing, db, formatos, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS)
 from .styles import BRAND_COLOR, FONTS, PANEL, PRECONNECT, logo
@@ -18,6 +18,7 @@ ICONS = {
     'academia': '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/>',
     'estadisticas': '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
     'invitar': '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/>',
+    'formatos': '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
     'publicar': '<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/>',
 }
 def props(n):
@@ -146,19 +147,19 @@ def greeting(now=None):
 HOME_TILES = [('propiedades', 'Mis propiedades', '/propiedades', ''), ('clientes', 'Mis clientes', '/clientes', ''),
               ('sitio', 'Mi sitio', '/sitio', ''), ('portales', 'Portales', '/portales', 'en camino'),
               ('publicar', 'Qué publicar', '/que-publicar', ''), ('academia', 'Academia', '/academia', 'pronto'),
-              ('servicios', 'Servicios', '/servicios', ''), ('estadisticas', 'Estadísticas', '/estadisticas', '')]
+              ('formatos', 'Formatos', '/formatos', ''), ('servicios', 'Servicios', '/servicios', '')]
 
 
 def home_tiles():
     return '<nav class="tiles" aria-label="Tus herramientas">%s</nav>' % ''.join(
         '<a class="tile" href="%s">%s<b>%s</b>%s</a>' % (href, _icon(k), e(lab), ('<small>%s</small>' % e(tag)) if tag else '')
-        for k, lab, href, tag in HOME_TILES)
+        for k, lab, href, tag in [(k, lab, href, 'pronto' if k == 'formatos' and not formatos.enabled() else tag) for k, lab, href, tag in HOME_TILES])
 
 
 def first_week(done, total, steps):
     pct = int(100 * done / total)
     return ('<section class="card"><div class="row" style="justify-content:space-between"><h2>Tu primera semana</h2><b>%d/%d</b></div>'
-            '<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="%d" aria-valuenow="%d"><i style="width:%d%%"></i></div>'
+            '<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="%d" aria-valuenow="%d"><i style="width:%d%%"></i></div>'
             '<div class="list">%s</div></section>') % (done, total, total, done, pct, ''.join(
         '<a class="row" href="%s" style="text-decoration:none;color:inherit"><span class="pill %s">%s</span>%s</a>'
         % (href, 'ok' if ok else 'pendiente', '✓' if ok else '•', e(t)) for ok, t, href in steps))
@@ -680,6 +681,45 @@ def academy(ctx):
     body = ('<h1>Academia</h1><p class="muted">Clases cortas, en video y en español, para vender y rentar más con Ficha Única. '
             'Gratis para todos los asesores.</p><div class="grid2">%s</div>') % items
     return layout('Academia', body, ctx, 'academia')
+
+
+# ---------- formatos ----------
+def formatos_list(ctx, q='', tag=''):
+    if not formatos.enabled():
+        return layout('Formatos', '<h1>Formatos</h1><div class="card"><p>Estamos preparando tus contratos y formatos con un abogado. Muy pronto los verás aquí.</p></div>', ctx, 'inicio')
+    chips = ''.join('<a class="pill %s" href="/formatos?tag=%s">%s</a>' % ('ok' if t == tag else 'pendiente', e(t), e(t)) for t in formatos.tags())
+    cards = ''.join('<a class="card" href="/formatos/%s" style="text-decoration:none;color:inherit;gap:4px"><b>%s</b><span class="small muted">%s</span><span class="pill pendiente">%s</span></a>'
+                    % (f['key'], e(f['title']), e(f['about']), e(f['tag'])) for f in formatos.search(q, tag))
+    body = ('<h1>Formatos</h1><p class="muted">Contratos y formatos listos para llenar, imprimir o guardar en PDF.</p>'
+            '<form method="get" action="/formatos" class="row"><input name="q" value="%s" placeholder="Buscar formato" aria-label="Buscar formato" style="flex:1">'
+            '<button class="btn small">Buscar</button></form><div class="row" style="flex-wrap:wrap">%s<a class="small" href="/formatos">Todos</a></div>'
+            '<div class="grid2">%s</div><p class="small muted">%s</p>') % (e(q), chips, cards or '<p class="muted">No encontramos ese formato.</p>', e(formatos.DISCLAIMER))
+    return layout('Formatos', body, ctx, 'inicio')
+
+
+def formatos_form(ctx, f, values=None):
+    values = values if values is not None else formatos.prefill(f, ctx['user'], ctx['agency'], __import__('datetime').date.today().isoformat())
+    kinds = {'date': 'date', 'money': 'text', 'text': 'text'}
+    inputs = ''.join(
+        ('<label for="f-%s">%s<textarea id="f-%s" name="%s" rows="3">%s</textarea></label>' % (n, e(l), n, n, e(values.get(n, ''))))
+        if k == 'area' else
+        ('<label for="f-%s">%s<input id="f-%s" name="%s" type="%s" value="%s"%s></label>'
+         % (n, e(l), n, n, kinds[k], e(values.get(n, '')), ' inputmode="decimal"' if k == 'money' else ''))
+        for n, l, k, _p in f['fields'])
+    body = ('<a class="small" href="/formatos">← Formatos</a><h1>%s</h1><p class="muted">%s</p>'
+            '<form class="stack card" method="post" action="/formatos/%s">%s%s<button class="btn">Crear documento</button></form>'
+            '<p class="small muted">%s</p>') % (e(f['title']), e(f['about']), f['key'], csrf_field(ctx), inputs, e(formatos.DISCLAIMER))
+    return layout(f['title'], body, ctx, 'inicio')
+
+
+def formatos_doc(ctx, f, values):
+    lines = formatos.render_lines(f, values, e)
+    paras = ''.join(('<h1 style="text-align:center">%s</h1>' % l) if i == 0 else '<p>%s</p>' % l for i, l in enumerate(lines))
+    body = ('<div class="row noprint"><a class="btn ghost small" href="/formatos/%s">← Editar</a>'
+            '<button class="btn small" onclick="window.print()">Imprimir o guardar PDF</button></div>'
+            '<article class="card" style="gap:14px;line-height:1.7">%s<p class="small muted">%s</p></article>'
+            '<style>@media print{.top,.tabs,footer,.noprint{display:none!important}.card{border:0}}</style>') % (f['key'], paras, e(formatos.DISCLAIMER))
+    return layout(f['title'], body, ctx, 'inicio')
 
 
 # ---------- legal drafts (platform) ----------

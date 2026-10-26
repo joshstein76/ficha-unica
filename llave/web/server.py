@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import threading
 
-from .. import auth, billing, cards, db, geo, importer, lead_watch, media, ml_oauth, novedades, photo_fetch, photos, price_check, replies, stats, whatsapp
+from .. import auth, billing, cards, db, formatos, geo, importer, lead_watch, media, ml_oauth, novedades, photo_fetch, photos, price_check, replies, stats, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
@@ -625,6 +625,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(panel.services(ctx, con, ok='Listo: canjeado.'))
             except ValueError as ex:
                 return self.send(panel.services(ctx, con, error=str(ex)), 400)
+        if path == '/formatos' or path.startswith('/formatos/'):
+            key = path[len('/formatos/'):] if path != '/formatos' else ''
+            if not formatos.enabled() or not key:
+                return self.send(panel.formatos_list(ctx, query.get('q', ''), query.get('tag', '')))
+            fm = formatos.BY_KEY.get(key)
+            if not fm:
+                return self.send(panel.formatos_list(ctx), 404)
+            if method == 'POST':
+                return self.send(panel.formatos_doc(ctx, fm, {n: f.get(n, '') for n, _l, _k, _p in fm['fields']}))
+            return self.send(panel.formatos_form(ctx, fm))
         if path == '/novedades':
             con.execute('UPDATE users SET novedades_seen=? WHERE id=?', (novedades.NOVEDADES[0][0], ctx['user']['id']))
             con.commit()
