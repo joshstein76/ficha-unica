@@ -45,6 +45,7 @@ create table public.profiles (
   whatsapp   text,
   photo_path text,
   role       text not null default 'owner',
+  novedades_seen date,
   created_at timestamptz not null default now(),
   constraint profiles_role_chk check (role in ('owner','agent'))
 );

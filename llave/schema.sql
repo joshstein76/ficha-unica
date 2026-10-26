@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS users (
   photo_path TEXT,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'owner',     -- owner | agent
+  novedades_seen TEXT,                    -- last Novedades date opened (YYYY-MM-DD)
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

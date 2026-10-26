@@ -70,6 +70,8 @@ def init(con):
     if 'referred_by' not in cols:  # agent referral loop
         con.execute('ALTER TABLE agencies ADD COLUMN referred_by INTEGER REFERENCES agencies(id)')
     ucols = {r[1] for r in con.execute('PRAGMA table_info(users)')}
+    if 'novedades_seen' not in ucols:  # last Novedades date this user opened (YYYY-MM-DD)
+        con.execute('ALTER TABLE users ADD COLUMN novedades_seen TEXT')
     for col in ('slug', 'bio', 'zones'):  # agent public profile
         if col not in ucols:
             con.execute('ALTER TABLE users ADD COLUMN %s TEXT' % col)
