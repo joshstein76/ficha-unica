@@ -77,7 +77,7 @@ def signup(error='', values=None, ref=''):
     body = ('<div class="auth pub"><div class="intro"><h1>Crea tu sitio gratis.</h1>'
             '<p class="muted">Sube cada propiedad una vez. Sale en tu sitio, en Google y en la IA, y quien la ve te escribe a tu WhatsApp.</p>'
             '<p class="micro"><span>Sin tarjeta</span><span>Sin plazo forzoso</span><span>Desde tu celular</span></p></div>%s'
-            '<form class="stack card" method="post" action="/registro"><input type="hidden" name="ref" value="%s">'
+            '<form class="stack card" method="post" action="/registro"><input type="hidden" name="ref" value="%s"><div aria-hidden="true" style="position:absolute;left:-9999px"><label>Sitio web<input name="website" tabindex="-1" autocomplete="off"></label></div>'
             '<label>Tu nombre<input name="name" value="%s" autocomplete="name" required></label>'
             '<label>Nombre de tu inmobiliaria o marca<input name="agency" value="%s" placeholder="Ej. Casas Roma" required></label>'
             '<label>Tu WhatsApp<input name="whatsapp" value="%s" inputmode="tel" placeholder="55 1234 5678" required></label>'

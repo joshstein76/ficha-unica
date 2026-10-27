@@ -187,6 +187,26 @@ class WebFlow(unittest.TestCase):
         self.assertEqual(con.execute('SELECT done FROM deal_tasks WHERE id=?', (tid,)).fetchone()[0], 1)
         con.close()
 
+    def test_signup_guard_honeypot_cap_login_lockout(self):
+        from llave.web import server
+        base = {'name': 'Ana Ruiz', 'whatsapp': '55 1234 5678', 'password': 'segura1234', 'terms': '1'}
+        s, _, h = req('app.fichaunica.localhost', '/registro', dict(base, agency='Bot Casas', email='bot@ejemplo.test', website='x'))
+        self.assertEqual(s, 200)
+        self.assertNotIn('Set-Cookie', h)
+        old = server.SIGNUP_DAILY_CAP, server.LOGIN_FAILS_15MIN
+        try:
+            server.SIGNUP_DAILY_CAP = 0
+            s, page, _ = req('app.fichaunica.localhost', '/registro', dict(base, agency='Casas Llenas', email='llena@ejemplo.test'))
+            self.assertEqual(s, 429)
+            self.assertIn('lugares del día', page)
+            server.LOGIN_FAILS_15MIN = 2
+            for _ in range(2):
+                self.assertEqual(req('app.fichaunica.localhost', '/entrar', {'email': 'nadie@ejemplo.test', 'password': 'mala1234'})[0], 401)
+            self.assertEqual(req('app.fichaunica.localhost', '/entrar', {'email': 'nadie@ejemplo.test', 'password': 'mala1234'})[0], 429)
+        finally:
+            server.SIGNUP_DAILY_CAP, server.LOGIN_FAILS_15MIN = old
+            con = db.connect(); con.execute('DELETE FROM rate_events'); con.commit(); con.close()
+
     def test_full_flow(self):
         cookie, csrf = self.signup('Casas Roma', 'maria@ejemplo.test')
         con = db.connect()

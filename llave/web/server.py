@@ -108,6 +108,14 @@ class Handler(BaseHTTPRequestHandler):
     def host(self):
         return (self.headers.get('Host') or '').split(':')[0].lower()
 
+    def client_ip(self):
+        """Real visitor IP: behind Caddy (localhost) trust the first X-Forwarded-For hop, never otherwise."""
+        ip = self.client_address[0]
+        if ip in ('127.0.0.1', '::1'):
+            fwd = (self.headers.get('X-Forwarded-For') or '').split(',')[0].strip()
+            return fwd or ip
+        return ip
+
     def cookie(self, name):
         for part in (self.headers.get('Cookie') or '').split(';'):
             k, _, v = part.strip().partition('=')
@@ -461,17 +469,27 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/registro':
             if method == 'POST':
                 f, _ = self.form()
+                if f.get('website'):  # honeypot: bots fill every field; pretend nothing happened
+                    return self.send(panel.signup(values={}), 200)
+                ip = self.client_ip()
+                if not rate_ok(con, 'signup', ip, SIGNUP_PER_IP_DAY, 24 * 60) or not signup_room_today(con):
+                    return self.send(panel.signup(SIGNUP_FULL_MSG, f), 429)
                 try:
                     uid = signup(con, f)
                 except ValueError as ex:
                     return self.send(panel.signup(str(ex), f), 400)
+                rate_hit(con, 'signup', ip)
                 return self.start_session(con, uid, '/nueva?bienvenida=1')
             return self.send(panel.signup(values={'agency': (query.get('marca') or '')[:40]}, ref=(query.get('ref') or '')[:60]))
         if path == '/entrar':
             if method == 'POST':
                 f, _ = self.form()
+                ip = self.client_ip()
+                if not rate_ok(con, 'login_fail', ip, LOGIN_FAILS_15MIN, 15):
+                    return self.send(panel.login('Demasiados intentos. Espera 15 minutos e intenta de nuevo.'), 429)
                 u = con.execute('SELECT * FROM users WHERE email=?', ((f.get('email') or '').strip().lower(),)).fetchone()
                 if not u or not auth.verify_password(f.get('password', ''), u['password_hash']):
+                    rate_hit(con, 'login_fail', ip)
                     return self.send(panel.login('Correo o contraseña incorrectos.'), 401)
                 return self.start_session(con, u['id'])
             return self.send(panel.login())
@@ -952,6 +970,43 @@ def unique_slug(con, name):
     while con.execute('SELECT 1 FROM agencies WHERE slug=?', (slug,)).fetchone():
         slug, n = '%s-%d' % (base, n), n + 1
     return slug
+
+
+# Sign-up guards (2026-10-27): each new agency is a new HTTPS certificate on first visit, and Let's Encrypt allows
+# ~50 per week for fichaunica.mx until the wildcard certificate (Cloudflare DNS) is in place. Env-tunable.
+def _limit(name, prod_default):
+    """Env override; otherwise the production default, and no limit outside production (tests, local)."""
+    v = os.environ.get(name)
+    return int(v) if v else (prod_default if db.ENV == 'production' else 10 ** 9)
+
+
+SIGNUP_DAILY_CAP = _limit('LLAVE_SIGNUP_DAILY_CAP', 7)
+SIGNUP_PER_IP_DAY = _limit('LLAVE_SIGNUP_PER_IP_DAY', 3)
+LOGIN_FAILS_15MIN = _limit('LLAVE_LOGIN_FAILS_15MIN', 10)
+SIGNUP_FULL_MSG = ('Hoy ya abrimos todos los lugares del día. Vuelve mañana o escríbenos por WhatsApp y te apartamos el tuyo.')
+
+
+def _rate_table(con):
+    con.execute("CREATE TABLE IF NOT EXISTS rate_events (kind TEXT NOT NULL, ip TEXT NOT NULL, "
+                "created_at TEXT NOT NULL DEFAULT (datetime('now')))")
+
+
+def rate_ok(con, kind, ip, limit, minutes):
+    _rate_table(con)
+    n = con.execute("SELECT COUNT(*) FROM rate_events WHERE kind=? AND ip=? AND created_at > datetime('now', ?)",
+                    (kind, ip, '-%d minutes' % minutes)).fetchone()[0]
+    return n < limit
+
+
+def rate_hit(con, kind, ip):
+    _rate_table(con)
+    con.execute('INSERT INTO rate_events(kind, ip) VALUES (?,?)', (kind, ip))
+    con.execute("DELETE FROM rate_events WHERE created_at < datetime('now', '-2 days')")
+    con.commit()
+
+
+def signup_room_today(con):
+    return con.execute("SELECT COUNT(*) FROM agencies WHERE created_at > datetime('now', '-1 day')").fetchone()[0] < SIGNUP_DAILY_CAP
 
 
 def signup(con, f):
