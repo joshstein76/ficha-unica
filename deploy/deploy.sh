@@ -25,7 +25,12 @@ if [[ $GO == 0 ]]; then
   exit 0
 fi
 
-echo "== 2. Backup on server"; $SSH "test -e $APP_DIR/current && set -a && . $DATA_DIR/app.env && set +a && $PYTHON $APP_DIR/current/tools/backup.py --dest $DATA_DIR/backups --prune || echo 'first deploy: no backup'"
+echo "== 2. Backup on server"
+if [[ "$TARGET_KIND" == vps ]]; then  # app.env is 600 for the app user: back up as that user, fail the deploy if it fails
+  $SSH "test ! -e $APP_DIR/current || sudo -u fichaunica bash -c 'set -a && . $DATA_DIR/app.env && set +a && cd $APP_DIR/current && $PYTHON tools/backup.py --dest $DATA_DIR/backups --prune'" || { echo "BACKUP FAILED: not deploying"; exit 1; }
+else
+  $SSH "test -e $APP_DIR/current && set -a && . $DATA_DIR/app.env && set +a && $PYTHON $APP_DIR/current/tools/backup.py --dest $DATA_DIR/backups --prune || echo 'first deploy: no backup'"
+fi
 echo "== 3. Upload $REL"; $SSH "mkdir -p $APP_DIR/releases/$REL"; rsync "${RSYNC_OPTS[@]}" ./ "$DEST"
 echo "== 4. Switch"; PREV=$($SSH "readlink $APP_DIR/current || true"); $SSH "ln -sfn $APP_DIR/releases/$REL $APP_DIR/current"
 echo "== 5. Restart"
