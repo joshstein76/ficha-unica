@@ -81,7 +81,7 @@ def _call(method, path, body=None, query=None):
         url += '?' + urllib.parse.urlencode(query)
     req = urllib.request.Request(url, method=method, data=json.dumps(body).encode() if body is not None else None, headers={
         'Authorization': 'Bearer ' + tok, 'Version': '2021-07-28', 'Content-Type': 'application/json',
-        'Accept': 'application/json'})
+        'Accept': 'application/json', 'User-Agent': 'FichaUnica-Sync/1.0'})  # Cloudflare 1010 blocks Python-urllib
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             raw = r.read().decode('utf-8', 'replace')
