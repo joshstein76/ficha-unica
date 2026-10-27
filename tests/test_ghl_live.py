@@ -55,6 +55,7 @@ class T(unittest.TestCase):
         c.execute("INSERT INTO listings(id,agency_id,ref,slug,status,operation,title,colonia) VALUES (1,1,'V-1','depto','activa','renta','Depto','Polanco')")
         c.commit()
         ghl_live._pipelines.clear()
+        ghl_live._fields.clear()
         self.env = mock.patch.dict(os.environ, ENV)
         self.env.start()
         self.addCleanup(self.env.stop)
@@ -261,6 +262,17 @@ class T(unittest.TestCase):
         f = Fake()
         self.drain(f)
         self.assertFalse([p for p in f.paths() if 'conversations' in p or 'messages' in p])
+
+
+    def test_custom_fields_sent_by_id_when_ghl_renamed_the_key(self):
+        ghl_live.enqueue_agent(self.con, 1, 'signup')
+        f = Fake({'GET /locations/LOC1/customFields': {'customFields': [
+            {'id': 'F1', 'fieldKey': 'contact.contactfu_plan'}, {'id': 'F2', 'fieldKey': 'contact.contactfu_agency_slug'}]}})
+        self.drain(f)
+        b = [c for c in f.calls if c[1] == '/contacts/upsert'][0][3]
+        by = {x.get('id') or x['key']: x['field_value'] for x in b['customFields']}
+        self.assertEqual((by['F1'], by['F2']), ('gratis', 'vive'))
+        self.assertEqual(by['contact.fu_listings_published'], 1)  # unknown to GHL: falls back to our key
 
 
 if __name__ == '__main__':

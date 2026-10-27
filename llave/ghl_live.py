@@ -21,6 +21,7 @@ STAGE_RANK = {'Registrado': 0, 'Primera propiedad publicada': 1, 'Pro': 2, 'Pro 
 PLAN_TAGS = ['fu-plan-gratis', 'fu-plan-pro', 'fu-plan-ia']
 
 _pipelines = {}  # per process: location id -> {pipeline name: {'id':..., 'stages': {stage name: id}}}
+_fields = {}  # per process: location id -> {'fu_plan': {'id':..., 'fieldKey':...}}
 
 
 class GhlError(Exception):
@@ -103,6 +104,26 @@ def _pipeline_ids(loc):
     return _pipelines[loc]
 
 
+def _field_ids(loc):
+    # GHL may store our fieldKey as 'contact.contactfu_plan' (it did on 2026-10-27), so match on the 'fu_' suffix
+    if loc not in _fields:
+        res = _call('GET', '/locations/%s/customFields' % loc)
+        out = {}
+        for f in res.get('customFields') or []:
+            k = f.get('fieldKey') or ''
+            if 'fu_' in k:
+                out['fu_' + k.split('fu_', 1)[1]] = f
+        _fields[loc] = out
+    return _fields[loc]
+
+
+def _cf(loc, pairs):
+    """[(fu_name, value)] -> customFields by id when GHL knows the field, else by our key."""
+    have = _field_ids(loc)
+    return [{'id': have[k]['id'], 'key': have[k].get('fieldKey'), 'field_value': v} if k in have
+            else {'key': 'contact.' + k, 'field_value': v} for k, v in pairs]
+
+
 def _contact_id(res):
     return ((res or {}).get('contact') or {}).get('id') or (res or {}).get('id')
 
@@ -154,10 +175,8 @@ def _send_agent(con, loc, p):
     body = {'firstName': parts[0] if parts else '', 'lastName': parts[1] if len(parts) > 1 else '',
             'email': (u['email'] if u else None) or ag['email'] or '', 'phone': ag['whatsapp'] or '',
             'companyName': ag['name'], 'source': 'Ficha Única app', 'tags': ['fu-agente', 'fu-plan-' + plan],
-            'customFields': [{'key': 'contact.fu_agency_slug', 'field_value': ag['slug']},
-                             {'key': 'contact.fu_plan', 'field_value': plan},
-                             {'key': 'contact.fu_site_url', 'field_value': db.site_url(ag)},
-                             {'key': 'contact.fu_listings_published', 'field_value': n}]}
+            'customFields': _cf(loc, [('fu_agency_slug', ag['slug']), ('fu_plan', plan),
+                                      ('fu_site_url', db.site_url(ag)), ('fu_listings_published', n)])}
     cid = _upsert(loc, body)
     if p['event'] == 'plan_change':
         _call('DELETE', '/contacts/%s/tags' % cid, {'tags': [t for t in PLAN_TAGS if t != 'fu-plan-' + plan]})
@@ -182,9 +201,7 @@ def _send_lead(con, loc, p):
     cid = _upsert(loc, {
         'firstName': parts[0] if parts else '', 'lastName': parts[1] if len(parts) > 1 else '',
         'email': lead['email'] or '', 'phone': lead['phone'] or '', 'source': 'Sitio de ' + ag['name'], 'tags': tags,
-        'customFields': [{'key': 'contact.fu_listing_ref', 'field_value': ref},
-                         {'key': 'contact.fu_listing_url', 'field_value': url},
-                         {'key': 'contact.fu_agent', 'field_value': ag['slug']}]})
+        'customFields': _cf(loc, [('fu_listing_ref', ref), ('fu_listing_url', url), ('fu_agent', ag['slug'])])})
     note = 'Lead de %s (%s).' % (ag['name'], lead['source'] or 'sitio')
     if lead['message']:
         note += ' Pidió: "%s".' % lead['message']
