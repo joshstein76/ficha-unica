@@ -727,6 +727,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(panel.listing_form(con, ctx, l, ok=ok))
         if path == '/clientes':
             return self.send(panel.leads(con, ctx, query.get('estado')))
+        m = re.match(r'^/clientes/(\d+)/seguimiento$', path)
+        if m and method == 'POST':
+            try:
+                dias = int(f.get('dias', ''))
+            except ValueError:
+                dias = -1
+            lead_watch.set_follow_up(con, int(m.group(1)), a['id'], dias)
+            return self.redirect('/clientes' + (('?estado=' + query['estado']) if query.get('estado') else ''))
         m = re.match(r'^/clientes/(\d+)/(whatsapp|estado)$', path)
         if m:
             lid = int(m.group(1))

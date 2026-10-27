@@ -67,6 +67,39 @@ def set_status(con, lead_id, agency_id, status, now=None):
     return True
 
 
+FOLLOW_UP_DAYS = (1, 3, 7)  # Mañana · En 3 días · En una semana; 0 clears it
+
+
+def today_cdmx(now=None):
+    """Mexico City calendar day (no DST since 2022: UTC-6)."""
+    if now is not None:
+        return _now(now).date()
+    return (datetime.datetime.utcnow() - datetime.timedelta(hours=6)).date()
+
+
+def set_follow_up(con, lead_id, agency_id, days, today=None):
+    """Remind the agent to follow up in N days (1/3/7), or clear it (0). Only the agency's own leads."""
+    if days not in FOLLOW_UP_DAYS + (0,):
+        return False
+    if not _own_lead(con, lead_id, agency_id):
+        return False
+    day = None if days == 0 else (today or today_cdmx()) + datetime.timedelta(days=days)
+    con.execute('UPDATE leads SET follow_up_on=? WHERE id=?', (day.isoformat() if day else None, lead_id))
+    db.audit(con, 'agency:%d' % agency_id, 'lead_follow_up', 'lead:%d %s' % (lead_id, day.isoformat() if day else 'none'))
+    con.commit()
+    return True
+
+
+def follow_up_due_sql():
+    return "follow_up_on IS NOT NULL AND follow_up_on <= ? AND status IN ('nuevo','contactado','cita')"
+
+
+def follow_up_count(con, agency_id, today=None):
+    """Open leads whose follow-up day is today or already passed."""
+    return con.execute('SELECT COUNT(*) FROM leads WHERE agency_id=? AND ' + follow_up_due_sql(),
+                       (agency_id, (today or today_cdmx()).isoformat())).fetchone()[0]
+
+
 def overdue(con, minutes=5, now=None):
     ensure_columns(con)
     n = _now(now)

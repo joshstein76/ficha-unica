@@ -185,9 +185,11 @@ def dashboard(con, ctx, welcome=False):
     leads = con.execute('SELECT * FROM leads WHERE agency_id=? ORDER BY id DESC LIMIT 5', (a['id'],)).fetchall()
     n_stale = len(price_check.stale_listings(con, a['id']))
     n_late = late_count(con, a['id'])
+    n_fu = lead_watch.follow_up_count(con, a['id'])
     body = pilot_notice(a) + (('<div class="notice err">⏰ %d cliente%s sin respuesta hace más de 5 minutos. <a href="/clientes?estado=nuevo">Respóndeles ya</a></div>'
              % (n_late, '' if n_late == 1 else 's')) if n_late else '') + (('<div class="notice warn">%d precio%s sin confirmar en 30 días. <a href="/precios">Confírmalos con un toque</a></div>'
-             % (n_stale, '' if n_stale == 1 else 's')) if n_stale else '') + ('%s<div><h1>%s, %s</h1><p class="muted">Tu sitio: <a href="%s" target="_blank" rel="noopener">%s</a></p></div>'
+             % (n_stale, '' if n_stale == 1 else 's')) if n_stale else '') + (('<div class="notice warn">📅 %d cliente%s para dar seguimiento hoy. <a href="/clientes?estado=hoy">Verlos</a></div>'
+             % (n_fu, '' if n_fu == 1 else 's')) if n_fu else '') + ('%s<div><h1>%s, %s</h1><p class="muted">Tu sitio: <a href="%s" target="_blank" rel="noopener">%s</a></p></div>'
             '<div class="stats"><div class="stat"><b>%d</b><small>Propiedades publicadas</small></div>'
             '<a class="stat" href="/plan" style="text-decoration:none;color:inherit"><b>%d/%d</b><small>Usadas en plan %s · cambiar</small></a>'
             '<div class="stat"><b>%d</b><small>Clientes nuevos</small></div>'
@@ -349,7 +351,19 @@ def _age_min(created_at):
     return int((_dt.datetime.utcnow() - t).total_seconds() // 60)
 
 
-def _leads_list(con, rows, ctx=None):
+FOLLOW_UP_CHOICES = [(1, 'Mañana'), (3, 'En 3 días'), (7, 'En una semana')]
+MESES = ('ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic')
+
+
+def _short_day(iso):
+    """'2026-10-29' → '29 oct'."""
+    try:
+        return '%d %s' % (int(iso[8:10]), MESES[int(iso[5:7]) - 1])
+    except (TypeError, ValueError, IndexError):
+        return iso or ''
+
+
+def _leads_list(con, rows, ctx=None, today=None):
     out = []
     for r in rows:
         lst = con.execute('SELECT title, ref FROM listings WHERE id=?', (r['listing_id'],)).fetchone() if r['listing_id'] else None
@@ -358,11 +372,19 @@ def _leads_list(con, rows, ctx=None):
         age = _age_min(r['created_at']) if waiting else None
         late = waiting and age is not None and age >= 5
         badge = ('<span class="pill error">⏰ sin respuesta · %s</span>' % ('%d min' % age if age < 120 else '%d h' % (age // 60))) if late else ''
+        fu = r['follow_up_on'] if 'follow_up_on' in keys else None
+        if fu and r['status'] in ('nuevo', 'contactado', 'cita'):
+            due = fu <= (today or lead_watch.today_cdmx()).isoformat()
+            badge += '<span class="pill %s">📅 %s</span>' % ('pendiente' if due else '', 'seguimiento hoy' if due else 'seguimiento ' + e(_short_day(fu)))
         chips = ''
         if ctx:
             chips = '<form class="row" method="post" action="/clientes/%d/estado">%s%s</form>' % (r['id'], csrf_field(ctx), ''.join(
                 '<button class="btn small %s" name="status" value="%s">%s</button>' % ('' if k == r['status'] else 'ghost', k, v)
                 for k, v in LEAD_STATUSES))
+            if r['status'] in ('nuevo', 'contactado', 'cita'):
+                chips += ('<form class="row" method="post" action="/clientes/%d/seguimiento">%s<span class="small muted">Recordarme:</span>%s</form>'
+                          % (r['id'], csrf_field(ctx), ''.join('<button class="btn ghost small" name="dias" value="%d">%s</button>' % (d, t)
+                                                               for d, t in FOLLOW_UP_CHOICES + ([(0, 'Quitar')] if fu else []))))
         out.append('<div class="card%s" style="gap:6px"><div class="row" style="justify-content:space-between"><b>%s</b>'
                    '<span class="row">%s<span class="pill %s">%s</span></span></div><span class="small muted">%s · %s · %s</span>%s'
                    '<p class="small" style="margin:0">%s</p><div class="row">%s%s</div>%s</div>' % (
@@ -386,18 +408,23 @@ def leads(con, ctx, estado=None):
     a = ctx['agency']
     lead_watch.ensure_columns(con)
     q, args = "SELECT * FROM leads WHERE agency_id=?", [a['id']]
-    if estado in dict(LEAD_STATUSES):
+    if estado == 'hoy':
+        q += ' AND ' + lead_watch.follow_up_due_sql()
+        args.append(lead_watch.today_cdmx().isoformat())
+    elif estado in dict(LEAD_STATUSES):
         q += ' AND status=?'
         args.append(estado)
     else:
         q += " AND status!='descartado'"
     rows = con.execute(q + ' ORDER BY id DESC LIMIT 200', args).fetchall()
     late = late_count(con, a['id'])
+    n_fu = lead_watch.follow_up_count(con, a['id'])
     tabs = '<div class="row">%s</div>' % ''.join(
         '<a class="btn small %s" href="/clientes%s">%s</a>' % ('' if (estado or '') == k else 'ghost', ('?estado=' + k) if k else '', v)
-        for k, v in [('', 'Todos')] + LEAD_STATUSES)
+        for k, v in [('', 'Todos'), ('hoy', 'Seguimiento hoy' + (' · %d' % n_fu if n_fu else ''))] + LEAD_STATUSES)
     body = ('<h1>Clientes</h1>%s<p class="muted small">Respóndeles en menos de 5 minutos: es lo que más cierra. '
-            'Al tocar "Responder por WhatsApp" se abre tu mensaje listo y lo marcamos como contactado.</p>%s%s') % (
+            'Al tocar "Responder por WhatsApp" se abre tu mensaje listo y lo marcamos como contactado. '
+            'Con "Recordarme" el cliente vuelve a aparecer en Seguimiento hoy el día que elijas.</p>%s%s') % (
         notice('Tienes %d cliente%s esperando respuesta hace más de 5 minutos.' % (late, '' if late == 1 else 's'), 'err') if late else '',
         tabs, _leads_list(con, rows, ctx) if rows else '<p class="muted">No hay clientes en esta vista.</p>')
     return layout('Clientes', body, ctx, 'clientes')

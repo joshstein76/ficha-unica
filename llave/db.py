@@ -72,6 +72,9 @@ def init(con):
     ucols = {r[1] for r in con.execute('PRAGMA table_info(users)')}
     if 'novedades_seen' not in ucols:  # last Novedades date this user opened (YYYY-MM-DD)
         con.execute('ALTER TABLE users ADD COLUMN novedades_seen TEXT')
+    lcols = {r[1] for r in con.execute('PRAGMA table_info(leads)')}
+    if 'follow_up_on' not in lcols:  # 'Seguimiento' reminder day (YYYY-MM-DD, CDMX)
+        con.execute('ALTER TABLE leads ADD COLUMN follow_up_on TEXT')
     for col in ('slug', 'bio', 'zones'):  # agent public profile
         if col not in ucols:
             con.execute('ALTER TABLE users ADD COLUMN %s TEXT' % col)
