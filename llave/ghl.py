@@ -1,4 +1,5 @@
-"""GoHighLevel plan + DRY-RUN outbox. MVP: no network, no writes, nothing is ever sent to a lead."""
+"""GoHighLevel plan + DRY-RUN outbox: nothing is ever sent to a lead. The only live part is the contact/opportunity copy
+in llave/ghl_live.py (no messaging)."""
 import json
 import os
 import sys
@@ -93,8 +94,6 @@ def queue_for_lead(con, lead_id):
     if not lead or lead['status'] == 'descartado' or is_blocked(lead['name'] or '', lead['email'] or ''):
         return []
     ag = con.execute('SELECT * FROM agencies WHERE id=?', (lead['agency_id'],)).fetchone()
-    if os.environ.get('LLAVE_GHL_LIVE') == '1' and ag['ghl_location_id']:
-        raise NotImplementedError('Live GHL off in MVP')
     owner = split = canon = None
     if lead['listing_id']:
         canon = db.canonical(con, lead['listing_id'])
@@ -110,4 +109,6 @@ def queue_for_lead(con, lead_id):
                     (op['kind'], 'lead:%d' % lead_id, json.dumps(op, ensure_ascii=False)))
     con.execute("UPDATE leads SET ghl_status='dry_run' WHERE id=?", (lead_id,))
     con.commit()
+    from . import ghl_live  # late import: ghl_live uses this module
+    ghl_live.enqueue(con, 'fu.lead', 'lead:%d' % lead_id, {'lead_id': lead_id})  # copy into the Ficha Única sub-account
     return ops

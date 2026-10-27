@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import threading
 
-from .. import auth, billing, calculadoras, cards, db, formatos, operaciones, geo, importer, lead_watch, media, ml_oauth, novedades, photo_fetch, photos, price_check, replies, stats, whatsapp
+from .. import auth, billing, calculadoras, cards, db, formatos, ghl_live, operaciones, geo, importer, lead_watch, media, ml_oauth, novedades, photo_fetch, photos, price_check, replies, stats, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
@@ -434,6 +434,7 @@ class Handler(BaseHTTPRequestHandler):
             con.execute("UPDATE agencies SET plan='gratis' WHERE id=?", (a['id'],))
             db.audit(con, 'user:%d' % uid, 'plan_change_downgrade', '%s -> gratis (no subscription)' % a['plan'])
             con.commit()
+            ghl_live.plan_changed(con, a['id'])
             ctx['agency'] = con.execute('SELECT * FROM agencies WHERE id=?', (a['id'],)).fetchone()
             return self.send(panel.plans(con, ctx, ok='Listo: ahora tienes el plan Gratis.'))
         try:
@@ -594,6 +595,7 @@ class Handler(BaseHTTPRequestHandler):
                             con.execute('INSERT OR IGNORE INTO portal_publications(listing_id, portal, enabled) VALUES (?,?,1)', (l['id'], p))
                     db.audit(con, actor, 'wizard_publish', 'listing:%d' % l['id'])
                     con.commit()
+                    ghl_live.first_publish(con, a['id'])
                     return self.redirect('/nueva/%d/lista' % l['id'])
                 return self.send(panel.wizard_3(ctx, l))
             return self.send(panel.wizard_done(ctx, l))
@@ -846,6 +848,7 @@ class Handler(BaseHTTPRequestHandler):
                 con.execute('UPDATE agencies SET plan=? WHERE id=?', (key, a['id']))
                 db.audit(con, actor, 'plan_change_test_mode', '%s -> %s (no payment)' % (a['plan'], key))
                 con.commit()
+                ghl_live.plan_changed(con, a['id'])
                 ctx['agency'] = con.execute('SELECT * FROM agencies WHERE id=?', (a['id'],)).fetchone()
                 return self.send(panel.plans(con, ctx, ok='Listo: ahora tienes el plan %s (modo prueba, sin cobro).' % key))
             return self.send(panel.plan_checkout(ctx, key))
@@ -1035,6 +1038,7 @@ def signup(con, f):
                       (aid, name, email, wa, auth.hash_password(pw))).lastrowid
     db.audit(con, 'user:%d' % uid, 'signup', 'agency:%d %s' % (aid, slug))
     con.commit()
+    ghl_live.enqueue_agent(con, aid, 'signup')
     return uid
 
 
@@ -1210,6 +1214,7 @@ def save_listing(con, a, uid, f, existing=None):
         lid = con.execute('INSERT INTO listings(%s) VALUES (%s)' % (cols, ','.join('?' * len(vals))), list(vals.values())).lastrowid
         db.audit(con, 'user:%d' % uid, 'listing_create', 'listing:%d' % lid)
     con.commit()
+    ghl_live.first_publish(con, a['id'])
     return lid
 
 

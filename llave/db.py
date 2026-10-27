@@ -83,6 +83,9 @@ def init(con):
             con.execute('ALTER TABLE agencies ADD COLUMN %s TEXT' % col)
     if 'plan_until' not in cols:  # pilot: plan given free until this date (tools/set_plan.py)
         con.execute('ALTER TABLE agencies ADD COLUMN plan_until TEXT')
+    ocols = {r[1] for r in con.execute('PRAGMA table_info(outbox)')}
+    if 'attempts' not in ocols:  # live GHL sync retries (llave/ghl_live.py)
+        con.execute('ALTER TABLE outbox ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0')
     con.execute("CREATE TABLE IF NOT EXISTS stripe_events ("  # one row per Stripe event id we processed: replays are no-ops
                 "event_id TEXT PRIMARY KEY, type TEXT NOT NULL, outcome TEXT, received_at TEXT NOT NULL DEFAULT (datetime('now')))")
     # Operaciones (deals, deal_tasks) are new tables: CREATE TABLE IF NOT EXISTS in schema.sql covers older databases

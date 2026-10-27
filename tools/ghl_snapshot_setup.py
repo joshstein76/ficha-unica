@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ficha Unica Agente snapshot: idempotent setup of the API-scriptable parts of ONE target GHL location.
+"""Ficha Unica platform sub-account: idempotent setup of the API-scriptable parts (custom fields + tags; pipelines are listed to create by hand).
 
 DRY-RUN by default: prints the plan, writes nothing. Existing items are read (GET) first so nothing is duplicated.
 Writes happen only with BOTH the --apply flag AND env FU_GHL_APPLY_APPROVED=1.
@@ -10,26 +10,26 @@ import argparse, json, os, subprocess, sys
 
 BASE = 'https://services.leadconnectorhq.com'
 
+# Platform sub-account "Ficha Única": agents are our customers, site leads are copied here (llave/ghl_live.py).
 PIPELINES = {
-    'Compradores': ['Nuevo', 'Contactado', 'Cita agendada', 'Visitó', 'Oferta', 'Cerrado ganado', 'Cerrado perdido'],
-    'Vendedores/Captación': ['Nuevo', 'Valuación', 'Firma de exclusiva', 'Publicado', 'Vendido', 'Perdido'],
-    'Rentas': ['Nuevo', 'Contactado', 'Visita', 'Solicitud', 'Póliza (RentaPóliza)', 'Firmado', 'Perdido'],
+    'Agentes': ['Registrado', 'Primera propiedad publicada', 'Pro', 'Pro + IA', 'Canceló'],
+    'Leads de sitios': ['Nuevo', 'Contactado por el asesor', 'Visita', 'Cerrado', 'Perdido'],
 }
 
 # (fieldKey suffix, display name, dataType)
 CUSTOM_FIELDS = [
+    ('fu_agency_slug', 'FU Agency Slug', 'TEXT'),
+    ('fu_plan', 'FU Plan', 'TEXT'),
+    ('fu_site_url', 'FU Site URL', 'TEXT'),
+    ('fu_listings_published', 'FU Listings Published', 'NUMERICAL'),
     ('fu_listing_ref', 'FU Listing Ref', 'TEXT'),
     ('fu_listing_url', 'FU Listing URL', 'TEXT'),
-    ('fu_listing_price', 'FU Listing Price', 'NUMERICAL'),
-    ('fu_operation', 'FU Operation', 'TEXT'),
-    ('fu_colonia', 'FU Colonia', 'TEXT'),
-    ('fu_budget', 'FU Budget', 'NUMERICAL'),
-    ('fu_source', 'FU Source', 'TEXT'),
     ('fu_agent', 'FU Agent', 'TEXT'),
+    ('fu_source', 'FU Source', 'TEXT'),
 ]
 
-# fu-portal-<name> is created on demand per portal, not here.
-TAGS = ['fu-lead', 'fu-web', 'fu-bolsa', 'fu-compra', 'fu-renta', 'fu-venta', 'fu-no-contactar']
+TAGS = ['fu-agente', 'fu-plan-gratis', 'fu-plan-pro', 'fu-plan-ia', 'fu-lead', 'fu-venta', 'fu-renta', 'fu-no-contactar']
+# fu-agencia-<slug> is created on demand per agency, not here.
 
 
 def norm(s):
@@ -43,8 +43,9 @@ def build_plan(existing):
     have_t = {norm(x) for x in existing.get('tags', [])}
     plan = []
     for name, stages in PIPELINES.items():
-        plan.append({'kind': 'pipeline', 'name': name, 'action': 'skip' if norm(name) in have_p else 'create',
-                     'payload': {'name': name, 'stages': [{'name': s, 'position': i} for i, s in enumerate(stages)]}})
+        # GHL's public API may not create pipelines: they are only listed ("CREATE IN UI"), never POSTed
+        plan.append({'kind': 'pipeline', 'name': name, 'action': 'skip' if norm(name) in have_p else 'ui',
+                     'stages': stages})
     for key, label, dtype in CUSTOM_FIELDS:
         exists = norm(key) in have_f or norm(label) in have_f
         plan.append({'kind': 'custom_field', 'name': key, 'action': 'skip' if exists else 'create',
@@ -80,15 +81,12 @@ def fetch_existing(tok, loc):
 
 
 def apply_plan(plan, tok, loc):
-    paths = {'pipeline': '/opportunities/pipelines', 'custom_field': '/locations/%s/customFields' % loc,
+    paths = {'custom_field': '/locations/%s/customFields' % loc,
              'tag': '/locations/%s/tags' % loc}
     for a in plan:
         if a['action'] != 'create':
             continue
-        body = dict(a['payload'])
-        if a['kind'] == 'pipeline':
-            body['locationId'] = loc
-        res = call('POST', tok, paths[a['kind']], body)
+        res = call('POST', tok, paths[a['kind']], dict(a['payload']))
         print('  %s %s -> %s' % (a['kind'], a['name'], 'ERROR' if res.get('_error') or res.get('statusCode') else 'ok'))
 
 
@@ -105,7 +103,10 @@ def main(argv=None):
         print('No credentials: planning against an EMPTY account (offline).')
     plan = build_plan(existing)
     for x in plan:
-        print('  [%s] %s: %s' % (x['action'].upper(), x['kind'], x['name']))
+        if x['action'] == 'ui':
+            print('  CREATE IN UI: %s: %s' % (x['name'], ', '.join(x['stages'])))
+        else:
+            print('  [%s] %s: %s' % (x['action'].upper(), x['kind'], x['name']))
     print('UI-only (not scripted): workflows, Conversation AI bot, calendars, email templates, forms, reputation, dashboard, snapshot creation.')
     todo = sum(1 for x in plan if x['action'] == 'create')
     if not a.apply:

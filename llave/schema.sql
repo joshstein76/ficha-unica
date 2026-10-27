@@ -155,8 +155,9 @@ CREATE TABLE IF NOT EXISTS outbox (
   kind TEXT NOT NULL,                     -- ghl.contact_upsert | ghl.opportunity | ghl.message | portal.<name>.<op>
   ref TEXT,                               -- e.g. lead:12, listing:3
   payload TEXT NOT NULL,                  -- json
-  status TEXT NOT NULL DEFAULT 'dry_run', -- dry_run | pending | sent | error
+  status TEXT NOT NULL DEFAULT 'dry_run', -- dry_run | pending | sent | error | failed (fu.* live rows: llave/ghl_live.py)
   response TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
