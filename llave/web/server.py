@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import threading
 
-from .. import auth, billing, cards, db, formatos, geo, importer, lead_watch, media, ml_oauth, novedades, photo_fetch, photos, price_check, replies, stats, whatsapp
+from .. import auth, billing, calculadoras, cards, db, formatos, operaciones, geo, importer, lead_watch, media, ml_oauth, novedades, photo_fetch, photos, price_check, replies, stats, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
@@ -625,6 +625,46 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(panel.services(ctx, con, ok='Listo: canjeado.'))
             except ValueError as ex:
                 return self.send(panel.services(ctx, con, error=str(ex)), 400)
+        if path == '/calculadoras':
+            return self.send(panel.calculadoras_index(ctx))
+        m = re.match(r'^/calculadoras/(neta|compra)$', path)
+        if m:
+            return self.send(panel.calculadora_page(ctx, m.group(1), query))
+        if path == '/operaciones':
+            return self.send(panel.operaciones_list(con, ctx, query.get('etapa', '')))
+        if path == '/operaciones/nueva':
+            if method != 'POST':
+                return self.send(panel.operaciones_form(con, ctx))
+            try:
+                did = operaciones.create(con, a['id'], f.get('client_name'), f.get('kind'), f.get('client_phone', ''),
+                                         int(f.get('listing') or 0) or None, to_cents(f.get('amount')), f.get('notes', ''))
+            except ValueError as ex:
+                return self.send(panel.operaciones_form(con, ctx, f, str(ex)), 400)
+            return self.redirect('/operaciones/%d' % did)
+        m = re.match(r'^/operaciones/(\d+)(?:/(etapa|notas|tarea)(?:/(\d+))?)?$', path)
+        if m:
+            did = int(m.group(1))
+            deal = operaciones.get(con, a['id'], did)
+            if not deal:
+                return self.send(panel.layout('No encontrada', panel.notice('No encontramos esa operación.', 'err'), ctx), 404)
+            err = ''
+            if method == 'POST' and m.group(2):
+                try:
+                    if m.group(2) == 'etapa':
+                        operaciones.set_stage(con, a['id'], did, f.get('stage'))
+                    elif m.group(2) == 'notas':
+                        operaciones.set_notes(con, a['id'], did, f.get('notes'))
+                    elif m.group(3):
+                        if not operaciones.set_task(con, a['id'], did, int(m.group(3)), f.get('done') == '1'):
+                            return self.send(panel.layout('No encontrada', panel.notice('No encontramos ese paso.', 'err'), ctx), 404)
+                    else:
+                        operaciones.add_task(con, a['id'], did, f.get('label'))
+                except ValueError as ex:
+                    err = str(ex)
+                if not err:
+                    return self.redirect('/operaciones/%d' % did)
+                deal = operaciones.get(con, a['id'], did)
+            return self.send(panel.operaciones_deal(con, ctx, deal, err), 400 if err else 200)
         if path == '/formatos' or path.startswith('/formatos/'):
             key = path[len('/formatos/'):] if path != '/formatos' else ''
             if not formatos.enabled() or not key:

@@ -130,6 +130,63 @@ class WebFlow(unittest.TestCase):
         finally:
             os.environ.pop('LLAVE_FORMATOS', None)
 
+    def test_calculadoras_render(self):
+        cookie, csrf = self.signup('Casas Calc', 'calc@ejemplo.test')
+        s, page, _ = req('app.fichaunica.localhost', '/calculadoras', cookie=cookie)
+        self.assertEqual(s, 200)
+        self.assertIn('Lo que recibe tu vendedor', page)
+        s, page, _ = req('app.fichaunica.localhost', '/calculadoras/neta', cookie=cookie)
+        self.assertIn('value="16"', page)
+        s, page, _ = req('app.fichaunica.localhost', '/calculadoras/neta?precio=1000000&comision=5&iva=16&hipoteca=&adeudos=&otros=', cookie=cookie)
+        self.assertIn('$942,000.00 MXN', page)
+        self.assertIn('confirma montos con tu notario', page)
+        s, page, _ = req('app.fichaunica.localhost', '/calculadoras/compra?precio=2000000&isai=3&honorarios=40000&avaluo=&otros=', cookie=cookie)
+        self.assertIn('$100,000.00 MXN', page)
+        s, page, _ = req('app.fichaunica.localhost', '/calculadoras/compra?precio=2000000&isai=', cookie=cookie)
+        self.assertIn('ISAI', page)
+        self.assertNotIn('Total de gastos', page)
+
+    def test_operaciones_flow_and_isolation(self):
+        cookie, csrf = self.signup('Casas Ops', 'ops@ejemplo.test')
+        cookie2, csrf2 = self.signup('Casas Otras', 'otras@ejemplo.test')
+        host = 'app.fichaunica.localhost'
+        s, _, _ = req(host, '/operaciones/nueva', {'client_name': 'Ana', 'kind': 'venta'}, cookie)
+        self.assertEqual(s, 403)  # CSRF
+        s, page, _ = req(host, '/operaciones/nueva', {'csrf': csrf, 'client_name': '', 'kind': 'venta'}, cookie)
+        self.assertEqual(s, 400)
+        s, _, h = req(host, '/operaciones/nueva', {'csrf': csrf, 'client_name': 'Ana <b>', 'kind': 'venta', 'amount': '2,500,000'}, cookie)
+        self.assertEqual(s, 303)
+        url = h['Location']
+        s, page, _ = req(host, url, cookie=cookie)
+        self.assertIn('Ana &lt;b&gt;', page)
+        self.assertIn('Certificado de libertad de gravamen', page)
+        self.assertIn('/formatos', page)
+        did = url.rsplit('/', 1)[1]
+        s, _, _ = req(host, url + '/etapa', {'stage': 'oferta'}, cookie)
+        self.assertEqual(s, 403)
+        s, _, _ = req(host, url + '/etapa', {'csrf': csrf, 'stage': 'oferta'}, cookie)
+        self.assertEqual(s, 303)
+        s, page, _ = req(host, '/operaciones?etapa=oferta', cookie=cookie)
+        self.assertIn('Ana &lt;b&gt;', page)
+        con = db.connect()
+        tid = con.execute('SELECT id FROM deal_tasks WHERE deal_id=? ORDER BY position LIMIT 1', (did,)).fetchone()[0]
+        s, _, _ = req(host, '%s/tarea/%d' % (url, tid), {'csrf': csrf, 'done': '1'}, cookie)
+        self.assertEqual(s, 303)
+        self.assertEqual(con.execute('SELECT done FROM deal_tasks WHERE id=?', (tid,)).fetchone()[0], 1)
+        # the other agency sees nothing and changes nothing
+        s, page, _ = req(host, url, cookie=cookie2)
+        self.assertEqual(s, 404)
+        s, page, _ = req(host, '/operaciones', cookie=cookie2)
+        self.assertNotIn('Ana', page)
+        s, _, _ = req(host, url + '/etapa', {'csrf': csrf2, 'stage': 'cerrada'}, cookie2)
+        self.assertEqual(s, 404)
+        s, _, _ = req(host, '%s/tarea/%d' % (url, tid), {'csrf': csrf2, 'done': '0'}, cookie2)
+        self.assertEqual(s, 404)
+        row = con.execute('SELECT stage FROM deals WHERE id=?', (did,)).fetchone()
+        self.assertEqual(row[0], 'oferta')
+        self.assertEqual(con.execute('SELECT done FROM deal_tasks WHERE id=?', (tid,)).fetchone()[0], 1)
+        con.close()
+
     def test_full_flow(self):
         cookie, csrf = self.signup('Casas Roma', 'maria@ejemplo.test')
         con = db.connect()

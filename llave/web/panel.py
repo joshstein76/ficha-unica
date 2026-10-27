@@ -2,7 +2,7 @@
 Pages are plain functions returning HTML; server.py handles routing, sessions and POSTs."""
 import json
 
-from .. import billing, db, formatos, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
+from .. import billing, calculadoras, db, formatos, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS)
 from .styles import BRAND_COLOR, FONTS, PANEL, PRECONNECT, logo
@@ -19,6 +19,8 @@ ICONS = {
     'estadisticas': '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
     'invitar': '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/>',
     'formatos': '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
+    'operaciones': '<path d="M4 5h5v14H4zM10 5h5v9h-5zM16 5h4v6h-4z"/>',
+    'calculadoras': '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/>',
     'publicar': '<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/>',
 }
 def props(n):
@@ -147,6 +149,7 @@ def greeting(now=None):
 HOME_TILES = [('propiedades', 'Mis propiedades', '/propiedades', ''), ('clientes', 'Mis clientes', '/clientes', ''),
               ('sitio', 'Mi sitio', '/sitio', ''), ('portales', 'Portales', '/portales', 'en camino'),
               ('publicar', 'Qué publicar', '/que-publicar', ''), ('academia', 'Academia', '/academia', 'pronto'),
+              ('operaciones', 'Operaciones', '/operaciones', ''), ('calculadoras', 'Calculadoras', '/calculadoras', ''),
               ('formatos', 'Formatos', '/formatos', ''), ('servicios', 'Servicios', '/servicios', '')]
 
 
@@ -681,6 +684,111 @@ def academy(ctx):
     body = ('<h1>Academia</h1><p class="muted">Clases cortas, en video y en español, para vender y rentar más con Ficha Única. '
             'Gratis para todos los asesores.</p><div class="grid2">%s</div>') % items
     return layout('Academia', body, ctx, 'academia')
+
+
+# ---------- calculadoras ----------
+CALCS = {
+    'neta': ('Lo que recibe tu vendedor', 'Hoja neta: del precio de venta, cuánto le queda al dueño después de comisión, deudas y gastos.',
+             [('precio', 'Precio de venta (MXN)', ''), ('comision', 'Comisión (%)', ''), ('iva', 'IVA sobre la comisión (%)', calculadoras.IVA_DEFAULT),
+              ('hipoteca', 'Saldo de hipoteca (MXN)', ''), ('adeudos', 'Adeudos: predial, agua, mantenimiento (MXN)', ''), ('otros', 'Otros gastos (MXN)', '')]),
+    'compra': ('Gastos de compra estimados', 'Lo que el comprador paga además del precio. El impuesto cambia por estado: escribe el que te dé tu notario.',
+               [('precio', 'Precio de compra (MXN)', ''), ('isai', 'Impuesto de adquisición, ISAI (%)', ''),
+                ('honorarios', 'Honorarios notariales y derechos (MXN)', ''), ('avaluo', 'Avalúo (MXN)', ''), ('otros', 'Otros gastos (MXN)', '')]),
+}
+
+
+def calculadoras_index(ctx):
+    cards = ''.join('<a class="card" href="/calculadoras/%s" style="text-decoration:none;color:inherit;gap:4px"><b>%s</b><span class="small muted">%s</span></a>'
+                    % (k, e(t), e(d)) for k, (t, d, _f) in CALCS.items())
+    return layout('Calculadoras', '<h1>Calculadoras</h1><p class="muted">Cuentas rápidas para tus clientes, listas para imprimir.</p><div class="grid2">%s</div>'
+                  '<p class="small muted">%s</p>' % (cards, e(calculadoras.NOTE)), ctx, 'inicio')
+
+
+def calculadora_page(ctx, kind, values):
+    title, about, fields = CALCS[kind]
+    result, error = '', ''
+    if any(values.get(n) for n, _l, _d in fields):  # the form is GET: results show on the same page
+        try:
+            r = getattr(calculadoras, kind)(**{n: values.get(n, '') for n, _l, _d in fields})
+            total = r['neto'] if kind == 'neta' else r['total']
+            rows = ''.join('<tr><td>%s</td><td style="text-align:right">%s</td></tr>' % (e(l), e(calculadoras.fmt(c))) for l, c in r['rows'])
+            extra = '' if kind == 'neta' else '<tr><td>Precio más gastos</td><td style="text-align:right">%s</td></tr>' % e(calculadoras.fmt(r['con_precio']))
+            result = ('<article class="card" style="gap:10px"><h2>%s</h2><table style="width:100%%">%s<tr><td><b>%s</b></td><td style="text-align:right"><b>%s</b></td></tr>%s</table>'
+                      '<p class="small muted">%s</p><div class="row noprint"><button class="btn small" onclick="window.print()">Imprimir o guardar PDF</button></div></article>'
+                      '<style>@media print{.top,.tabs,footer,.noprint,form{display:none!important}.card{border:0}}</style>') % (
+                e(title), rows, 'Neto para tu vendedor' if kind == 'neta' else 'Total de gastos', e(calculadoras.fmt(total)), extra, e(calculadoras.NOTE))
+        except ValueError as ex:
+            error = notice(str(ex), 'err')
+    inputs = ''.join('<label for="c-%s">%s<input id="c-%s" name="%s" type="text" inputmode="decimal" value="%s"></label>'
+                     % (n, e(l), n, n, e(values.get(n) if values.get(n) is not None and any(values.values()) else d)) for n, l, d in fields)
+    body = ('<a class="small noprint" href="/calculadoras">← Calculadoras</a><h1>%s</h1><p class="muted">%s</p>%s'
+            '<form class="stack card" method="get" action="/calculadoras/%s">%s<button class="btn">Calcular</button></form>%s') % (
+        e(title), e(about), error, kind, inputs, result)
+    return layout(title, body, ctx, 'inicio')
+
+
+# ---------- operaciones ----------
+def operaciones_list(con, ctx, stage=''):
+    a = ctx['agency']['id']
+    counts = operaciones.counts(con, a)
+    chips = '<a class="pill %s" href="/operaciones">Todas %d</a>' % ('ok' if not stage else 'pendiente', sum(counts.values())) + ''.join(
+        '<a class="pill %s" href="/operaciones?etapa=%s">%s %d</a>' % ('ok' if k == stage else 'pendiente', k, e(l), counts[k]) for k, l in operaciones.STAGES)
+    rows = operaciones.listing_all(con, a, stage)
+    cards = ''.join(
+        '<a class="card" href="/operaciones/%d" style="text-decoration:none;color:inherit;gap:4px"><b>%s</b><span class="small muted">%s%s</span>'
+        '<span class="small">%d de %d pasos</span><span class="pill pendiente">%s</span></a>'
+        % (d['id'], e(d['client_name']), e(d['kind'].capitalize()), (' · ' + e(calculadoras.fmt(d['amount_cents']))) if d['amount_cents'] is not None else '',
+           d['n_done'], d['n_tasks'], e(operaciones.STAGE_LABEL[d['stage']])) for d in rows)
+    empty = '<p class="muted">Todavía no tienes operaciones. Agrega la primera con un cliente que ya va en camino.</p>' if not stage else '<p class="muted">No hay operaciones en esta etapa.</p>'
+    body = ('<div class="row" style="justify-content:space-between"><h1>Operaciones</h1><a class="btn small" href="/operaciones/nueva">Nueva operación</a></div>'
+            '<p class="muted">Cada cliente en proceso, de la primera visita a la firma.</p><div class="row" style="flex-wrap:wrap">%s</div>'
+            '<div class="grid2">%s</div>') % (chips, cards or empty)
+    return layout('Operaciones', body, ctx, 'inicio')
+
+
+def operaciones_form(con, ctx, values=None, error=''):
+    v = values or {}
+    opts = '<option value="">Sin propiedad</option>' + ''.join(
+        '<option value="%d"%s>%s · %s</option>' % (l['id'], ' selected' if str(l['id']) == v.get('listing') else '', e(l['ref']), e(l['title']))
+        for l in con.execute('SELECT id, ref, title FROM listings WHERE agency_id=? ORDER BY id DESC', (ctx['agency']['id'],)))
+    kinds = ''.join('<option value="%s"%s>%s</option>' % (k, ' selected' if v.get('kind', 'venta') == k else '', k.capitalize()) for k in operaciones.KINDS)
+    body = ('<a class="small" href="/operaciones">← Operaciones</a><h1>Nueva operación</h1>%s'
+            '<form class="stack card" method="post" action="/operaciones/nueva">%s'
+            '<label for="o-name">Nombre del cliente<input id="o-name" name="client_name" value="%s" required></label>'
+            '<label for="o-phone">Teléfono o WhatsApp<input id="o-phone" name="client_phone" type="tel" value="%s"></label>'
+            '<label for="o-kind">Tipo<select id="o-kind" name="kind">%s</select></label>'
+            '<label for="o-listing">Propiedad<select id="o-listing" name="listing">%s</select></label>'
+            '<label for="o-amount">Monto (MXN, opcional)<input id="o-amount" name="amount" inputmode="decimal" value="%s"></label>'
+            '<label for="o-notes">Notas<textarea id="o-notes" name="notes" rows="3">%s</textarea></label>'
+            '<button class="btn">Crear operación</button></form>') % (
+        notice(error, 'err') if error else '', csrf_field(ctx), e(v.get('client_name')), e(v.get('client_phone')), kinds, opts, e(v.get('amount')), e(v.get('notes')))
+    return layout('Nueva operación', body, ctx, 'inicio')
+
+
+def operaciones_deal(con, ctx, d, error=''):
+    a, did = ctx['agency']['id'], d['id']
+    stages = ''.join('<option value="%s"%s>%s</option>' % (k, ' selected' if k == d['stage'] else '', e(l)) for k, l in operaciones.STAGES)
+    tasks = ''.join(
+        '<form method="post" action="/operaciones/%d/tarea/%d" class="row" style="margin:0">%s<input type="hidden" name="done" value="%d">'
+        '<button class="btn ghost small" aria-label="%s">%s</button><span%s>%s</span></form>'
+        % (did, t['id'], csrf_field(ctx), 0 if t['done'] else 1, 'Desmarcar' if t['done'] else 'Marcar como hecho', '☑' if t['done'] else '☐',
+           ' class="muted" style="text-decoration:line-through"' if t['done'] else '', e(t['label'])) for t in operaciones.tasks(con, a, did))
+    prop = (' · <b>%s</b> %s' % (e(d['listing_ref']), e(d['listing_title']))) if d['listing_id'] else ''
+    body = ('<a class="small" href="/operaciones">← Operaciones</a><h1>%s</h1>%s'
+            '<p class="muted">%s%s%s%s</p>'
+            '<form method="post" action="/operaciones/%d/etapa" class="row card">%s<label for="d-stage" style="flex:1">Etapa<select id="d-stage" name="stage">%s</select></label>'
+            '<button class="btn small">Cambiar etapa</button></form>'
+            '<section class="card" style="gap:8px"><h2>Pasos</h2>%s'
+            '<form method="post" action="/operaciones/%d/tarea" class="row" style="margin:0">%s<input name="label" placeholder="Agregar un paso" aria-label="Agregar un paso" style="flex:1">'
+            '<button class="btn small">Agregar</button></form></section>'
+            '<form method="post" action="/operaciones/%d/notas" class="stack card">%s<label for="d-notes">Notas<textarea id="d-notes" name="notes" rows="4">%s</textarea></label>'
+            '<button class="btn small">Guardar notas</button></form>'
+            '<a class="btn ghost" href="/formatos">Crear documento</a>') % (
+        e(d['client_name']), notice(error, 'err') if error else '', e(d['kind'].capitalize()),
+        (' · ' + e(calculadoras.fmt(d['amount_cents']))) if d['amount_cents'] is not None else '',
+        (' · ' + e(d['client_phone'])) if d['client_phone'] else '', prop,
+        did, csrf_field(ctx), stages, tasks, did, csrf_field(ctx), did, csrf_field(ctx), e(d['notes']))
+    return layout(d['client_name'], body, ctx, 'inicio')
 
 
 # ---------- formatos ----------
