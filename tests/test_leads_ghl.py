@@ -77,15 +77,14 @@ class T(unittest.TestCase):
                 self.assertNotIn('{', p['body']['text'])
             self.assertNotEqual(p['kind'], 'ghl.message')
 
-    def test_live_raises(self):
+    def test_live_flag_without_token_stays_dry_run(self):
         r = self.mk()
-        self.con.execute("UPDATE agencies SET ghl_location_id='LOC' WHERE id=1"); self.con.commit()
         os.environ['LLAVE_GHL_LIVE'] = '1'
         try:
-            with self.assertRaises(NotImplementedError):
-                ghl.queue_for_lead(self.con, r['id'])
+            ghl.queue_for_lead(self.con, r['id'])   # no FU_GHL_TOKEN: nothing pending, nothing raised
         finally:
             os.environ.pop('LLAVE_GHL_LIVE', None)
+        self.assertEqual(self.con.execute("SELECT COUNT(*) FROM outbox WHERE status='pending'").fetchone()[0], 0)
 
     def test_rentapoliza(self):
         self.assertIn('RentaPóliza', leads.rentapoliza_offer(db.canonical(self.con, 1)))

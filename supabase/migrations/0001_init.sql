@@ -235,8 +235,9 @@ create table public.outbox (
   payload    jsonb not null,
   status     text not null default 'dry_run',
   response   text,
+  attempts   integer not null default 0,
   created_at timestamptz not null default now(),
-  constraint outbox_status_chk check (status in ('dry_run','pending','sent','error'))
+  constraint outbox_status_chk check (status in ('dry_run','pending','sent','error','failed'))
 );
 create index ix_outbox_status on public.outbox(status, id);
 

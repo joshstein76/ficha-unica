@@ -22,7 +22,7 @@ import urllib.parse
 import urllib.request
 import uuid
 
-from . import db
+from . import db, ghl_live
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_FILE = os.path.join(ROOT, 'config', 'stripe.env')
@@ -257,6 +257,7 @@ def handle_event(con, raw_body, sig_header, now=None):
         raise BillingError('Evento inválido', 'json_invalido') from None
     if etype not in HANDLED_EVENTS:
         return {'status': 'ignored', 'outcome': 'tipo:' + etype}
+    before = _plans(con) if ghl_live.enabled() else None
     try:
         if not con.in_transaction:
             con.execute('BEGIN IMMEDIATE')  # take the write lock first: two deliveries of one event can't both apply
@@ -272,7 +273,15 @@ def handle_event(con, raw_body, sig_header, now=None):
     except Exception:
         con.rollback()
         raise
+    if before is not None:  # live GHL sync: one plan_change job per agency whose plan this event moved
+        for aid, plan in _plans(con).items():
+            if before.get(aid) != plan:
+                ghl_live.plan_changed(con, aid)
     return {'status': 'handled', 'outcome': outcome}
+
+
+def _plans(con):
+    return {r['id']: r['plan'] for r in con.execute('SELECT id, plan FROM agencies')}
 
 
 def _id(x):

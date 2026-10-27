@@ -4,6 +4,8 @@ SHELL=/bin/bash
 15 9 * * * set -a; . /srv/fichaunica-data/app.env; set +a; cd /srv/fichaunica/current && python3 tools/backup.py --prune >> /srv/fichaunica-data/logs/backup.log 2>&1
 # unanswered-lead reminders to agencies: every minute
 * * * * * set -a; . /srv/fichaunica-data/app.env; set +a; cd /srv/fichaunica/current && python3 tools/lead_watch_run.py >> /srv/fichaunica-data/logs/lead_watch.log 2>&1
+# live GHL copy of agents + site leads into the Ficha Única sub-account (contacts/opportunities only, no messages; needs LLAVE_GHL_LIVE=1, FU_GHL_TOKEN, FU_GHL_LOCATION_ID in app.env): every minute
+* * * * * set -a; . /srv/fichaunica-data/app.env; set +a; cd /srv/fichaunica/current && python3 tools/ghl_sync_run.py >> /srv/fichaunica-data/logs/ghl_sync.log 2>&1
 # weekly price check: Mondays 15:00 UTC (9 a.m. CDMX)
 0 15 * * 1 set -a; . /srv/fichaunica-data/app.env; set +a; cd /srv/fichaunica/current && python3 tools/price_check_weekly.py >> /srv/fichaunica-data/logs/price_check.log 2>&1
 # Cloud plan only: watchdog
