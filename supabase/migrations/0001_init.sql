@@ -190,6 +190,7 @@ create table public.leads (
   status          text not null default 'nuevo',
   ghl_status      text not null default 'pendiente',
   ghl_contact_id  text,
+  follow_up_on    date,                                                               -- 'Seguimiento' reminder day (CDMX)
   created_at      timestamptz not null default now(),
   constraint leads_source_chk check (source in ('sitio','bolsa','whatsapp') or source ~ '^portal:[a-z0-9_.-]+$'),
   constraint leads_status_chk check (status in ('nuevo','contactado','cita','cerrado','descartado')),

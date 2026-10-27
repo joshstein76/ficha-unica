@@ -123,6 +123,7 @@ CREATE TABLE IF NOT EXISTS leads (
   status TEXT NOT NULL DEFAULT 'nuevo',   -- nuevo | contactado | cita | cerrado | descartado
   ghl_status TEXT NOT NULL DEFAULT 'pendiente', -- pendiente | dry_run | enviado | error
   ghl_contact_id TEXT,
+  follow_up_on TEXT,                      -- 'Seguimiento' reminder day (YYYY-MM-DD, CDMX)
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
