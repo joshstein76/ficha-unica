@@ -49,7 +49,7 @@ def main():
     L += ['## Pipelines (%d)' % len(pipes)] + ['- ' + n for n in pipes]
     L += ['', "'LLAVE Leads' exists: %s (expected no)" % ('yes' if 'LLAVE Leads' in pipes else 'no'), '']
     canon = None
-    dbp = os.path.join(ROOT, 'data', 'llave.db')
+    dbp = db.DB_PATH
     if os.path.exists(dbp):
         try:
             con = db.connect(dbp)

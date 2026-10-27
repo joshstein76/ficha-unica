@@ -10,7 +10,7 @@ MAX_REQ = 20
 
 
 def main():
-    con = db.connect(os.path.join(ROOT, 'data', 'llave.db'))
+    con = db.connect(db.DB_PATH)  # LLAVE_DB on the server
     rows = con.execute('SELECT id, ref, street, ext_number, colonia, municipio, estado FROM listings WHERE lat IS NULL').fetchall()
     cache, reqs = {}, 0
     for r in rows:

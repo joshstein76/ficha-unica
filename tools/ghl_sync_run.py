@@ -10,7 +10,7 @@ if __name__ == '__main__':
     if not ghl_live.enabled():
         print('ghl sync off')
         sys.exit(0)
-    con = db.connect(os.path.join(ROOT, 'data', 'llave.db'))
+    con = db.connect(db.DB_PATH)  # LLAVE_DB on the server
     db.init(con)
     queued = ghl_live.sweep_first_publish(con)
     print('first_publish queued: %d' % queued, ghl_live.drain(con))

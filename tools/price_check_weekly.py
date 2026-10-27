@@ -6,6 +6,6 @@ sys.path.insert(0, ROOT)
 from llave import db, price_check  # noqa: E402
 
 if __name__ == '__main__':
-    con = db.connect(os.path.join(ROOT, 'data', 'llave.db'))
+    con = db.connect(db.DB_PATH)  # LLAVE_DB on the server
     db.init(con)
     print(price_check.weekly_run(con))
