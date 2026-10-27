@@ -82,6 +82,7 @@ def init(con):
         con.execute('ALTER TABLE agencies ADD COLUMN plan_until TEXT')
     con.execute("CREATE TABLE IF NOT EXISTS stripe_events ("  # one row per Stripe event id we processed: replays are no-ops
                 "event_id TEXT PRIMARY KEY, type TEXT NOT NULL, outcome TEXT, received_at TEXT NOT NULL DEFAULT (datetime('now')))")
+    # Operaciones (deals, deal_tasks) are new tables: CREATE TABLE IF NOT EXISTS in schema.sql covers older databases
     con.execute("UPDATE agencies SET plan='ia' WHERE plan IN ('agencia','pro_crm')")  # 10-19 plans
     con.commit()
 

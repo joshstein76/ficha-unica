@@ -199,6 +199,33 @@ create table public.leads (
 create index ix_leads_agency on public.leads(agency_id, created_at);
 create index ix_leads_phone_recent on public.leads(phone, created_at) where phone is not null;  -- rate limit
 
+-- ------------------------------------------------------------------ deals (Operaciones: deal tracker + checklist)
+create table public.deals (
+  id            bigint generated always as identity primary key,
+  agency_id     bigint not null references public.agencies(id) on delete cascade,
+  listing_id    bigint references public.listings(id) on delete set null,
+  client_name   text not null,
+  client_phone  text,
+  kind          text not null default 'venta',
+  stage         text not null default 'interesado',
+  amount_cents  bigint,
+  notes         text,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now(),
+  constraint deals_kind_chk check (kind in ('venta','renta')),
+  constraint deals_stage_chk check (stage in ('interesado','visita','oferta','apartado','firma','cerrada','perdida'))
+);
+create index ix_deals_agency on public.deals(agency_id, stage);
+
+create table public.deal_tasks (
+  id       bigint generated always as identity primary key,
+  deal_id  bigint not null references public.deals(id) on delete cascade,
+  label    text not null,
+  done     boolean not null default false,
+  position integer not null default 0
+);
+create index ix_deal_tasks_deal on public.deal_tasks(deal_id, position);
+
 -- ------------------------------------------------------------------ outbox (service role only)
 create table public.outbox (
   id         bigint generated always as identity primary key,

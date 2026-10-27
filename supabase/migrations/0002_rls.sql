@@ -43,6 +43,8 @@ alter table public.leads               enable row level security;
 alter table public.outbox              enable row level security;
 alter table public.audit               enable row level security;
 alter table public.ml_accounts         enable row level security;
+alter table public.deals               enable row level security;
+alter table public.deal_tasks          enable row level security;
 
 -- Belt and braces: no table privileges for anon; authenticated gets only what policies can use.
 revoke all on all tables in schema public from anon;
@@ -55,6 +57,8 @@ grant select, insert, update, delete on public.portal_publications to authentica
 grant select, insert, update, delete on public.shares              to authenticated;
 grant select, update                 on public.leads               to authenticated;   -- NO insert: submit_lead() only
 grant select, insert                 on public.photo_jobs          to authenticated;
+grant select, insert, update, delete on public.deals               to authenticated;
+grant select, insert, update, delete on public.deal_tasks          to authenticated;
 grant select, delete                 on public.ml_accounts         to authenticated;   -- tokens never exposed anyway
 -- outbox, audit: no grants at all.
 
@@ -171,6 +175,14 @@ create policy ml_accounts_delete on public.ml_accounts for delete to authenticat
   using (agency_id = public.current_agency_id() and public.current_role_name() = 'owner');
 -- Even with select, token columns hold only vault ids; vault.* is not exposed to clients.
 -- (Better: grant column-level select excluding *_secret_id; see SUPABASE-PORT.md open questions.)
+
+-- ------------------------------------------------------------------ deals / deal_tasks (Operaciones)
+-- Strictly own agency; a task is reachable only through a deal of the caller's agency.
+create policy deals_all on public.deals for all to authenticated
+  using (agency_id = public.current_agency_id()) with check (agency_id = public.current_agency_id());
+create policy deal_tasks_all on public.deal_tasks for all to authenticated
+  using (exists (select 1 from public.deals d where d.id = deal_id and d.agency_id = public.current_agency_id()))
+  with check (exists (select 1 from public.deals d where d.id = deal_id and d.agency_id = public.current_agency_id()));
 
 -- ------------------------------------------------------------------ outbox / audit
 -- RLS enabled, zero policies, zero grants: reachable only with the service role.

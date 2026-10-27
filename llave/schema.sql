@@ -126,6 +126,28 @@ CREATE TABLE IF NOT EXISTS leads (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Operaciones: one row per deal an agent is working (venta or renta), plus its checklist.
+CREATE TABLE IF NOT EXISTS deals (
+  id INTEGER PRIMARY KEY,
+  agency_id INTEGER NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+  listing_id INTEGER REFERENCES listings(id) ON DELETE SET NULL,
+  client_name TEXT NOT NULL,
+  client_phone TEXT,
+  kind TEXT NOT NULL DEFAULT 'venta',      -- venta | renta
+  stage TEXT NOT NULL DEFAULT 'interesado',-- interesado | visita | oferta | apartado | firma | cerrada | perdida
+  amount_cents INTEGER,                    -- agreed or offered amount, NULL = not set
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS deal_tasks (
+  id INTEGER PRIMARY KEY,
+  deal_id INTEGER NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  done INTEGER NOT NULL DEFAULT 0,
+  position INTEGER NOT NULL DEFAULT 0
+);
+
 -- Outbox for every outside call (GHL, portals). Dry-run writes here and stops.
 CREATE TABLE IF NOT EXISTS outbox (
   id INTEGER PRIMARY KEY,
@@ -146,3 +168,5 @@ CREATE TABLE IF NOT EXISTS audit (
 CREATE INDEX IF NOT EXISTS ix_listings_agency ON listings(agency_id, status);
 CREATE INDEX IF NOT EXISTS ix_listings_bolsa ON listings(share_in_bolsa, status);
 CREATE INDEX IF NOT EXISTS ix_leads_agency ON leads(agency_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_deals_agency ON deals(agency_id, stage);
+CREATE INDEX IF NOT EXISTS ix_deal_tasks_deal ON deal_tasks(deal_id, position);

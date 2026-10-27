@@ -14,7 +14,7 @@ class HomeTiles(unittest.TestCase):
     def test_tiles_are_honest_about_portals(self):
         h = panel.home_tiles()
         self.assertIn('en camino', h)
-        self.assertEqual(h.count('class="tile"'), 8)
+        self.assertEqual(h.count('class="tile"'), 10)
 
     def test_first_week_progress(self):
         h = panel.first_week(2, 5, [(True, 'a', '/a'), (True, 'b', '/b'), (False, 'c', '/c'), (False, 'd', '/d'), (False, 'e', '/e')])
