@@ -163,7 +163,8 @@ def first_week(done, total, steps):
     pct = int(100 * done / total)
     return ('<section class="card"><div class="row" style="justify-content:space-between"><h2>Tu primera semana</h2><b>%d/%d</b></div>'
             '<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="%d" aria-valuenow="%d"><i style="width:%d%%"></i></div>'
-            '<div class="list">%s</div></section>') % (done, total, total, done, pct, ''.join(
+            '<div class="list">%s</div><p class="small muted" style="margin:8px 0 0">¿Primera vez? Lee la clase '
+            '<a href="/academia/primera-propiedad">Tu primera propiedad en 10 minutos</a>.</p></section>') % (done, total, total, done, pct, ''.join(
         '<a class="row" href="%s" style="text-decoration:none;color:inherit"><span class="pill %s">%s</span>%s</a>'
         % (href, 'ok' if ok else 'pendiente', '✓' if ok else '•', e(t)) for ok, t, href in steps))
 
