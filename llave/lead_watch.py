@@ -100,6 +100,42 @@ def follow_up_count(con, agency_id, today=None):
                        (agency_id, (today or today_cdmx()).isoformat())).fetchone()[0]
 
 
+DIGEST_HOURS = (9, 20)  # CDMX: from 9:00 a.m., never after 8 p.m. (Josh's night rule)
+
+
+def follow_up_digest(con, now=None):
+    """Once a day per agency: one dry-run alert to the AGENCY listing today's due follow-ups. Never messages the lead."""
+    n = _now(now)
+    local = n - datetime.timedelta(hours=6)
+    if not DIGEST_HOURS[0] <= local.hour < DIGEST_HOURS[1]:
+        return 0
+    day = local.date().isoformat()
+    rows = con.execute(
+        "SELECT l.agency_id, l.name, a.whatsapp AS agency_whatsapp FROM leads l JOIN agencies a ON a.id=l.agency_id "
+        "WHERE l.follow_up_on IS NOT NULL AND l.follow_up_on <= ? AND l.status IN ('nuevo','contactado','cita')"
+        " ORDER BY l.agency_id, l.follow_up_on, l.id", (day,)).fetchall()
+    by_agency = {}
+    for r in rows:
+        by_agency.setdefault(r['agency_id'], []).append(r)
+    count = 0
+    for agency_id, leads in by_agency.items():
+        ref = 'follow_up_digest:%d:%s' % (agency_id, day)
+        if con.execute('SELECT 1 FROM outbox WHERE ref=?', (ref,)).fetchone():
+            continue
+        names = [(r['name'] or '').strip() or 'un cliente' for r in leads[:3]]
+        more = len(leads) - len(names)
+        who = ', '.join(names) + (' y %d más' % more if more else '')
+        text = '📅 Hoy toca dar seguimiento a %d cliente%s: %s. Velos aquí: %s/clientes?estado=hoy' % (
+            len(leads), '' if len(leads) == 1 else 's', who, db.origin('app'))
+        payload = {'kind': 'ghl.agent_alert', 'audience': 'agency', 'channel': 'whatsapp',
+                   'to_whatsapp': leads[0]['agency_whatsapp'], 'body': {'text': text}}
+        con.execute("INSERT INTO outbox(kind, ref, payload, status) VALUES ('ghl.agent_alert', ?, ?, 'dry_run')",
+                    (ref, json.dumps(payload, ensure_ascii=False)))
+        count += 1
+    con.commit()
+    return count
+
+
 def overdue(con, minutes=5, now=None):
     ensure_columns(con)
     n = _now(now)
