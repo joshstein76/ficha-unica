@@ -311,7 +311,7 @@ class WebFlow(unittest.TestCase):
         r = con.execute('SELECT * FROM listings WHERE agency_id=?', (aid,)).fetchone()
         self.assertEqual((r['status'], r['estado'], r['price_cents']), ('borrador', 'Ciudad de México', 320000000))
         con.close()
-        for path, text in (('/servicios', 'RentaPóliza'), ('/academia', 'Próximamente')):
+        for path, text in (('/servicios', 'RentaPóliza'), ('/academia', 'Tu primera propiedad en 10 minutos'), ('/academia/rentas-seguras', 'no asesoría legal')):
             s, page, _ = req('app.fichaunica.localhost', path, cookie=cookie)
             self.assertEqual(s, 200)
             self.assertIn(text, page)

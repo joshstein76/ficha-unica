@@ -395,6 +395,15 @@ class LessonCopyTest(unittest.TestCase):
         for title, desc in panel.LESSONS:
             self.assertNotIn('portales', (title + desc).lower())
 
+    def test_lesson_bodies_are_complete_and_never_promise_portals_or_results(self):
+        from llave import academia
+        self.assertEqual(len(academia.LESSONS), 6)
+        for slug, title, _d, mins, steps, tip in academia.LESSONS:
+            self.assertGreaterEqual(len(steps), 4, slug)
+            text = ' '.join([title, tip] + [t + x for t, x in steps]).lower()
+            self.assertNotIn('portales', text, slug)
+            self.assertNotIn('garantiz', text.replace('nadie puede garantizar', ''), slug)
+
 
 if __name__ == '__main__':
     unittest.main()

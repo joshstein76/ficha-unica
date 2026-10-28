@@ -701,6 +701,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(panel.novedades_page(ctx))
         if path == '/academia':
             return self.send(panel.academy(ctx))
+        if path.startswith('/academia/'):
+            page = panel.academy_lesson(ctx, path[len('/academia/'):])
+            if page is None:
+                return self.send('No encontrado', 404, 'text/plain; charset=utf-8')
+            return self.send(page)
         if path == '/propiedades/importar':
             if not db.plan_has(a, 'tools'):
                 return self.send(panel.upsell(ctx, 'tools', 'Importar desde Excel', 'propiedades'))

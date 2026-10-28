@@ -1,6 +1,7 @@
 """Novedades: short updates from us, newest first. Only things that already work in the app.
 Add an entry at the TOP: (YYYY-MM-DD, title, one-line body, internal link or '')."""
 NOVEDADES = [
+    ('2026-10-28', 'Academia: 6 clases', 'Clases cortas en español para publicar, fotografiar, responder y compartir mejor.', '/academia'),
     ('2026-10-26', 'Tu panel, más fácil', 'Ahora tu inicio tiene tus herramientas a un toque y una lista para tu primera semana.', '/'),
     ('2026-10-23', 'Confirma tus precios con un toque', 'Si un precio lleva 30 días sin confirmarse, te avisamos en tu inicio.', '/precios'),
     ('2026-10-19', 'Invita a un colega', 'Por cada colega que publique con tu enlace, tú ganas propiedades extra.', '/invitar'),
