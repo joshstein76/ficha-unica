@@ -2,7 +2,7 @@
 Pages are plain functions returning HTML; server.py handles routing, sessions and POSTs."""
 import json
 
-from .. import billing, calculadoras, db, formatos, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
+from .. import academia, billing, calculadoras, db, formatos, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS)
 from .styles import BRAND_COLOR, FONTS, PANEL, PRECONNECT, logo
@@ -148,7 +148,7 @@ def greeting(now=None):
 # (icon, label, href, tag): tag '' = ready, text = shown as a small pill
 HOME_TILES = [('propiedades', 'Mis propiedades', '/propiedades', ''), ('clientes', 'Mis clientes', '/clientes', ''),
               ('sitio', 'Mi sitio', '/sitio', ''), ('portales', 'Portales', '/portales', 'en camino'),
-              ('publicar', 'Qué publicar', '/que-publicar', ''), ('academia', 'Academia', '/academia', 'pronto'),
+              ('publicar', 'Qué publicar', '/que-publicar', ''), ('academia', 'Academia', '/academia', ''),
               ('operaciones', 'Operaciones', '/operaciones', ''), ('calculadoras', 'Calculadoras', '/calculadoras', ''),
               ('formatos', 'Formatos', '/formatos', ''), ('servicios', 'Servicios', '/servicios', '')]
 
@@ -670,14 +670,7 @@ SERVICES = [
     ('Marketing con IA y SEO', 'Ciao Bella Marketing', 'Campañas, contenido y posicionamiento en Google y en asistentes de IA.',
      'https://ciaobellamarketing.com', 'Conocer Ciao Bella'),
 ]
-LESSONS = [
-    ('Tu primera propiedad en 10 minutos', 'Del celular a tu sitio y a Google.'),
-    ('Fotos que venden con tu celular', 'Luz, ángulos y orden: lo que más cambia una ficha.'),
-    ('Aparecer en Google y en ChatGPT', 'Qué lee un buscador en tu ficha y cómo ayudarle.'),
-    ('Responder en 5 minutos por WhatsApp', 'El primer mensaje y cómo agendar la visita.'),
-    ('Compartir en la Bolsa sin perder comisión', 'Cómo funciona la división y qué acordar por escrito.'),
-    ('Rentas seguras', 'Contrato, póliza jurídica y entrega del inmueble.'),
-]
+LESSONS = [(t, d) for _slug, t, d, *_ in academia.LESSONS]  # social_kit keeps a copy; test_ai checks they match
 
 
 def services(ctx, con=None, ok='', error=''):
@@ -706,11 +699,27 @@ def services(ctx, con=None, ok='', error=''):
 
 
 def academy(ctx):
-    items = ''.join('<div class="card" style="gap:4px"><b>%d. %s</b><span class="small muted">%s</span><span class="pill pendiente">%s</span></div>'
-                    % (i + 1, e(t), e(d), 'Video en preparación' if i == 0 else 'Próximamente') for i, (t, d) in enumerate(LESSONS))
-    body = ('<h1>Academia</h1><p class="muted">Clases cortas, en video y en español, para vender y rentar más con Ficha Única. '
-            'Gratis para todos los asesores.</p><div class="grid2">%s</div>') % items
+    items = ''.join('<a class="card" href="/academia/%s" style="gap:4px;text-decoration:none;color:inherit"><b>%d. %s</b>'
+                    '<span class="small muted">%s</span><span class="small muted">%d min de lectura</span></a>'
+                    % (e(slug), i + 1, e(t), e(d), mins) for i, (slug, t, d, mins, _s, _tip) in enumerate(academia.LESSONS))
+    body = ('<h1>Academia</h1><p class="muted">Clases cortas en español para vender y rentar más con Ficha Única. '
+            'Gratis para todos los asesores. Los videos llegan después.</p><div class="grid2">%s</div>') % items
     return layout('Academia', body, ctx, 'academia')
+
+
+def academy_lesson(ctx, slug):
+    les = academia.lesson(slug)
+    if not les:
+        return None
+    _slug, title, summary, mins, steps, tip = les
+    prev, nxt = academia.neighbors(slug)
+    steps_html = ''.join('<div class="card" style="gap:4px"><b>%d. %s</b><span>%s</span></div>' % (i + 1, e(t), e(x)) for i, (t, x) in enumerate(steps))
+    nav = ''.join('<a class="btn small ghost" href="/academia/%s">%s</a>' % (e(o[0]), lab) for o, lab in
+                  ((prev, '← ' + e(prev[1]) if prev else ''), (nxt, e(nxt[1]) + ' →' if nxt else '')) if o)
+    body = ('<p class="small"><a href="/academia">← Academia</a></p><h1>%s</h1><p class="muted">%s · %d min de lectura</p>%s'
+            '<section class="card"><b>Para recordar</b><p style="margin:0">%s</p></section>'
+            '<div class="row" style="gap:8px;flex-wrap:wrap">%s</div>') % (e(title), e(summary), mins, steps_html, e(tip), nav)
+    return layout(title, body, ctx, 'academia')
 
 
 # ---------- calculadoras ----------
