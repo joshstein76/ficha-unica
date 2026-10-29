@@ -201,8 +201,9 @@ def dashboard(con, ctx, welcome=False):
     n_list = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status IN ('activa','apartada')", (a['id'],)).fetchone()[0]
     n_all = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
     n_new = con.execute("SELECT COUNT(*) FROM leads WHERE agency_id=? AND status='nuevo'", (a['id'],)).fetchone()[0]
+    live = [k for k, p in registry.PORTALS.items() if p['status'] in ('open', 'api')]
     n_feed = con.execute("SELECT COUNT(*) FROM portal_publications p JOIN listings l ON l.id=p.listing_id "
-                         "WHERE l.agency_id=? AND p.enabled=1", (a['id'],)).fetchone()[0]
+                         "WHERE l.agency_id=? AND p.enabled=1 AND p.portal IN (%s)" % ','.join('?' * len(live)), (a['id'], *live)).fetchone()[0]
     limit = db.listing_limit(con, a)
     steps = [
         (n_all > 0, 'Sube tu primera propiedad', '/nueva'),
@@ -495,7 +496,8 @@ def portals(con, ctx, flash=''):
     a = ctx['agency']
     rows = con.execute("SELECT * FROM listings WHERE agency_id=? AND status IN ('activa','apartada') ORDER BY title", (a['id'],)).fetchall()
     base = db.site_url(a)
-    open_keys = [k for k, p in registry.PORTALS.items() if p['status'] in ('open', 'api')]
+    # per-listing switches only where the switch matters (the open feed always carries every public listing)
+    open_keys = [k for k, p in registry.PORTALS.items() if p['status'] in ('open', 'api') and k != 'llave_open']
     head = ''.join('<th scope="col">%s</th>' % e(registry.PORTALS[k]['name']) for k in open_keys)
     trs = []
     for r in rows:
@@ -511,9 +513,9 @@ def portals(con, ctx, flash=''):
     feeds = ''.join('<li><b>%s</b>: <code>%s/feeds/%s.xml</code></li>' % (e(p['name']), e(base), k)
                     for k, p in registry.PORTALS.items() if p['status'] == 'open')
     soon = ''.join('<li><b>%s</b>: <span class="muted">%s</span></li>' % (e(p['name']), e(p['notes']))
-                   for p in registry.PORTALS.values() if p['status'] == 'needs_agreement')
-    body = ('%s<h1>Portales</h1><p class="muted">Activa cada propiedad una vez. Cuando cambies precio o fotos, '
-            'los portales se actualizan solos.</p>'
+                   for p in registry.PORTALS.values() if p['status'] in ('needs_agreement', 'partner_only'))
+    body = ('%s<h1>Portales</h1><p class="muted">Aquí ves dónde sale cada propiedad. Hoy: tu feed abierto y Mercado Libre en modo prueba. '
+            'Los demás portales, en camino.</p>'
             '<section class="card"><div class="tbl" tabindex="0" role="region" aria-label="Publicaciones por portal"><table><thead><tr><th scope="col">Propiedad</th>%s</tr></thead><tbody>%s</tbody></table></div>'
             '<p class="small muted">Mercado Libre: por ahora generamos la publicación en modo prueba; '
             'para publicar de verdad conectarás tu propia cuenta.</p></section>'
@@ -532,8 +534,8 @@ def _ml_card(con, ctx):
             e(st.get('nickname') or ''), 'ok' if st['status'] == 'conectada' else 'pendiente',
             'conectada' if st['status'] == 'conectada' else 'demo, sin publicar de verdad', csrf_field(ctx))
     else:
-        inner = ('<p class="small muted" style="margin:0">Publica en Mercado Libre Inmuebles con tu propia cuenta. '
-                 'Tus precios y fotos se actualizan solos.</p><div class="row"><a class="btn small" href="/portales/mercadolibre/conectar">Conectar mi cuenta</a>'
+        inner = ('<p class="small muted" style="margin:0">Pronto publicarás en Mercado Libre Inmuebles con tu propia cuenta '
+                 '(Mercado Libre cobra su paquete aparte). Por ahora, solo vista previa.</p><div class="row"><a class="btn small" href="/portales/mercadolibre/conectar">Conectar mi cuenta</a>'
                  '%s</div>') % ('' if st.get('configured') else
                                 '<form method="post" action="/portales/mercadolibre/conectar">%s<input type="hidden" name="demo" value="1">'
                                 '<button class="btn ghost small">Ver demo</button></form>' % csrf_field(ctx))
@@ -995,7 +997,6 @@ def wizard_3(ctx, l, error=''):
     body = ('%s<h1>Revisa y publica</h1>%s<form class="stack card" method="post" action="/nueva/%d/3">%s'
             '<label>Título<input name="title" value="%s" maxlength="100" required></label>'
             '<label>Descripción<textarea name="description">%s</textarea></label>'
-            '<label class="check"><input type="checkbox" name="portales" value="1" checked> También en portales y buscadores gratuitos</label>'
             '<button class="btn">Publicar en mi sitio</button></form>'
             '<p class="small muted">Podrás cambiar todo después en Propiedades.</p>') % (
         _steps(3), notice(error, 'err'), l['id'], csrf_field(ctx),
@@ -1080,7 +1081,7 @@ def profile(ctx, ok='', error=''):
 
 # ---------- plans (TEST MODE until llave/billing.py is configured; then Stripe takes the payment) ----------
 PLANS = [
-    ('gratis', 'Gratis', 0, ['Tu sitio en una dirección gratis', '1 propiedad', 'Portales y buscadores gratuitos', 'Clientes directo a tu WhatsApp']),
+    ('gratis', 'Gratis', 0, ['Tu sitio en una dirección gratis', '1 propiedad', 'Clientes directo a tu WhatsApp']),
     ('pro', 'Pro', 499, ['Todo lo de Gratis', '5 propiedades', 'Tu propio dominio', 'Imágenes para Instagram y ficha para imprimir',
                          'Importa tus propiedades desde Excel', 'Bolsa 50/50 con otros asesores', 'Estadísticas completas']),
     ('ia', 'Pro + IA', 999, ['Todo lo de Pro', '25 propiedades', 'Títulos y descripciones con IA, en español e inglés', 'Revisión y orden de tus fotos',
