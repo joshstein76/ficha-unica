@@ -3,7 +3,7 @@ Every number comes from the database; nothing is invented (no events, no app car
 import json
 import os
 
-from . import db, lead_watch, novedades, price_check
+from . import db, lead_watch, novedades, price_check, replies
 
 
 def enabled():
@@ -39,7 +39,8 @@ def build(con, ctx, steps, services, welcome=False):
     n_stale = len(price_check.stale_listings(con, uid))
     views = con.execute("SELECT COALESCE(SUM(v.views),0) FROM listing_views v JOIN listings l ON l.id=v.listing_id WHERE l.agency_id=? "
                         "AND v.day >= date('now','-7 days')", (uid,)).fetchone()[0]
-    name = ctx['user']['name'].split(' ')[0] or a['name']
+    first = ctx['user']['name'].split(' ')[0]
+    name = a['name'] if (not first or first.lower() in replies.GENERIC_ACCOUNT) else first
     stats = [{'label': 'Clientes nuevos', 'value': str(n_new), 'sub': ('%d sin respuesta hace más de 5 min' % n_late) if n_late else 'Al día',
               'cta': {'label': 'Responder', 'href': '/clientes?estado=nuevo'} if n_new else None},
              {'label': 'Propiedades publicadas', 'value': str(n_list), 'sub': 'En tu sitio'}]
@@ -47,7 +48,7 @@ def build(con, ctx, steps, services, welcome=False):
         stats.insert(1, {'label': 'Visitas esta semana', 'value': '{:,}'.format(views), 'sub': 'A tus propiedades'})
     data = {'user': {'name': name, 'href': '/perfil'}, 'notifications': {'count': n_late + n_fu} if (n_late or n_fu) else {},
             'tabs': [{'label': l, 'href': h, 'current': k == 'inicio'} for k, l, h in KIT_TABS],
-            'primary': {'label': 'Subir propiedad', 'href': '/nueva'}, 'search': False,
+            'primary': {'label': 'Subir propiedad', 'href': '/nueva'}, 'search': False, 'arrange': False, 'help': {'href': '/academia'},
             'stats': [dict((k, v) for k, v in s.items() if v) for s in stats],
             'tools': [{'icon': i, 'label': l, 'hint': h, 'href': u} for i, l, h, u in tools()],
             'services': [{'name': b, 'mono': ''.join(w[0] for w in b.split()[:2]).upper(), 'text': d,
