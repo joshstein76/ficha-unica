@@ -182,18 +182,18 @@ def kit_page(con, ctx, steps, welcome=False):
             '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
             '<title>Inicio · Ficha Única</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="%s">'
             '<link rel="apple-touch-icon" href="/_s/apple-touch-icon.png">%s<link rel="stylesheet" href="%s">'
-            '<link rel="stylesheet" href="/_s/agent-dash.css">'
+            '<link rel="stylesheet" href="/_s/agent-dash.css?v=%s">'
             '<style>.skip{position:absolute;left:-9999px}.skip:focus{left:8px;top:8px;background:#fff;padding:8px;z-index:9}</style></head><body style="margin:0">'
             '<a class="skip" href="#dash">Saltar al contenido</a>%s%s<div id="dash"></div>'
             '<footer class="small muted" style="padding:16px;text-align:center">'
             '<form method="post" action="/salir" style="display:inline">%s<button class="btn ghost small">Salir</button></form> · '
             '<a href="/terminos">Términos</a> · <a href="/privacidad">Privacidad</a></footer>'
-            '<script src="/_s/agent-dash.js"></script>'
+            '<script src="/_s/agent-dash.js?v=%s"></script>'
             '<script>AgentDashKit.mount(document.getElementById("dash"),{brand:%s,data:%s,onAction:function(){}});'
             'if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js").catch(function(){})</script></body></html>') % (
-        BRAND_COLOR, PRECONNECT, FONTS, pilot_notice(ctx['agency']),
+        BRAND_COLOR, PRECONNECT, FONTS, kit_home.KIT_VERSION, pilot_notice(ctx['agency']),
         notice('¡Listo! Tu sitio ya existe. Ahora sube tu primera propiedad.') if welcome else '',
-        csrf_field(ctx), kit_home.js(json.loads(brand)), kit_home.js(data))
+        csrf_field(ctx), kit_home.KIT_VERSION, kit_home.js(json.loads(brand)), kit_home.js(data))
 
 
 def dashboard(con, ctx, welcome=False):

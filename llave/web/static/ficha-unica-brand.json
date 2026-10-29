@@ -47,6 +47,11 @@
     "copyFailed": "No se pudo copiar. Selecciona el código y cópialo.",
     "newsTitle": "Novedades",
     "eventsTitle": "Academia en vivo",
-    "addCal": "Agregar a mi calendario"
+    "addCal": "Agregar a mi calendario",
+    "alertsLabel": "Avisos",
+    "checklistTitle": "Tu primera semana",
+    "checklistProgress": "{done} de {total} listos",
+    "checkDone": "Listo",
+    "checkTodo": "Pendiente"
   }
 }

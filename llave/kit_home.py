@@ -1,7 +1,9 @@
-"""Home on the shared agent dashboard kit (functions/agent-dashboard, AgentDashKit 1.0.0). Off unless LLAVE_KIT_HOME=1.
+"""Home on the shared agent dashboard kit (functions/agent-dashboard, AgentDashKit 1.1.0). Off unless LLAVE_KIT_HOME=1.
 Every number comes from the database; nothing is invented (no events, no app card, no rewards that don't exist)."""
 import json
 import os
+
+KIT_VERSION = '1.1.0'  # cache-buster for /_s/agent-dash.* (static files are cached a year)
 
 from . import db, lead_watch, novedades, price_check, replies
 
@@ -59,18 +61,30 @@ def build(con, ctx, steps, services, welcome=False):
     for sv in data['services']:
         if sv['cta'] is None:
             sv.pop('cta')
-    nxt = None
+    # Urgent things go in the kit's 'alerts' (1.1.0), all at once instead of only the first one.
+    alerts = []
     if n_late:
-        nxt = {'title': 'Tienes %d cliente%s sin respuesta.' % (n_late, '' if n_late == 1 else 's'),
-               'body': 'Responder en pocos minutos es lo que más ayuda a avanzar.', 'cta': {'label': 'Responder ahora', 'href': '/clientes?estado=nuevo'}, 'dismissible': False}
-    elif n_fu:
-        nxt = {'title': '%d cliente%s para dar seguimiento hoy.' % (n_fu, '' if n_fu == 1 else 's'), 'cta': {'label': 'Verlos', 'href': '/clientes?estado=hoy'}}
-    elif n_stale:
-        nxt = {'title': '%d precio%s sin confirmar en 30 días.' % (n_stale, '' if n_stale == 1 else 's'), 'cta': {'label': 'Confirmar', 'href': '/precios'}}
-    else:
-        pend = [(t, h) for ok, t, h in steps if not ok]
-        if pend:
-            nxt = {'label': 'Tu primera semana', 'title': pend[0][0], 'body': '%d de %d pasos listos.' % (len(steps) - len(pend), len(steps)),
+        alerts.append({'tone': 'warn', 'icon': 'chat', 'title': '%d cliente%s sin respuesta hace más de 5 min' % (n_late, '' if n_late == 1 else 's'),
+                       'body': 'Responder rápido es lo que más ayuda a avanzar.', 'cta': {'label': 'Responder', 'href': '/clientes?estado=nuevo'}})
+    if n_fu:
+        alerts.append({'icon': 'cal', 'title': 'Hoy toca dar seguimiento a %d cliente%s' % (n_fu, '' if n_fu == 1 else 's'),
+                       'cta': {'label': 'Verlos', 'href': '/clientes?estado=hoy'}})
+    if n_stale:
+        alerts.append({'icon': 'tag', 'title': '%d precio%s sin confirmar en 30 días' % (n_stale, '' if n_stale == 1 else 's'),
+                       'cta': {'label': 'Confirmar', 'href': '/precios'}})
+    if alerts:
+        data['alerts'] = alerts
+    # First week = the kit's 'checklist' while steps are open; the next-step card points at the first open one.
+    pend = [(t, h) for ok, t, h in steps if not ok]
+    nxt = None
+    if pend:
+        data['checklist'] = {'title': 'Tu primera semana',
+                             'items': [{'label': t, 'done': True} if ok else {'label': t, 'href': h} for ok, t, h in steps]}
+        if not steps[0][0]:  # no property yet: lesson 1 first (same link the old first-week card had)
+            nxt = {'title': 'Tu primera propiedad en 10 minutos', 'body': 'Clase 1 de Academia: del celular a tu sitio.',
+                   'icon': 'bolt', 'cta': {'label': 'Ver la clase', 'href': '/academia/primera-propiedad'}}
+        else:
+            nxt = {'title': pend[0][0], 'body': '%d de %d pasos listos.' % (len(steps) - len(pend), len(steps)),
                    'cta': {'label': 'Ir', 'href': pend[0][1]}}
     if nxt:
         data['next'] = nxt
