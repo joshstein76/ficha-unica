@@ -410,6 +410,13 @@ class WebhookEvents(unittest.TestCase):
             self.feed(event('evt_end%d' % i, 'customer.subscription.updated', sub_obj(status=status)))
             self.assertEqual(self.agency()['plan'], 'gratis', status)
 
+    def test_newer_api_payload_shapes_still_map_the_plan(self):
+        # the webhook endpoint renders payloads in ITS API version (2026-09-30.endive), not our pinned one
+        for i, item in enumerate(({'price': 'price_ia_x'}, {'pricing': {'price_details': {'price': 'price_ia_x'}}},
+                                  {'plan': {'id': 'price_ia_x'}})):
+            self.assertEqual(billing._plan_of_subscription({'items': {'data': [item]}}), 'ia', i)
+        self.assertIsNone(billing._plan_of_subscription({'items': {'data': [{'pricing': {}}]}}))
+
     def test_old_subscription_events_never_touch_the_new_one(self):
         self.feed(checkout_event('evt_a', self.aid, 'pro', sub='sub_A'))
         self.feed(event('evt_a_del', 'customer.subscription.deleted', sub_obj('sub_A', 'canceled')))

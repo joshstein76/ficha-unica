@@ -306,8 +306,11 @@ def _plan_for_price(price_id):
 
 
 def _plan_of_subscription(sub):
+    # webhook payloads follow the endpoint's API version (2026-09-30.endive on Ficha's), not STRIPE_VERSION:
+    # accept price as object or bare id, the legacy plan, and the newer pricing.price_details.price
     for it in ((sub.get('items') or {}).get('data')) or []:
-        plan = _plan_for_price(((it.get('price') or {}).get('id')) or ((it.get('plan') or {}).get('id')))
+        pd = (it.get('pricing') or {}).get('price_details') or {}
+        plan = _plan_for_price(_id(it.get('price')) or _id(it.get('plan')) or _id(pd.get('price')))
         if plan:
             return plan
     return None

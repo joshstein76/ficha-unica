@@ -3,3 +3,4 @@ seed/*.local.md
 __pycache__/
 deploy/target.env
 config/*.env
+config/*.env.bak*
