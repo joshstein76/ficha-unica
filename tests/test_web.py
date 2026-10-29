@@ -319,6 +319,28 @@ class WebFlow(unittest.TestCase):
         self.assertEqual(s, 200)
         self.assertIn('Ciao Bella Marketing', page)
 
+    def test_kit_home_and_five_tabs_behind_switch(self):
+        cookie, csrf = self.signup('Kit Home', 'kit@ejemplo.test')
+        s, page, _ = req('app.fichaunica.localhost', '/', cookie=cookie)
+        self.assertNotIn('agent-dash.js', page)  # off by default: old Home
+        os.environ['LLAVE_KIT_HOME'] = '1'
+        try:
+            s, page, _ = req('app.fichaunica.localhost', '/', cookie=cookie)
+            self.assertEqual(s, 200)
+            self.assertIn('/_s/agent-dash.js', page)
+            self.assertNotIn('[PREMIO]', page)
+            m = re.search(r'data:(\{.*\}),onAction', page, re.S)
+            data = json.loads(m.group(1))
+            self.assertEqual([t['label'] for t in data['tabs']], ['Inicio', 'Clientes', 'Mi sitio', 'Crecer', 'Cuenta'])
+            s, page, _ = req('app.fichaunica.localhost', '/academia', cookie=cookie)
+            self.assertEqual(page.count('<nav class="tabs"'), 1)
+            self.assertIn('aria-current="page"', page)
+            for name in ('agent-dash.js', 'agent-dash.css', 'ficha-unica-brand.json'):
+                s, _p, _ = req('app.fichaunica.localhost', '/_s/' + name)
+                self.assertEqual(s, 200, name)
+        finally:
+            os.environ.pop('LLAVE_KIT_HOME', None)
+
     def test_mercadolibre_connect_demo(self):
         cookie, csrf = self.signup('Conecta ML', 'ml@ejemplo.test')
         s, page, _ = req('app.fichaunica.localhost', '/portales/mercadolibre/conectar', cookie=cookie)
