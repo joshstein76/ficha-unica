@@ -1081,7 +1081,7 @@ def profile(ctx, ok='', error=''):
 
 # ---------- plans (TEST MODE until llave/billing.py is configured; then Stripe takes the payment) ----------
 PLANS = [
-    ('gratis', 'Gratis', 0, ['Tu sitio en una dirección gratis', '1 propiedad', 'Portales: en camino', 'Clientes directo a tu WhatsApp']),
+    ('gratis', 'Gratis', 0, ['Tu sitio en una dirección gratis', '1 propiedad', 'Clientes directo a tu WhatsApp']),
     ('pro', 'Pro', 499, ['Todo lo de Gratis', '5 propiedades', 'Tu propio dominio', 'Imágenes para Instagram y ficha para imprimir',
                          'Importa tus propiedades desde Excel', 'Bolsa 50/50 con otros asesores', 'Estadísticas completas']),
     ('ia', 'Pro + IA', 999, ['Todo lo de Pro', '25 propiedades', 'Títulos y descripciones con IA, en español e inglés', 'Revisión y orden de tus fotos',
