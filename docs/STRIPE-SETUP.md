@@ -1,6 +1,6 @@
 # Stripe setup for Ficha Única (LLAVE): the exact clicks
 
-Merchant: **Ciao Bella Marketing**. Plans: **Pro MXN 499/month** and **Pro + IA MXN 999/month**, IVA included. Gratis is MXN 0 and never touches Stripe.
+Stripe account: **Ficha Única**, its own account inside the Ciao Bella Marketing organization (Josh 10-29, like Cerquito / IDX Bloom / Xin Puente); Ciao Bella Marketing, LLC stays the legal owner. Not the main Ciao Bella Marketing account. Plans: **Pro MXN 499/month** and **Pro + IA MXN 999/month**, IVA included. Gratis is MXN 0 and never touches Stripe.
 Code: `llave/billing.py` (written 2026-10-19, never run against the real Stripe: the first test-mode purchase is its first real test).
 Status: nothing here has been done. No Stripe account was created and no Stripe call was made while building this.
 
@@ -16,7 +16,7 @@ Status: nothing here has been done. No Stripe account was created and no Stripe 
 Until `config/stripe.env` is filled, none of this is active and plan changes stay in free TEST MODE exactly as before.
 
 ## Part 1. Stripe account and test mode
-1. Sign in at dashboard.stripe.com with the **Ciao Bella Marketing** account (if it does not exist yet: create it under the company's legal name, EIN and bank account; Josh does this himself).
+1. Sign in at dashboard.stripe.com and switch to the **Ficha Única** account (account picker, top left). If it does not exist yet, Josh creates it inside the Ciao Bella Marketing organization. Settings → Business → Public details: public name `Ficha Única`, statement descriptor `FICHAUNICA.MX`, Ficha support email/phone, icon + logo from iCloud `Ciao Bella Marketing/05 Marketing/Brand/2026-10-29 Stripe logos (pack 1)/`. The app sends no descriptor or account ID of its own: the account's settings are what agents see.
 2. Switch to **Test mode** (toggle at the top right). If Stripe shows **Sandbox** instead of "Test mode", use the sandbox: its keys also start with `sk_test_`.
 3. Everything below (products, webhook, portal) lives *per mode*: test and live are separate and nothing carries over.
 
@@ -92,7 +92,7 @@ In Stripe, also set **Settings → Billing → Subscriptions and emails → Mana
 
 ## Not verified, and for the lawyer / accountant
 - **Never run against the real Stripe.** The request fields, the API version pin (`2024-06-20` in `llave/billing.py`) and the webhook field names follow Stripe's documentation from memory. The first test-mode purchase is the real check; expect to fix small things.
-- **MXN on a US account.** Whether Ciao Bella Marketing's US Stripe account can show MXN prices and charge Mexican cards in MXN, what currency it settles in, and the conversion/FX fees: check in the dashboard and Stripe's pricing page, then confirm with one live purchase. Only card works for subscriptions (no OXXO/SPEI recurring).
+- **MXN on a US account.** Whether the Ficha Única Stripe account (Ciao Bella Marketing, a US company) can show MXN prices and charge Mexican cards in MXN, what currency it settles in, and the conversion/FX fees: check in the dashboard and Stripe's pricing page, then confirm with one live purchase. Only card works for subscriptions (no OXXO/SPEI recurring).
 - **IVA and facturas (CFDI).** The price says "IVA incluido", but that label does not register or pay any tax. Whether a US company selling a digital service to Mexican agents must register with SAT and collect/remit IVA, and how agents get a CFDI, is a Mexican tax lawyer/accountant question (same gate as Cerquito). Stripe Tax is **not** turned on. Do not promise facturas until this is answered.
 - **Terms and cancellation text.** Auto-renewal and cancellation wording in `/terminos` is a draft until the lawyer reviews it.
 - **Restricted keys.** The code accepts a restricted key (`rk_`) but the exact permissions it needs (Checkout Sessions: write, Customer portal: write) are untested. Use the normal secret key for the first run.

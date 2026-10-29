@@ -1,6 +1,6 @@
 """Stripe subscription billing for Ficha Única (Josh 10-19: the first agents pay).
 
-Merchant: Ciao Bella Marketing. Prices are MXN with IVA included (set on the Stripe prices, see docs/STRIPE-SETUP.md).
+Stripe account: Ficha Única (inside the Ciao Bella Marketing org; legal owner Ciao Bella Marketing). Prices are MXN with IVA included (set on the Stripe prices, see docs/STRIPE-SETUP.md).
 Stripe's REST API over urllib (no SDK, no third-party packages). Nothing here runs unless `enabled()`.
 
 Settings come from env vars or `config/stripe.env` (gitignored; production: LLAVE_STRIPE_ENV_FILE=/srv/fichaunica-data/stripe.env):
