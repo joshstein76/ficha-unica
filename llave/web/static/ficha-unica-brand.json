@@ -1,0 +1,52 @@
+{
+  "id": "ficha-unica",
+  "lang": "es-MX",
+  "name": "Ficha Única",
+  "mono": "FÚ",
+  "font": "Onest, Inter, -apple-system, Segoe UI, Roboto, system-ui, sans-serif",
+  "tokens": {
+    "bg": "#FFF8F3",
+    "ink": "#1F1A17",
+    "ink2": "#3D342E",
+    "muted": "#5E534B",
+    "line": "#F0E3D8",
+    "line2": "#D9C2B0",
+    "accent": "#FF6B1A",
+    "onAccent": "#1F1300",
+    "accentText": "#B83E06",
+    "soft": "#FFEBDD",
+    "card": "#FFFFFF"
+  },
+  "labels": {
+    "navLabel": "Principal",
+    "search": "Buscar",
+    "searchPh": "Busca clientes, fichas, mensajes",
+    "bell": "Avisos",
+    "bellUnread": "Avisos (nuevos)",
+    "help": "Ayuda",
+    "helpLabel": "Ayuda",
+    "account": "Mi cuenta",
+    "greeting": {
+      "morning": "Buenos días, {name}",
+      "afternoon": "Buenas tardes, {name}",
+      "evening": "Buenas noches, {name}"
+    },
+    "dateLine": "Así va tu negocio hoy, {date}.",
+    "statsLabel": "Resumen",
+    "nextLabel": "Tu siguiente paso",
+    "later": "Después",
+    "toolsTitle": "Tus herramientas",
+    "arrange": "Ordenar",
+    "svcTitle": "Crece con nuestros aliados",
+    "svcSub": "Un toque para empezar. Cada uno es su propia empresa.",
+    "sideLabel": "Más para ti",
+    "share": "Compartir",
+    "copy": "Copiar código",
+    "codeLabel": "Tu código",
+    "copied": "Copiado",
+    "copyFailed": "No se pudo copiar. Selecciona el código y cópialo.",
+    "newsTitle": "Novedades",
+    "eventsTitle": "Academia en vivo",
+    "addCal": "Agregar a mi calendario"
+  }
+}

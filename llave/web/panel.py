@@ -1,8 +1,9 @@
 """The agent panel (app.<base>): sign up, listings + photos, leads, portals, Bolsa, my site.
 Pages are plain functions returning HTML; server.py handles routing, sessions and POSTs."""
 import json
+import os
 
-from .. import academia, billing, calculadoras, db, formatos, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
+from .. import academia, billing, kit_home, calculadoras, db, formatos, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS)
 from .styles import BRAND_COLOR, FONTS, PANEL, PRECONNECT, logo
@@ -13,6 +14,8 @@ ICONS = {
     'clientes': '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
     'portales': '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
     'bolsa': '<path d="M7 7h10l-1 13H8z"/><path d="M9 7a3 3 0 0 1 6 0"/>',
+    'crecer': '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>',
+    'cuenta': '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
     'sitio': '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',
     'servicios': '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/>',
     'academia': '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/>',
@@ -43,10 +46,12 @@ def layout(title, body, ctx=None, tab=None, flash=''):
     nav = ''
     top_right = '<a class="btn ghost small" href="/entrar">Entrar</a>'
     if ctx:
+        kit = kit_home.enabled()
+        on = kit_home.TAB_OF.get(tab, tab) if kit else tab
         nav = '<nav class="tabs" aria-label="Secciones">%s</nav>' % ''.join(
-            '<a href="%s" class="%s"%s>%s<span>%s</span></a>' % (href, ('on ' if k == tab else '') + ('desk' if k in DESKTOP_ONLY else ''),
-                                                                 ' aria-current="page"' if k == tab else '', _icon(k), lab)
-            for k, lab, href in TABS)
+            '<a href="%s" class="%s"%s>%s<span>%s</span></a>' % (href, ('on ' if k == on else '') + ('desk' if k in DESKTOP_ONLY and not kit else ''),
+                                                                 ' aria-current="page"' if k == on else '', _icon(k), lab)
+            for k, lab, href in (kit_home.KIT_TABS if kit else TABS))
         top_right = ('<span class="row small">' + ('<a href="/admin">Admin</a>' if ctx['user']['role'] == 'admin' else '') +
                      '<a href="%s" target="_blank" rel="noopener">Ver mi sitio ↗</a>'
                      '<form method="post" action="/salir" style="margin:0">%s<button class="btn ghost small">Salir</button></form></span>'
@@ -169,6 +174,27 @@ def first_week(done, total, steps):
         % (href, 'ok' if ok else 'pendiente', '✓' if ok else '•', e(t)) for ok, t, href in steps))
 
 
+def kit_page(con, ctx, steps, welcome=False):
+    """Home on the shared agent dashboard kit (LLAVE_KIT_HOME=1). The kit draws its own header and five tabs."""
+    data = kit_home.build(con, ctx, steps, SERVICES, welcome)
+    brand = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'ficha-unica-brand.json'), encoding='utf-8').read()
+    return ('<!doctype html><html lang="es-MX"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
+            '<title>Inicio · Ficha Única</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="%s">'
+            '<link rel="apple-touch-icon" href="/_s/apple-touch-icon.png">%s<link rel="stylesheet" href="%s">'
+            '<link rel="stylesheet" href="/_s/agent-dash.css"></head><body style="margin:0">'
+            '<a class="skip" href="#dash">Saltar al contenido</a>%s%s<div id="dash"></div>'
+            '<footer class="small muted" style="padding:16px;text-align:center">'
+            '<form method="post" action="/salir" style="display:inline">%s<button class="btn ghost small">Salir</button></form> · '
+            '<a href="/terminos">Términos</a> · <a href="/privacidad">Privacidad</a></footer>'
+            '<script src="/_s/agent-dash.js"></script>'
+            '<script>AgentDashKit.mount(document.getElementById("dash"),{brand:%s,data:%s,onAction:function(){}});'
+            'if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js").catch(function(){})</script></body></html>') % (
+        BRAND_COLOR, PRECONNECT, FONTS, pilot_notice(ctx['agency']),
+        notice('¡Listo! Tu sitio ya existe. Ahora sube tu primera propiedad.') if welcome else '',
+        csrf_field(ctx), kit_home.js(json.loads(brand)), kit_home.js(data))
+
+
 def dashboard(con, ctx, welcome=False):
     a = ctx['agency']
     n_list = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status IN ('activa','apartada')", (a['id'],)).fetchone()[0]
@@ -186,6 +212,8 @@ def dashboard(con, ctx, welcome=False):
         (bool(a['whatsapp']), 'Agrega tu WhatsApp para recibir clientes', '/perfil'),
     ]
     done = sum(1 for s in steps if s[0])
+    if kit_home.enabled():
+        return kit_page(con, ctx, steps, welcome)
     leads = con.execute('SELECT * FROM leads WHERE agency_id=? ORDER BY id DESC LIMIT 5', (a['id'],)).fetchall()
     n_stale = len(price_check.stale_listings(con, a['id']))
     n_late = late_count(con, a['id'])
