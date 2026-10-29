@@ -99,9 +99,9 @@ def slugify(s):
 
 
 def site_url(agency):
-    """Public base URL of an agency site (custom domain once verified, else the free address)."""
+    """Public base URL of an agency site (custom domain once verified and the plan includes it, else the free address)."""
     a = dict(agency)
-    if a.get('custom_domain') and a.get('domain_verified_at'):
+    if a.get('custom_domain') and a.get('domain_verified_at') and plan_has(a, 'domain'):
         return 'https://' + a['custom_domain']
     return origin(a['slug'])
 
@@ -173,9 +173,13 @@ def canonical(con, listing_id):
 
 
 def public_listing_ids(con, agency_id, include_shared=True):
-    """Listings an agency site shows: its own public ones + active Bolsa shares."""
-    q = "SELECT id FROM listings WHERE agency_id=? AND status IN ('activa','apartada') ORDER BY updated_at DESC"
+    """Listings an agency site shows: its own public ones (newest first, only as many as the plan allows) + active Bolsa shares.
+    Over the limit (e.g. Pro -> Gratis after the pilot) the rest stay saved, just not public; they come back on upgrade."""
+    q = "SELECT id FROM listings WHERE agency_id=? AND status IN ('activa','apartada') ORDER BY updated_at DESC, id DESC"
     ids = [r['id'] for r in con.execute(q, (agency_id,))]
+    a = con.execute('SELECT * FROM agencies WHERE id=?', (agency_id,)).fetchone()
+    if a:
+        ids = ids[:listing_limit(con, a)]
     if include_shared:
         q2 = ("SELECT l.id FROM shares s JOIN listings l ON l.id=s.listing_id WHERE s.sharing_agency_id=? "
               "AND s.status='activa' AND l.share_in_bolsa=1 AND l.status IN ('activa','apartada')")

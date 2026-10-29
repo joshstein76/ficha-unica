@@ -21,7 +21,7 @@ class FeedsTest(unittest.TestCase):
         self.con = db.connect(os.path.join(self.tmp, 't.db'))
         db.init(self.con)
         c = self.con
-        c.execute("INSERT INTO agencies(id, slug, name, email) VALUES (1,'vive','VIVE Polanco','a@x.mx')")
+        c.execute("INSERT INTO agencies(id, slug, name, email, plan) VALUES (1,'vive','VIVE Polanco','a@x.mx','pro')")
         c.execute("INSERT INTO users(id, agency_id, name, email, password_hash) VALUES (1,1,'Ana','ana@x.mx','x')")
         today = datetime.date.today().isoformat()
         c.execute("""INSERT INTO listings(id, agency_id, agent_id, ref, slug, status, operation, property_type, title,
