@@ -338,6 +338,20 @@ class WebFlow(unittest.TestCase):
             for name in ('agent-dash.js', 'agent-dash.css', 'ficha-unica-brand.json'):
                 s, _p, _ = req('app.fichaunica.localhost', '/_s/' + name)
                 self.assertEqual(s, 200, name)
+            # kit 1.1.0: first week as a checklist, lesson 1 as the next step, no alerts on a fresh account
+            self.assertIn('/_s/agent-dash.js?v=1.1.0', req('app.fichaunica.localhost', '/', cookie=cookie)[1])
+            self.assertEqual(len(data['checklist']['items']), 5)
+            self.assertNotIn('done', data['checklist']['items'][0])  # no property yet
+            self.assertEqual(data['next']['cta']['href'], '/academia/primera-propiedad')
+            self.assertNotIn('alerts', data)
+            con = db.connect()
+            aid = con.execute("SELECT agency_id FROM users WHERE email='kit@ejemplo.test'").fetchone()[0]
+            con.execute("INSERT INTO leads (agency_id, name, phone, status, created_at) VALUES (?, 'Ana', '5512345678', 'nuevo', datetime('now','-1 hour'))", (aid,))
+            con.commit(); con.close()
+            s, page, _ = req('app.fichaunica.localhost', '/', cookie=cookie)
+            data = json.loads(re.search(r'data:(\{.*\}),onAction', page, re.S).group(1))
+            self.assertEqual(data['alerts'][0]['tone'], 'warn')
+            self.assertIn('1 cliente sin respuesta', data['alerts'][0]['title'])
         finally:
             os.environ.pop('LLAVE_KIT_HOME', None)
 

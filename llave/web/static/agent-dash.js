@@ -1,10 +1,10 @@
-/*! AgentDashKit 1.0.0 - framework-free agent dashboard. One global: window.AgentDashKit.
+/*! AgentDashKit 1.1.0 - framework-free agent dashboard. One global: window.AgentDashKit.
  *  Plain ES5. All text is set with textContent. All URLs pass through safeUrl().
  *  No network requests. Pair with agent-dash.css. */
 (function (global) {
   'use strict';
 
-  var VERSION = '1.0.0';
+  var VERSION = '1.1.0';
   var SVGNS = 'http://www.w3.org/2000/svg';
   var uid = 0;
 
@@ -33,6 +33,8 @@
     search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3',
     bell: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0',
     copy: 'M11 9h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1',
+    check: 'M20 6 9 17l-5-5',
+    alert: 'M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
     circle: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z'
   };
 
@@ -52,7 +54,9 @@
     toolsTitle: 'Your tools', arrange: 'Arrange', svcTitle: 'Grow with our partners', svcSub: '',
     sideLabel: 'More for you', share: 'Share', copy: 'Copy code', codeLabel: 'Your code',
     copied: 'Copied', copyFailed: 'Could not copy. Select the code and copy it.',
-    newsTitle: 'What is new', eventsTitle: 'Live help', addCal: 'Add to my calendar'
+    newsTitle: 'What is new', eventsTitle: 'Live help', addCal: 'Add to my calendar',
+    alertsLabel: 'Alerts', checklistTitle: 'Getting started', checklistProgress: '{done} of {total} done',
+    checkDone: 'Done', checkTodo: 'To do'
   };
 
   /* ---------------------------------------------------------------- helpers */
@@ -671,6 +675,86 @@
       return box;
     }
 
+    /* 1.1.0: urgent notices at the top of the main column (late leads, follow-ups due, stale prices). */
+    function buildAlerts(L) {
+      var items = list(data.alerts).filter(function (a) { return str(a.title); });
+      if (!items.length) { return null; }
+      var sec = el('section', 'adk-alerts');
+      sec.setAttribute('aria-label', L.alertsLabel);
+      var ul = el('ul', 'adk-alerts__list');
+      ul.setAttribute('role', 'list');
+      items.forEach(function (a, i) {
+        var warn = a.tone === 'warn';
+        var li = el('li', 'adk-alert' + (warn ? ' adk-alert--warn' : ''));
+        var ico = el('span', 'adk-alert__ico');
+        ico.setAttribute('aria-hidden', 'true');
+        ico.appendChild(icon(str(a.icon) || (warn ? 'alert' : 'bell'), 20));
+        li.appendChild(ico);
+        var txt = el('div', 'adk-alert__txt');
+        txt.appendChild(el('p', 'adk-alert__title', str(a.title)));
+        if (str(a.body)) { txt.appendChild(el('p', 'adk-alert__body', str(a.body))); }
+        li.appendChild(txt);
+        if (isObj(a.cta) && str(a.cta.label)) {
+          var c = interactive('adk-btn adk-btn--ghost adk-btn--sm adk-alert__cta', a.cta, 'alerts', i);
+          if (c) { c.textContent = str(a.cta.label); li.appendChild(c); }
+        }
+        ul.appendChild(li);
+      });
+      sec.appendChild(ul);
+      return sec;
+    }
+
+    /* 1.1.0: a short to-do list with progress (first week, setup). Counts come from the items. */
+    function buildChecklist(L) {
+      var c = data.checklist;
+      if (!isObj(c)) { return null; }
+      var items = list(c.items).filter(function (t) { return str(t.label); });
+      if (!items.length) { return null; }
+      var done = items.filter(function (t) { return t.done === true; }).length;
+      var total = items.length;
+      var sec = el('section', 'adk-sec adk-check');
+      var hid = id + '-check-h';
+      sec.setAttribute('aria-labelledby', hid);
+      var head = el('div', 'adk-sec__head');
+      var h = el('h2', 'adk-h2', str(c.title) || L.checklistTitle);
+      h.id = hid;
+      head.appendChild(h);
+      var progText = fill(fill(L.checklistProgress, 'done', String(done)), 'total', String(total));
+      head.appendChild(el('span', 'adk-check__count', progText));
+      sec.appendChild(head);
+      var bar = el('div', 'adk-check__bar');
+      bar.setAttribute('role', 'progressbar');
+      bar.setAttribute('aria-valuemin', '0');
+      bar.setAttribute('aria-valuemax', String(total));
+      bar.setAttribute('aria-valuenow', String(done));
+      bar.setAttribute('aria-valuetext', progText);
+      bar.setAttribute('aria-labelledby', hid);
+      var fillEl = el('span', 'adk-check__fill');
+      fillEl.style.width = Math.round(done / total * 100) + '%';
+      bar.appendChild(fillEl);
+      sec.appendChild(bar);
+      var ul = el('ul', 'adk-check__list');
+      ul.setAttribute('role', 'list');
+      items.forEach(function (t, i) {
+        var isDone = t.done === true;
+        var li = el('li', 'adk-check__li' + (isDone ? ' adk-check__li--done' : ''));
+        var row = (!isDone && interactive('adk-check__item', t, 'checklist', i)) || el('div', 'adk-check__item adk-check__item--static');
+        var mark = el('span', 'adk-check__mark');
+        mark.setAttribute('aria-hidden', 'true');
+        if (isDone) { mark.appendChild(icon('check', 16)); }
+        row.appendChild(mark);
+        row.appendChild(el('span', 'adk-sr', (isDone ? L.checkDone : L.checkTodo) + ': '));
+        var txt = el('span', 'adk-check__txt');
+        txt.appendChild(el('span', 'adk-check__label', str(t.label)));
+        if (str(t.hint) && !isDone) { txt.appendChild(el('span', 'adk-check__hint', str(t.hint))); }
+        row.appendChild(txt);
+        li.appendChild(row);
+        ul.appendChild(li);
+      });
+      sec.appendChild(ul);
+      return sec;
+    }
+
     function add(parent, node) { if (node) { parent.appendChild(node); } }
 
     function render() {
@@ -683,8 +767,10 @@
       var layout = el('div', 'adk-layout');
       var main = el('div', 'adk-main');
       add(main, buildHello(L));
+      add(main, buildAlerts(L));
       add(main, buildStats(L));
       add(main, buildNext(L));
+      add(main, buildChecklist(L));
       add(main, buildTools(L));
       add(main, buildServices(L));
       layout.appendChild(main);
