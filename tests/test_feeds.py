@@ -112,8 +112,9 @@ class FeedsTest(unittest.TestCase):
         self.assertIn('Precio a consultar', m); self.assertIn('título es muy corto', m); self.assertIn('la colonia', m)
 
     def test_mercadolibre(self):
+        c1 = db.canonical(self.con, 1)
         p = mercadolibre.dry_run_publish(self.con, 1)
-        self.assertEqual(p['category_id'], 'MLM1472')
+        self.assertEqual(p['category_id'], mercadolibre.CATEGORIES[(c1['property_type'], c1['operation'])])
         self.assertLessEqual(len(p['title']), 60)
         self.assertEqual(p['currency_id'], 'MXN')
         self.assertEqual(len(p['pictures']), 6)
@@ -123,10 +124,34 @@ class FeedsTest(unittest.TestCase):
         self.assertEqual(ids['BEDROOMS'], '2')
         self.assertEqual(p['location']['neighborhood']['name'], 'Polanco')
         self.assertIn('plain_text', p['description'])
-        self.assertEqual(mercadolibre.build_item(db.canonical(self.con, 2))['category_id'], 'MLM1466')
+        c2 = db.canonical(self.con, 2)
+        self.assertEqual(mercadolibre.build_item(c2)['category_id'],
+                         mercadolibre.CATEGORIES[(c2['property_type'], c2['operation'])])
         row = self.con.execute("SELECT * FROM outbox").fetchone()
         self.assertEqual((row['kind'], row['status'], row['ref']), ('portal.mercadolibre.create', 'dry_run', 'listing:1'))
-        self.assertEqual(json.loads(row['payload'])['category_id'], 'MLM1472')
+        self.assertEqual(json.loads(row['payload'])['category_id'], p['category_id'])
+
+    def test_mercadolibre_leaf_categories_and_contact(self):
+        c = db.canonical(self.con, 1)
+        for (pt, op), cat in [(('casa', 'venta'), 'MLM170527'), (('departamento', 'renta'), 'MLM1479'),
+                              (('local', 'venta'), 'MLM1474'), (('bodega', 'renta'), 'MLM50744')]:
+            c['property_type'], c['operation'] = pt, op
+            self.assertEqual(mercadolibre.category(c), cat)
+        c['property_type'] = 'rancho'
+        self.assertEqual(mercadolibre.category(c), mercadolibre.PARENT)
+        self.assertEqual(mercadolibre.split_phone('55 1234 5678'), ('52', '5512345678'))
+        self.assertEqual(mercadolibre.split_phone('+1 (305) 555-0101'), ('1', '3055550101'))
+        self.assertEqual(mercadolibre.split_phone('abc'), ('', ''))
+        c['property_type'] = 'departamento'
+        c['agent'] = {'name': 'Ana', 'whatsapp': '+52 1 55 1234 5678', 'email': 'ana@example.com'}
+        sc = mercadolibre.build_item(c)['seller_contact']
+        self.assertEqual((sc['country_code2'], sc['phone2'], sc['contact']), ('52', '5512345678', 'Ana'))
+        self.assertTrue(sc['phone2'].isdigit())
+        self.assertEqual(mercadolibre.blockers(mercadolibre.build_item(c)), [])
+        c['agent'] = None; c['agency']['whatsapp'] = ''; c['photos'] = []
+        it = mercadolibre.build_item(c)
+        self.assertEqual(len(mercadolibre.blockers(it)), 2)
+        self.assertIn('Falta un WhatsApp válido del agente (Mercado Libre lo exige)', it['_todo'])
 
     def test_skip_no_photos_no_title(self):
         self.con.execute("DELETE FROM photos WHERE listing_id=2")

@@ -201,6 +201,9 @@ def publish(con, listing_id, http_post=None):
         refresh_if_needed(con, l['agency_id'], http_post)
         acc = con.execute('SELECT access_token FROM ml_accounts WHERE agency_id=?', (l['agency_id'],)).fetchone()
         item = ml_feed.build_item(db.canonical(con, listing_id))
+        stop = ml_feed.blockers(item)
+        if stop:  # ML would answer 400; say why instead of sending
+            raise ValueError('No se puede publicar en Mercado Libre: ' + '; '.join(stop))
         item = {k: v for k, v in item.items() if not k.startswith('_')}
         resp = (http_post or _default_http_post)(ITEMS_URL, item, {
             'Authorization': 'Bearer ' + acc['access_token'], 'Content-Type': 'application/json'})
