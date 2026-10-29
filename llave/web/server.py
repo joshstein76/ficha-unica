@@ -590,9 +590,6 @@ class Handler(BaseHTTPRequestHandler):
                         return self.send(panel.wizard_3(ctx, l, 'Escribe un título de al menos 8 letras.'), 400)
                     con.execute("UPDATE listings SET title=?, description=?, status='activa', updated_at=datetime('now') WHERE id=?",
                                 (title[:100], (f.get('description') or '').strip()[:8000], l['id']))
-                    if f.get('portales') == '1':
-                        for p in ('trovit', 'mitula'):
-                            con.execute('INSERT OR IGNORE INTO portal_publications(listing_id, portal, enabled) VALUES (?,?,1)', (l['id'], p))
                     db.audit(con, actor, 'wizard_publish', 'listing:%d' % l['id'])
                     con.commit()
                     ghl_live.first_publish(con, a['id'])
