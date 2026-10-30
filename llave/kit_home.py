@@ -3,7 +3,7 @@ Every number comes from the database; nothing is invented (no events, no app car
 import json
 import os
 
-KIT_VERSION = '1.2.0'  # cache-buster for /_s/agent-dash.* (static files are cached a year)
+KIT_VERSION = '1.2.1'  # cache-buster for /_s/agent-dash.* (static files are cached a year)
 
 from . import db, lead_watch, novedades, price_check, replies
 

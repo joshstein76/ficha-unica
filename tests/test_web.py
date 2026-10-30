@@ -371,7 +371,7 @@ class WebFlow(unittest.TestCase):
                 s, _p, _ = req('app.fichaunica.localhost', '/_s/' + name)
                 self.assertEqual(s, 200, name)
             # kit 1.2.0 (logo) / 1.1.0: first week as a checklist, lesson 1 as the next step, no alerts on a fresh account
-            self.assertIn('/_s/agent-dash.js?v=1.2.0', req('app.fichaunica.localhost', '/', cookie=cookie)[1])
+            self.assertIn('/_s/agent-dash.js?v=1.2.1', req('app.fichaunica.localhost', '/', cookie=cookie)[1])
             self.assertIn('"logo": "/_s/fu-mark.svg"', req('app.fichaunica.localhost', '/', cookie=cookie)[1])
             self.assertEqual(len(data['checklist']['items']), 5)
             self.assertNotIn('done', data['checklist']['items'][0])  # no property yet

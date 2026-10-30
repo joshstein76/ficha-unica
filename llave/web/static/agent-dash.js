@@ -4,7 +4,7 @@
 (function (global) {
   'use strict';
 
-  var VERSION = '1.2.0';
+  var VERSION = '1.2.1';
   var SVGNS = 'http://www.w3.org/2000/svg';
   var uid = 0;
 

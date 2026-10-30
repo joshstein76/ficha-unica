@@ -313,3 +313,8 @@
   .adk .adk-next__actions .adk-btn { flex: 1 1 auto; }
   .adk .adk-alert__cta { width: 100%; }
 }
+
+/* small phones (1.2.1): five short tabs fit at 375 px instead of cutting the last one; longer labels still scroll */
+@media (max-width: 400px) {
+  .adk .adk-tab { padding: 0 9px; font-size: 14px; }
+}
