@@ -199,8 +199,11 @@ class WebFlow(unittest.TestCase):
         self.assertIn('og:image', page)
         self.assertIn('<meta name="description"', page)
         self.assertEqual(page.count('<meta name="description"'), 1)
-        s, _, h = req('ana.fichaunica.localhost', '/robots.txt')
-        self.assertIsNone(h.get('X-Robots-Tag'))  # agent sites must stay indexable
+        self.signup('Indexable Sur', 'idx@ejemplo.test')
+        for path in ('/', '/robots.txt'):  # agent sites must stay indexable
+            s, _, h = req('indexable-sur.fichaunica.localhost', path)
+            self.assertEqual(s, 200, path)
+            self.assertIsNone(h.get('X-Robots-Tag'), path)
 
     def test_signup_guard_honeypot_cap_login_lockout(self):
         from llave.web import server
