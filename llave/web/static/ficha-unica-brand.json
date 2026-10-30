@@ -53,5 +53,6 @@
     "checklistProgress": "{done} de {total} listos",
     "checkDone": "Listo",
     "checkTodo": "Pendiente"
-  }
+  },
+  "logo": "/_s/fu-mark.svg"
 }

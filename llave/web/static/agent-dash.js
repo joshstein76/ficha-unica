@@ -4,7 +4,7 @@
 (function (global) {
   'use strict';
 
-  var VERSION = '1.1.0';
+  var VERSION = '1.2.0';
   var SVGNS = 'http://www.w3.org/2000/svg';
   var uid = 0;
 
@@ -148,7 +148,7 @@
     TOKEN_KEYS.forEach(function (k) { tokens[k] = safeColor(t[k]) || TOKEN_DEFAULTS[k]; });
     var lang = str(b.lang);
     return {
-      name: str(b.name), mono: str(b.mono),
+      name: str(b.name), mono: str(b.mono), logo: str(b.logo),
       lang: /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(lang) ? lang : '',
       font: safeFont(b.font), tokens: tokens,
       labels: mergeLabels(DEFAULT_LABELS, b.labels)
@@ -295,7 +295,15 @@
       var row = el('div', 'adk-top__row');
 
       var brandBox = el('div', 'adk-brand');
-      if (brand.mono) {
+      var logoUrl = brand.logo ? safeUrl(str(brand.logo)) : '';
+      if (logoUrl) {  // 1.2.0: the brand's own mark (square image); falls back to the letter badge
+        var logo = el('img', 'adk-logo');
+        logo.setAttribute('src', logoUrl);
+        logo.setAttribute('alt', '');
+        logo.setAttribute('width', '34');
+        logo.setAttribute('height', '34');
+        brandBox.appendChild(logo);
+      } else if (brand.mono) {
         var mono = el('span', 'adk-mono', brand.mono);
         mono.setAttribute('aria-hidden', 'true');
         brandBox.appendChild(mono);
