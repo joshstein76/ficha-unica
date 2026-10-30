@@ -131,6 +131,22 @@ class FeedsTest(unittest.TestCase):
         self.assertEqual((row['kind'], row['status'], row['ref']), ('portal.mercadolibre.create', 'dry_run', 'listing:1'))
         self.assertEqual(json.loads(row['payload'])['category_id'], p['category_id'])
 
+    def test_mercadolibre_update_dry_run(self):
+        with self.assertRaises(ValueError):
+            mercadolibre.dry_run_update(self.con, 1, 'pause')  # never published
+        self.con.execute("INSERT INTO portal_publications(listing_id, portal, enabled, status, external_id) "
+                         "VALUES (1,'mercadolibre',1,'publicada','MLM123')")
+        r = mercadolibre.dry_run_update(self.con, 1, 'pause')
+        self.assertEqual((r['method'], r['path'], r['body']), ('PUT', '/items/MLM123', {'status': 'paused'}))
+        self.assertEqual(mercadolibre.dry_run_update(self.con, 1, 'reactivate')['body'], {'status': 'active'})
+        self.assertEqual(mercadolibre.dry_run_update(self.con, 1, 'close')['body'], {'status': 'closed'})
+        self.assertEqual(mercadolibre.dry_run_update(self.con, 1, 'price')['body'],
+                         {'price': db.canonical(self.con, 1)['price']})
+        with self.assertRaises(ValueError):
+            mercadolibre.dry_run_update(self.con, 1, 'delete')
+        kinds = [x['kind'] for x in self.con.execute("SELECT kind FROM outbox ORDER BY id")]
+        self.assertEqual(kinds, ['portal.mercadolibre.' + k for k in ('pause', 'reactivate', 'close', 'price')])
+
     def test_mercadolibre_leaf_categories_and_contact(self):
         c = db.canonical(self.con, 1)
         for (pt, op), cat in [(('casa', 'venta'), 'MLM170527'), (('departamento', 'renta'), 'MLM1479'),

@@ -108,3 +108,33 @@ def dry_run_publish(con, listing_id):
                 ('listing:%d' % listing_id, json.dumps(payload, ensure_ascii=False)))
     con.commit()
     return payload
+
+
+# Status/price changes for a listing already on Mercado Libre (PUT /items/{id}). DRY ONLY, like publish.
+STATUS = {'pause': 'paused', 'reactivate': 'active', 'close': 'closed'}
+
+
+def build_update(c, action, external_id):
+    """-> PUT /items/{external_id} body for 'pause' | 'reactivate' | 'close' | 'price'. Raises ValueError if it can't be sent."""
+    if not external_id:
+        raise ValueError('La propiedad aún no está publicada en Mercado Libre')
+    if action in STATUS:
+        body = {'status': STATUS[action]}
+    elif action == 'price':
+        if c['price'] is None:
+            raise ValueError('Precio a consultar: Mercado Libre pide un precio')
+        body = {'price': c['price']}
+    else:
+        raise ValueError('Acción desconocida: %s' % action)
+    return {'method': 'PUT', 'path': '/items/%s' % external_id, 'body': body, '_dry_run': True}
+
+
+def dry_run_update(con, listing_id, action):
+    """DRY: store the would-be PUT in the outbox using the external_id saved in portal_publications."""
+    row = con.execute("SELECT external_id FROM portal_publications WHERE listing_id=? AND portal='mercadolibre'",
+                      (listing_id,)).fetchone()
+    req = build_update(db.canonical(con, listing_id), action, row['external_id'] if row else None)
+    con.execute("INSERT INTO outbox(kind, ref, payload, status) VALUES (?, ?, ?, 'dry_run')",
+                ('portal.mercadolibre.' + action, 'listing:%d' % listing_id, json.dumps(req, ensure_ascii=False)))
+    con.commit()
+    return req
