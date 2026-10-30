@@ -205,6 +205,16 @@ class WebFlow(unittest.TestCase):
             self.assertEqual(s, 200, path)
             self.assertIsNone(h.get('X-Robots-Tag'), path)
 
+    def test_plan_page_wording(self):
+        cookie, _ = self.signup('Plan Claro', 'plan@ejemplo.test', plan='gratis')
+        s, page, _ = req('app.fichaunica.localhost', '/plan', cookie=cookie)
+        self.assertEqual(s, 200)
+        self.assertIn('Usas 0 de 1 propiedad.', page)
+        self.assertIn('<b>$0</b>', page)
+        self.assertIn('para siempre', page)
+        s, page, _ = req('app.fichaunica.localhost', '/registro')
+        self.assertIn('autocomplete="tel"', page)
+
     def test_signup_guard_honeypot_cap_login_lockout(self):
         from llave.web import server
         base = {'name': 'Ana Ruiz', 'whatsapp': '55 1234 5678', 'password': 'segura1234', 'terms': '1'}

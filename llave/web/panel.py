@@ -94,7 +94,7 @@ def signup(error='', values=None, ref=''):
             '<form class="stack card" method="post" action="/registro"><input type="hidden" name="ref" value="%s"><div aria-hidden="true" style="position:absolute;left:-9999px"><label>Sitio web<input name="website" tabindex="-1" autocomplete="off"></label></div>'
             '<label>Tu nombre<input name="name" value="%s" autocomplete="name" required></label>'
             '<label>Nombre de tu inmobiliaria o marca<input name="agency" value="%s" placeholder="Ej. Casas Roma" required></label>'
-            '<label>Tu WhatsApp<input name="whatsapp" value="%s" inputmode="tel" placeholder="55 1234 5678" required></label>'
+            '<label>Tu WhatsApp<input name="whatsapp" value="%s" inputmode="tel" autocomplete="tel" placeholder="55 1234 5678" required></label>'
             '<label>Correo<input name="email" type="email" value="%s" autocomplete="email" required></label>'
             '<label>Contraseña<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>'
             '<label class="check"><input type="checkbox" name="terms" value="1" required> Acepto los términos y el aviso de privacidad (borrador).</label>'
@@ -644,7 +644,7 @@ def site_settings(con, ctx, ok='', error=''):
             '<section class="card"><h2>Textos</h2><label>Nombre<input name="name" value="%s" required></label>'
             '<label>Frase corta<input name="tagline" value="%s" maxlength="90" placeholder="Departamentos en la Roma y la Condesa"></label>'
             '<label>Sobre nosotros<textarea name="about">%s</textarea></label>'
-            '<label>WhatsApp<input name="whatsapp" value="%s" inputmode="tel" required></label>'
+            '<label>WhatsApp<input name="whatsapp" value="%s" inputmode="tel" autocomplete="tel" required></label>'
             '<label>Correo de contacto<input name="email" type="email" value="%s"></label>'
             '<label>Ciudad<input name="city" value="%s"></label>'
             '<label>Logo (PNG o JPG)<input type="file" name="logo" accept="image/png,image/jpeg,image/webp"></label></section>'
@@ -1109,8 +1109,8 @@ def plans(con, ctx, ok='', error=''):
     n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
     cards = ''.join(
         '<div class="card plan%s"><h2>%s</h2><p class="price"><b>%s</b>%s</p><ul class="small">%s</ul>%s</div>' % (
-            ' current' if k == a['plan'] else '', e(name), 'Gratis' if not price else '$%d MXN' % price,
-            '' if not price else ' <span class="muted small">al mes, IVA incluido</span>',
+            ' current' if k == a['plan'] else '', e(name), '$%d MXN' % price if price else '$0',
+            ' <span class="muted small">%s</span>' % ('al mes, IVA incluido' if price else 'para siempre'),
             ''.join('<li>%s</li>' % e(f) for f in feats),
             '<span class="pill ok">Tu plan</span>' if k == a['plan'] else
             '<span class="pill pendiente">Próximamente</span>' if k in COMING_SOON else
@@ -1121,8 +1121,10 @@ def plans(con, ctx, ok='', error=''):
         manage = ('<form class="card" method="post" action="/plan/portal">%s<p class="small muted">Cambia de plan, actualiza tu tarjeta '
                   'o cancela desde tu pago.</p><button class="btn ghost">Administrar mi pago</button></form>') % csrf_field(ctx)
     foot = (STRIPE_NOTE % e(db.OWNER)) if paid else 'Precios en pesos mexicanos con IVA. Sin plazo forzoso: cambias o cancelas cuando quieras.'
-    body = ('%s%s<h1>Tu plan</h1><p class="muted">Usas %d de %d propiedades.</p><div class="grid2 wide plans">%s</div>%s'
-            '<p class="small muted">%s</p>') % (notice(ok), notice(error, 'err'), n, db.listing_limit(con, a), cards, manage, foot)
+    cap = db.listing_limit(con, a)
+    body = ('%s%s<h1>Tu plan</h1><p class="muted">Usas %d de %d %s.</p><div class="grid2 wide plans">%s</div>%s'
+            '<p class="small muted">%s</p>') % (notice(ok), notice(error, 'err'), n, cap, 'propiedad' if cap == 1 else 'propiedades',
+                                                 cards, manage, foot)
     return layout('Tu plan', body, ctx, 'sitio')
 
 
