@@ -12,7 +12,7 @@ for v in SSH_HOST SSH_USER APP_DIR DATA_DIR; do [[ "${!v}" == REPLACE_ME* ]] && 
 echo "== 1. Tests"; python3 -m unittest discover -s tests >/dev/null 2>&1 && echo "tests OK" || { echo "TESTS FAIL: not deploying"; exit 1; }
 REL=$(git rev-parse --short HEAD); [[ -z "$(git status --porcelain)" ]] || { echo "Uncommitted changes: commit first"; [[ $GO == 1 ]] && exit 1; }
 SSH="ssh -p ${SSH_PORT:-22} ${SSH_USER}@${SSH_HOST}"
-RSYNC_OPTS=(-az --delete --exclude .git --exclude data/ --exclude 'deploy/target.env' --exclude '__pycache__' --exclude 'seed/*.local.md' -e "ssh -p ${SSH_PORT:-22}")
+RSYNC_OPTS=(-az --delete --exclude .git --exclude data/ --exclude 'deploy/target.env' --exclude '__pycache__' --exclude 'seed/*.local.md' --exclude 'config/*.env' --exclude 'config/*.env.bak*' -e "ssh -p ${SSH_PORT:-22}")
 DEST="${SSH_USER}@${SSH_HOST}:${APP_DIR}/releases/${REL}/"
 
 if [[ $GO == 0 ]]; then
