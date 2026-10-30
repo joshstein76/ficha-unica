@@ -81,6 +81,8 @@ class Handler(BaseHTTPRequestHandler):
             if len(data) > 1024 and 'gzip' in (self.headers.get('Accept-Encoding') or '').lower():
                 data = gzip.compress(data, 6, mtime=0)
                 headers['Content-Encoding'] = 'gzip'
+        if self.host() == 'app.' + db.BASE_DOMAIN and 'X-Robots-Tag' not in headers:
+            headers['X-Robots-Tag'] = 'noindex'  # the panel never ranks; fichaunica.mx (WordPress) is the public face
         if base_type == 'text/html' and 'Cache-Control' not in headers:
             headers['Cache-Control'] = 'private, no-store' if self.host() == 'app.' + db.BASE_DOMAIN else 'no-cache'
         if self.command == 'POST' and not self._body_read:
@@ -231,6 +233,8 @@ class Handler(BaseHTTPRequestHandler):
                 if path == '/sw.js':  # served from the root so its scope covers the whole panel
                     return self.send(PWA_SW, ctype='application/javascript; charset=utf-8',
                                      headers={'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/'})
+                if path == '/robots.txt':  # was a 303 to /entrar: crawlers need a real file to read the noindex pages
+                    return self.send(APP_ROBOTS, ctype='text/plain; charset=utf-8')
                 if path == '/offline':
                     return self.send(PWA_OFFLINE, headers={'Cache-Control': 'public, max-age=3600'})
                 return self.panel(con, method, path, query)
@@ -964,6 +968,8 @@ def start_photo_worker():
 
 
 # ---------- actions (module-level so tests can call them) ----------
+APP_ROBOTS = ('User-agent: *\nDisallow: /stripe/\nDisallow: /oauth/\nDisallow: /api/\n'
+              'Sitemap: https://fichaunica.mx/sitemap_index.xml\n')
 RESERVED = {'app', 'www', 'api', 'admin', 'sites', 'mail', 'feeds', 'static', 'llave'}
 
 

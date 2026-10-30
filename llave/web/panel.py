@@ -42,6 +42,15 @@ def _icon(k):
             'stroke-linejoin="round" aria-hidden="true">%s</svg>' % ICONS[k])
 
 
+# The panel is private and never ranks (server.py sends X-Robots-Tag: noindex on the app host); these tags only
+# give a clean preview when a sign-up or invite link is shared on WhatsApp.
+SHARE_TEXT = 'Tu sitio inmobiliario gratis, con clientes directo a tu WhatsApp. Crea tu cuenta en minutos.'
+SHARE_META = ('<meta name="description" content="%s"><meta property="og:site_name" content="Ficha Única">'
+              '<meta property="og:title" content="Ficha Única: tu oficina inmobiliaria digital"><meta property="og:description" content="%s">'
+              '<meta property="og:image" content="https://fichaunica.mx/wp-content/uploads/2026/10/fichaunica-compartir.jpg">'
+              '<meta name="twitter:card" content="summary_large_image">') % (SHARE_TEXT, SHARE_TEXT)
+
+
 def layout(title, body, ctx=None, tab=None, flash=''):
     nav = ''
     top_right = '<a class="btn ghost small" href="/entrar">Entrar</a>'
@@ -60,11 +69,11 @@ def layout(title, body, ctx=None, tab=None, flash=''):
             '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
             '<title>%s · Ficha Única</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="%s">'
             '<link rel="apple-touch-icon" href="/_s/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes">'
-            '%s<link rel="stylesheet" href="%s"><style>%s</style></head><body>'
+            '%s%s<link rel="stylesheet" href="%s"><style>%s</style></head><body>'
             '<a class="skip" href="#main">Saltar al contenido</a><header class="top"><a class="logo" href="/">%s</a>%s</header>%s'
             '<main id="main" class="wrap">%s%s</main><footer class="wrap small muted" style="padding-top:0;display:block">Ficha Única es un servicio de %s · <a href="/terminos">Términos</a> · <a href="/privacidad">Privacidad</a></footer>'
             '<script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js").catch(function(){})</script></body></html>') % (
-        e(title), BRAND_COLOR, PRECONNECT, FONTS, PANEL, logo('fu-top'), top_right, nav, flash, body, e(db.OWNER))
+        e(title), BRAND_COLOR, SHARE_META, PRECONNECT, FONTS, PANEL, logo('fu-top'), top_right, nav, flash, body, e(db.OWNER))
 
 
 def csrf_field(ctx):

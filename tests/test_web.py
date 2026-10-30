@@ -187,6 +187,21 @@ class WebFlow(unittest.TestCase):
         self.assertEqual(con.execute('SELECT done FROM deal_tasks WHERE id=?', (tid,)).fetchone()[0], 1)
         con.close()
 
+    def test_app_host_never_indexed_but_shares_well(self):
+        s, body, h = req('app.fichaunica.localhost', '/robots.txt')
+        self.assertEqual(s, 200)
+        self.assertIn('Disallow: /stripe/', body)
+        self.assertIn('text/plain', h['Content-Type'])
+        for path in ('/registro', '/entrar', '/robots.txt'):
+            s, page, h = req('app.fichaunica.localhost', path)
+            self.assertEqual((s, h['X-Robots-Tag']), (200, 'noindex'), path)
+        s, page, _ = req('app.fichaunica.localhost', '/registro')
+        self.assertIn('og:image', page)
+        self.assertIn('<meta name="description"', page)
+        self.assertEqual(page.count('<meta name="description"'), 1)
+        s, _, h = req('ana.fichaunica.localhost', '/robots.txt')
+        self.assertIsNone(h.get('X-Robots-Tag'))  # agent sites must stay indexable
+
     def test_signup_guard_honeypot_cap_login_lockout(self):
         from llave.web import server
         base = {'name': 'Ana Ruiz', 'whatsapp': '55 1234 5678', 'password': 'segura1234', 'terms': '1'}
