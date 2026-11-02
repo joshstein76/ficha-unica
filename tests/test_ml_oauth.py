@@ -158,8 +158,22 @@ class MLOAuthTest(unittest.TestCase):
         row = self.con.execute("SELECT * FROM outbox WHERE kind='portal.mercadolibre.create'").fetchone()
         self.assertEqual(row['status'], 'dry_run')
 
+    def test_publish_live_blocked_without_whatsapp_or_photo(self):
+        self.configure(live=True)
+        far = (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).replace(microsecond=0).isoformat()
+        ml_oauth.ensure_tables(self.con)
+        self.con.execute("INSERT INTO ml_accounts(agency_id, access_token, refresh_token, expires_at, status) "
+                         "VALUES (1,'AT','RT',?, 'conectada')", (far,))
+        self.con.commit()
+        with self.assertRaises(ValueError) as e:
+            ml_oauth.publish(self.con, 1, http_post=self.fake({'id': 'MLM123'}))
+        self.assertIn('WhatsApp', str(e.exception))
+        self.assertEqual(self.calls, [])
+
     def test_publish_live(self):
         self.configure(live=True)
+        self.con.execute("UPDATE agencies SET whatsapp='5512345678' WHERE id=1")
+        self.con.execute("INSERT INTO photos(listing_id, position, sha256, sizes) VALUES (1,0,'p0',?)", ('{"1600": "p/1600.jpg", "800": "p/800.jpg", "400": "p/400.jpg"}',))
         far = (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).replace(microsecond=0).isoformat()
         ml_oauth.ensure_tables(self.con)
         self.con.execute("INSERT INTO ml_accounts(agency_id, access_token, refresh_token, expires_at, status) "
@@ -171,6 +185,7 @@ class MLOAuthTest(unittest.TestCase):
         self.assertEqual(url, ml_oauth.ITEMS_URL)
         self.assertEqual(headers['Authorization'], 'Bearer AT')
         self.assertNotIn('_dry_run', data)
+        self.assertEqual((data['seller_contact']['country_code2'], data['seller_contact']['phone2']), ('52', '5512345678'))
         out = self.con.execute('SELECT * FROM outbox').fetchone()
         self.assertEqual(out['status'], 'sent')
         self.assertNotIn('AT', out['response'])
