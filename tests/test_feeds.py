@@ -147,6 +147,26 @@ class FeedsTest(unittest.TestCase):
         kinds = [x['kind'] for x in self.con.execute("SELECT kind FROM outbox ORDER BY id")]
         self.assertEqual(kinds, ['portal.mercadolibre.' + k for k in ('pause', 'reactivate', 'close', 'price')])
 
+    def test_mercadolibre_sync_plan_limit(self):
+        ag = self.con.execute("SELECT agency_id FROM listings WHERE id=1").fetchone()['agency_id']
+        ids = [r['id'] for r in self.con.execute("SELECT id FROM listings WHERE agency_id=? AND status IN %s" % (db.PUBLIC_STATUSES,), (ag,))]
+        for i in ids:
+            self.con.execute("INSERT INTO portal_publications(listing_id, portal, enabled, status, external_id) "
+                             "VALUES (?,'mercadolibre',1,'publicada',?)", (i, 'MLM%d' % i))
+        self.con.commit()
+        self.assertEqual(mercadolibre.sync_plan_limit(self.con, ag), {'pause': [], 'reactivate': []})  # all shown
+        orig = db.listing_limit
+        db.listing_limit = lambda con, a: 1
+        try:
+            r = mercadolibre.sync_plan_limit(self.con, ag)
+            self.assertEqual(len(r['pause']), len(ids) - 1)
+            self.assertEqual(mercadolibre.sync_plan_limit(self.con, ag), {'pause': [], 'reactivate': []})  # idempotent
+        finally:
+            db.listing_limit = orig
+        back = mercadolibre.sync_plan_limit(self.con, ag)
+        self.assertEqual(sorted(back['reactivate']), sorted(r['pause']))
+        self.assertEqual(back['pause'], [])
+
     def test_mercadolibre_leaf_categories_and_contact(self):
         c = db.canonical(self.con, 1)
         for (pt, op), cat in [(('casa', 'venta'), 'MLM170527'), (('departamento', 'renta'), 'MLM1479'),

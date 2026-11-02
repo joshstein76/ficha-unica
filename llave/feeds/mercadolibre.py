@@ -138,3 +138,27 @@ def dry_run_update(con, listing_id, action):
                 ('portal.mercadolibre.' + action, 'listing:%d' % listing_id, json.dumps(req, ensure_ascii=False)))
     con.commit()
     return req
+
+
+def sync_plan_limit(con, agency_id):
+    """DRY: after a plan change (Pro -> Gratis, or back), queue 'pause' for published, still-public ML items the plan no longer shows
+    and 'reactivate' for ones it shows again. Idempotent: the last queued pause/reactivate per listing is the memory.
+    -> {'pause': [listing_id], 'reactivate': [listing_id]}"""
+    shown = set(db.public_listing_ids(con, agency_id, include_shared=False))
+    rows = con.execute("SELECT pp.listing_id FROM portal_publications pp JOIN listings l ON l.id=pp.listing_id "
+                       "WHERE l.agency_id=? AND pp.portal='mercadolibre' AND pp.external_id IS NOT NULL "
+                       "AND pp.external_id<>'' AND l.status IN %s ORDER BY pp.listing_id" % (db.PUBLIC_STATUSES,),
+                       (agency_id,)).fetchall()
+    out = {'pause': [], 'reactivate': []}
+    for r in rows:
+        lid = r['listing_id']
+        last = con.execute("SELECT kind FROM outbox WHERE ref=? AND kind IN ('portal.mercadolibre.pause',"
+                           "'portal.mercadolibre.reactivate') ORDER BY id DESC LIMIT 1", ('listing:%d' % lid,)).fetchone()
+        paused = bool(last) and last['kind'].endswith('.pause')
+        if lid not in shown and not paused:
+            dry_run_update(con, lid, 'pause')
+            out['pause'].append(lid)
+        elif lid in shown and paused:
+            dry_run_update(con, lid, 'reactivate')
+            out['reactivate'].append(lid)
+    return out
