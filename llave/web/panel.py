@@ -494,7 +494,7 @@ def _leads_list(con, rows, ctx=None, today=None):
                    '<span class="row">%s<span class="pill %s">%s</span></span></div><span class="small muted">%s · %s · %s</span>%s'
                    '<p class="small" style="margin:0">%s</p>%s<div class="row">%s%s</div>%s</div>' % (
                        ' late' if late else '', e(r['name'] or 'Sin nombre'), badge, e(r['status']), e(label(LEAD_STATUSES, r['status'])),
-                       e(nice_date(r['created_at'])), e(r['source']), e(lst['ref'] if lst else 'general'),
+                       e(nice_date(r['created_at'])), 'Lía' if r['source'] == 'lia' else e(r['source']), e(lst['ref'] if lst else 'general'),
                        ('<span class="small">%s</span>' % e(lst['title'])) if lst else '', lia_top or e(r['message']), lia_talk,
                        ('<a class="btn wa small" href="/clientes/%d/whatsapp" target="_blank" rel="noopener">Responder por WhatsApp</a>' % r['id'])
                        if r['phone'] else '',

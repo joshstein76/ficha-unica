@@ -109,6 +109,7 @@
       if (j.t) { token = j.t; mem(token); }
       if (j.reply) add('a', j.reply); else if (!j.ok) add('a', FALLBACK);
       if (j.ok) ask(j); else cf.hidden = false;
+      log.scrollTop = log.scrollHeight;  /* the contact form shrinks the log: keep her reply in view */
       box.focus();
     });
   });

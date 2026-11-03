@@ -6,14 +6,14 @@
 .lia-sp{position:absolute;pointer-events:none}
 .lia-vh{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .lia-ic{width:36px;height:36px;flex:none}
-.lia-fab{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:10;display:inline-flex;align-items:center;gap:8px;
+.lia-fab{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:1090;display:inline-flex;align-items:center;gap:8px;
 min-height:48px;padding:0 16px 0 8px;border:0;border-radius:var(--br);background:var(--accent);color:var(--on-accent);font:700 16px/1 var(--body);cursor:pointer;
 box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:calc(100vw - 32px);white-space:nowrap}
 .lia-fab:focus-visible,.lia button:focus-visible,.lia a:focus-visible,.lia input:focus-visible,.lia textarea:focus-visible,.lia-log:focus-visible{outline:3px solid var(--accent-text,var(--fg));outline-offset:2px}
 /* above the existing mobile bar (phone) and the WhatsApp float (desktop) */
 @media(min-width:701px){body:has(.float) .lia-fab{bottom:calc(84px + env(safe-area-inset-bottom,0px))}}
 @media(max-width:700px){body:has(.mbar) .lia-fab{bottom:calc(96px + env(safe-area-inset-bottom,0px))}}
-.lia-panel{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;background:var(--bg);color:var(--fg);font:16px/1.45 var(--body);overscroll-behavior:contain}
+.lia-panel{position:fixed;inset:0;z-index:1100;display:flex;flex-direction:column;background:var(--bg);color:var(--fg);font:16px/1.45 var(--body);overscroll-behavior:contain}
 @media(min-width:701px){.lia-panel{inset:auto max(16px,env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom,0px)) auto;width:392px;height:min(620px,calc(100vh - 32px));
 border:1px solid var(--line);border-radius:calc(var(--br) + 4px);box-shadow:0 12px 40px rgba(0,0,0,.28);overflow:hidden}}
 @media(max-width:700px){html.lia-open{overflow:hidden}}
