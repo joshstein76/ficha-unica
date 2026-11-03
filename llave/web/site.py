@@ -297,7 +297,7 @@ def privacy(agency):
             'Los usamos para responder tu solicitud sobre propiedades y darte seguimiento por WhatsApp, teléfono o correo. '
             'No vendemos tus datos. Puedes pedir acceso, corrección, cancelación u oposición (derechos ARCO) escribiendo a %s.\n\n'
             'Este sitio funciona con Ficha Única, un servicio de %s, que trata tus datos solo por cuenta de %s.\n\n'
-            '<b>BORRADOR LOCAL</b>: texto de ejemplo, debe revisarlo un abogado conforme a la Ley Federal de Protección de Datos '
+            '<b>Borrador</b>: texto de ejemplo, debe revisarlo un abogado conforme a la Ley Federal de Protección de Datos '
             'Personales en Posesión de los Particulares (2025) antes de publicarse.</div></main>') % (
         e(agency['name']), e(agency['email'] or agency['whatsapp'] or ''), e(db.OWNER), e(agency['name']))
     return _page(agency, 'Aviso de privacidad · ' + agency['name'], body)

@@ -180,11 +180,27 @@
 .adk .adk-toast { border: 3px solid var(--lt-tinta); border-radius: 12px; background: var(--lt-papel); color: var(--lt-tinta); box-shadow: 3px 3px 0 var(--lt-tinta); font-weight: 700; }
 .adk .adk-toast:empty { border-width: 0; box-shadow: none; }
 
+/* the kit's list reset (.adk .adk-stats > li) outranks .adk .adk-stat, so padding needs the same weight here */
+.adk .adk-stats > .adk-stat { padding: 14px; }
+.adk .adk-svcs > .adk-svc { padding: 16px; }
+
 /* phones */
 @media (max-width: 640px) {
   .adk .adk-stat__value { font-size: 34px; }
   .adk .adk-next { padding: 16px; }
   .adk .adk-stats { gap: 12px; }
+  .adk .adk-stat { min-height: 104px; }
+  .adk .adk-stat:last-child:nth-child(odd) { grid-column: 1 / -1; min-height: 0; }
+  /* one header row, like the other pages */
+  .adk .adk-top__row { flex-wrap: nowrap; gap: 8px; }
+  .adk .adk-brand { flex: 1 1 auto; flex-basis: auto; }
+  .adk .adk-logo { width: 34px; height: 34px; }
+  .adk .adk-brand__name { font-size: 19px; white-space: nowrap; }
+  .adk .adk-actions { flex: none; gap: 6px; }
+  /* tools as a tabla: two columns of small cards */
+  .adk .adk-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .adk .adk-tool { flex-direction: column; align-items: flex-start; gap: 8px; height: 100%; padding: 10px; }
+  .adk .adk-tool__ico { width: 42px; height: 42px; }
 }
 
 /* motion only when the visitor has not asked to reduce it: press effect, and the ficha drops onto a finished step with a bounce */

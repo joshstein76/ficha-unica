@@ -106,9 +106,9 @@ h1,h2,h3{margin:0;text-wrap:balance}
 h1,h2{font-family:var(--carta);font-weight:400;font-synthesis:none;line-height:1.12}h1{font-size:30px}h2{font-size:21px}
 h3{font:800 17px/1.2 var(--titulo);letter-spacing:-.01em}
 p{margin:0}
-.top{display:flex;align-items:center;justify-content:space-between;gap:10px 12px;flex-wrap:wrap;padding:10px max(16px,env(safe-area-inset-left,0px));
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px max(16px,env(safe-area-inset-left,0px));
 background:var(--cempa);border-bottom:3px solid var(--tinta);position:sticky;top:0;z-index:5}
-.top .logo{font-size:21px}
+.top .logo{font-size:19px;min-width:0}.top .logo .mark{width:32px;height:32px}
 .top a:not(.btn):not(.logo){color:var(--tinta);font-weight:700;display:inline-flex;align-items:center;min-height:44px;padding:0 4px}
 .wrap{max-width:860px;margin:0 auto;padding:20px max(16px,env(safe-area-inset-left,0px)) 32px;display:grid;gap:18px}
 .card{background:var(--blanco);border:3px solid var(--tinta);border-radius:14px;box-shadow:4px 4px 0 var(--tinta);padding:18px;display:grid;gap:12px;min-width:0}

@@ -24,7 +24,7 @@ LESSONS = [
         ('Tu perfil de asesor', 'En Mi perfil puedes mostrar tu foto, zonas y WhatsApp en tu página pública.'),
     ], 'Nadie puede garantizar un lugar en Google: lo que sí controlas es que tu ficha sea clara y completa.'),
     ('responder-en-5-minutos', 'Responder en 5 minutos por WhatsApp', 'El primer mensaje y cómo agendar la visita.', 5, [
-        ('Cuando llega un cliente', 'Te avisamos por WhatsApp y aparece en Clientes con su mensaje.'),
+        ('Cuando llega un cliente', 'Si te dejó sus datos, aparece en Clientes con su mensaje. Si usó el botón de WhatsApp, te llega directo a tu chat.'),
         ('Responde rápido', 'La respuesta en pocos minutos es lo que más ayuda a avanzar. Si se te pasa, te recordamos.'),
         ('Primer mensaje', 'Salúdalo por su nombre, menciona la propiedad que vio y pregunta cuándo le gustaría visitarla. Tu mensaje base ya viene listo y lo cambias en Mi sitio.'),
         ('Agenda la visita', 'Ofrece dos horarios concretos en lugar de preguntar "¿cuándo puedes?".'),

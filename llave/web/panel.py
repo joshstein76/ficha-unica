@@ -93,7 +93,7 @@ def signup(error='', values=None, ref=''):
     v = values or {}
     ref = v.get('ref') or ref
     body = ('<div class="auth pub"><div class="intro"><h1>Crea tu sitio gratis.</h1>'
-            '<p class="muted">Sube cada propiedad una vez. Sale en tu sitio, en Google y en la IA, y quien la ve te escribe a tu WhatsApp.</p>'
+            '<p class="muted">Sube cada propiedad una vez. Queda en tu sitio, lista para Google, y quien la ve te escribe a tu WhatsApp.</p>'
             '<p class="micro"><span>Sin tarjeta</span><span>Sin plazo forzoso</span><span>Desde tu celular</span></p></div>%s'
             '<form class="stack card" method="post" action="/registro"><input type="hidden" name="ref" value="%s"><div aria-hidden="true" style="position:absolute;left:-9999px"><label>Sitio web<input name="website" tabindex="-1" autocomplete="off"></label></div>'
             '<label>Tu nombre<input name="name" value="%s" autocomplete="name" required></label>'
@@ -263,7 +263,7 @@ def dashboard(con, ctx, welcome=False):
         n_list, n_all, limit, e(a['plan']), n_new, n_feed,
         home_tiles(), novedades_card(ctx),
         first_week(done, len(steps), steps) if done < len(steps) else '<div class="notice">✓ Tu primera semana está completa. <a href="/nueva">Sube otra propiedad</a></div>',
-        _leads_list(con, leads) if leads else '<p class="muted">Aún no tienes clientes. Cuando alguien escriba desde tu sitio, aparece aquí y en WhatsApp.</p>', props(db.REFERRAL_BONUS_LISTINGS))
+        _leads_list(con, leads) if leads else '<p class="muted">Aún no tienes clientes. Cuando alguien te deje sus datos en tu sitio, aparece aquí.</p>', props(db.REFERRAL_BONUS_LISTINGS))
     return layout('Inicio', body, ctx, 'inicio')
 
 
@@ -1099,8 +1099,8 @@ def profile(ctx, ok='', error=''):
 # ---------- plans (TEST MODE until llave/billing.py is configured; then Stripe takes the payment) ----------
 PLANS = [
     ('gratis', 'Gratis', 0, ['Tu sitio en una dirección gratis', '1 propiedad', 'Clientes directo a tu WhatsApp']),
-    ('pro', 'Pro', 499, ['Todo lo de Gratis', '5 propiedades', 'Tu propio dominio', 'Imágenes para Instagram y ficha para imprimir',
-                         'Importa tus propiedades desde Excel', 'Bolsa 50/50 con otros asesores', 'Estadísticas completas']),
+    ('pro', 'Pro', 499, ['Todo lo de Gratis', '5 propiedades', 'Tu propio dominio (muy pronto)', 'Imágenes para Instagram y ficha para imprimir',
+                         'Importa tus propiedades desde Excel (archivo CSV)', 'Bolsa 50/50 con otros asesores', 'Estadísticas completas']),
     ('ia', 'Pro + IA', 999, ['Todo lo de Pro', '25 propiedades', 'Títulos y descripciones con IA, en español e inglés', 'Revisión y orden de tus fotos',
                              'Precio sugerido con propiedades parecidas', 'Qué publicar cada semana en tus redes']),
 ]

@@ -364,7 +364,7 @@ class Handler(BaseHTTPRequestHandler):
                                             f.get('beds'), f.get('consent') == '1')
                 except ValueError as ex:
                     return self.send(site.thanks(a, '', str(ex)), 400)
-            return self.send(site.thanks(a, '', 'Listo. Le avisaremos por WhatsApp cuando salga algo así.'))
+            return self.send(site.thanks(a, '', 'Listo. Guardamos tu búsqueda.'))
         if path == '/gracias':
             msg = 'Hola, acabo de dejar mis datos en su sitio.'
             return self.send(site.thanks(a, whatsapp.wa_link(a['whatsapp'], msg) if a['whatsapp'] else ''))

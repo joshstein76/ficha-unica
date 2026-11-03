@@ -120,7 +120,7 @@ class PortalAlerts(unittest.TestCase):
         lid, cookie, csrf = self.agency_with_listing('alertas-roma', 'Roma Norte', 4200000)
         s, page, _ = req('alertas-roma.fichaunica.localhost', '/alerta', {'name': 'Iván', 'phone': '5598765432', 'operation': 'venta',
                                                                        'colonia': 'Roma', 'max': '5000000', 'consent': '1'})
-        self.assertIn('Le avisaremos', page)
+        self.assertIn('Guardamos tu búsqueda', page)
         from llave import alerts_buyers
         con = db.connect()
         self.assertEqual(alerts_buyers.run(con), 0)                               # listing is still a draft
