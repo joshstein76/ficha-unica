@@ -21,7 +21,7 @@ class FeedsTest(unittest.TestCase):
         self.con = db.connect(os.path.join(self.tmp, 't.db'))
         db.init(self.con)
         c = self.con
-        c.execute("INSERT INTO agencies(id, slug, name, email) VALUES (1,'vive','VIVE Polanco','a@x.mx')")
+        c.execute("INSERT INTO agencies(id, slug, name, email, plan) VALUES (1,'vive','VIVE Polanco','a@x.mx','pro')")
         c.execute("INSERT INTO users(id, agency_id, name, email, password_hash) VALUES (1,1,'Ana','ana@x.mx','x')")
         today = datetime.date.today().isoformat()
         c.execute("""INSERT INTO listings(id, agency_id, agent_id, ref, slug, status, operation, property_type, title,
@@ -112,8 +112,9 @@ class FeedsTest(unittest.TestCase):
         self.assertIn('Precio a consultar', m); self.assertIn('título es muy corto', m); self.assertIn('la colonia', m)
 
     def test_mercadolibre(self):
+        c1 = db.canonical(self.con, 1)
         p = mercadolibre.dry_run_publish(self.con, 1)
-        self.assertEqual(p['category_id'], 'MLM1472')
+        self.assertEqual(p['category_id'], mercadolibre.CATEGORIES[(c1['property_type'], c1['operation'])])
         self.assertLessEqual(len(p['title']), 60)
         self.assertEqual(p['currency_id'], 'MXN')
         self.assertEqual(len(p['pictures']), 6)
@@ -123,10 +124,70 @@ class FeedsTest(unittest.TestCase):
         self.assertEqual(ids['BEDROOMS'], '2')
         self.assertEqual(p['location']['neighborhood']['name'], 'Polanco')
         self.assertIn('plain_text', p['description'])
-        self.assertEqual(mercadolibre.build_item(db.canonical(self.con, 2))['category_id'], 'MLM1466')
+        c2 = db.canonical(self.con, 2)
+        self.assertEqual(mercadolibre.build_item(c2)['category_id'],
+                         mercadolibre.CATEGORIES[(c2['property_type'], c2['operation'])])
         row = self.con.execute("SELECT * FROM outbox").fetchone()
         self.assertEqual((row['kind'], row['status'], row['ref']), ('portal.mercadolibre.create', 'dry_run', 'listing:1'))
-        self.assertEqual(json.loads(row['payload'])['category_id'], 'MLM1472')
+        self.assertEqual(json.loads(row['payload'])['category_id'], p['category_id'])
+
+    def test_mercadolibre_update_dry_run(self):
+        with self.assertRaises(ValueError):
+            mercadolibre.dry_run_update(self.con, 1, 'pause')  # never published
+        self.con.execute("INSERT INTO portal_publications(listing_id, portal, enabled, status, external_id) "
+                         "VALUES (1,'mercadolibre',1,'publicada','MLM123')")
+        r = mercadolibre.dry_run_update(self.con, 1, 'pause')
+        self.assertEqual((r['method'], r['path'], r['body']), ('PUT', '/items/MLM123', {'status': 'paused'}))
+        self.assertEqual(mercadolibre.dry_run_update(self.con, 1, 'reactivate')['body'], {'status': 'active'})
+        self.assertEqual(mercadolibre.dry_run_update(self.con, 1, 'close')['body'], {'status': 'closed'})
+        self.assertEqual(mercadolibre.dry_run_update(self.con, 1, 'price')['body'],
+                         {'price': db.canonical(self.con, 1)['price']})
+        with self.assertRaises(ValueError):
+            mercadolibre.dry_run_update(self.con, 1, 'delete')
+        kinds = [x['kind'] for x in self.con.execute("SELECT kind FROM outbox ORDER BY id")]
+        self.assertEqual(kinds, ['portal.mercadolibre.' + k for k in ('pause', 'reactivate', 'close', 'price')])
+
+    def test_mercadolibre_sync_plan_limit(self):
+        ag = self.con.execute("SELECT agency_id FROM listings WHERE id=1").fetchone()['agency_id']
+        ids = [r['id'] for r in self.con.execute("SELECT id FROM listings WHERE agency_id=? AND status IN %s" % (db.PUBLIC_STATUSES,), (ag,))]
+        for i in ids:
+            self.con.execute("INSERT INTO portal_publications(listing_id, portal, enabled, status, external_id) "
+                             "VALUES (?,'mercadolibre',1,'publicada',?)", (i, 'MLM%d' % i))
+        self.con.commit()
+        self.assertEqual(mercadolibre.sync_plan_limit(self.con, ag), {'pause': [], 'reactivate': []})  # all shown
+        orig = db.listing_limit
+        db.listing_limit = lambda con, a: 1
+        try:
+            r = mercadolibre.sync_plan_limit(self.con, ag)
+            self.assertEqual(len(r['pause']), len(ids) - 1)
+            self.assertEqual(mercadolibre.sync_plan_limit(self.con, ag), {'pause': [], 'reactivate': []})  # idempotent
+        finally:
+            db.listing_limit = orig
+        back = mercadolibre.sync_plan_limit(self.con, ag)
+        self.assertEqual(sorted(back['reactivate']), sorted(r['pause']))
+        self.assertEqual(back['pause'], [])
+
+    def test_mercadolibre_leaf_categories_and_contact(self):
+        c = db.canonical(self.con, 1)
+        for (pt, op), cat in [(('casa', 'venta'), 'MLM170527'), (('departamento', 'renta'), 'MLM1479'),
+                              (('local', 'venta'), 'MLM1474'), (('bodega', 'renta'), 'MLM50744')]:
+            c['property_type'], c['operation'] = pt, op
+            self.assertEqual(mercadolibre.category(c), cat)
+        c['property_type'] = 'rancho'
+        self.assertEqual(mercadolibre.category(c), mercadolibre.PARENT)
+        self.assertEqual(mercadolibre.split_phone('55 1234 5678'), ('52', '5512345678'))
+        self.assertEqual(mercadolibre.split_phone('+1 (305) 555-0101'), ('1', '3055550101'))
+        self.assertEqual(mercadolibre.split_phone('abc'), ('', ''))
+        c['property_type'] = 'departamento'
+        c['agent'] = {'name': 'Ana', 'whatsapp': '+52 1 55 1234 5678', 'email': 'ana@example.com'}
+        sc = mercadolibre.build_item(c)['seller_contact']
+        self.assertEqual((sc['country_code2'], sc['phone2'], sc['contact']), ('52', '5512345678', 'Ana'))
+        self.assertTrue(sc['phone2'].isdigit())
+        self.assertEqual(mercadolibre.blockers(mercadolibre.build_item(c)), [])
+        c['agent'] = None; c['agency']['whatsapp'] = ''; c['photos'] = []
+        it = mercadolibre.build_item(c)
+        self.assertEqual(len(mercadolibre.blockers(it)), 2)
+        self.assertIn('Falta un WhatsApp válido del agente (Mercado Libre lo exige)', it['_todo'])
 
     def test_skip_no_photos_no_title(self):
         self.con.execute("DELETE FROM photos WHERE listing_id=2")

@@ -41,7 +41,7 @@ def _boost_order_sql(con):
 
 
 def search(con, q):
-    sql = ("SELECT l.id FROM listings l JOIN agencies a ON a.id=l.agency_id WHERE l.status IN ('activa','apartada') "
+    sql = ("SELECT l.id, l.agency_id FROM listings l JOIN agencies a ON a.id=l.agency_id WHERE l.status IN ('activa','apartada') "
            "AND EXISTS (SELECT 1 FROM photos p WHERE p.listing_id=l.id)")
     args = []
     if q.get('operation') in ('venta', 'renta'):
@@ -66,7 +66,14 @@ def search(con, q):
         args.append(int(q['beds']))
     boost = _boost_order_sql(con)
     sql += ' ORDER BY %sl.updated_at DESC LIMIT %d' % (('%s DESC, ' % boost) if boost != '0' else '', PER_PAGE * 4)
-    return [r['id'] for r in con.execute(sql, args)]
+    shown = {}  # agency_id -> ids its site shows (plan limit)
+    out = []
+    for r in con.execute(sql, args).fetchall():
+        if r['agency_id'] not in shown:
+            shown[r['agency_id']] = set(db.public_listing_ids(con, r['agency_id'], include_shared=False))
+        if r['id'] in shown[r['agency_id']]:
+            out.append(r['id'])
+    return out
 
 
 def _opt(pairs, cur):

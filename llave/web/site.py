@@ -353,7 +353,8 @@ def team_html(con, agency):
 def agent_profile(con, agency, u):
     ids = [r['id'] for r in con.execute("SELECT id FROM listings WHERE agency_id=? AND agent_id=? AND status IN ('activa','apartada') "
                                         "ORDER BY updated_at DESC", (agency['id'], u['id']))]
-    cards = [db.canonical(con, i) for i in ids]
+    shown = set(db.public_listing_ids(con, agency['id'], include_shared=False))
+    cards = [db.canonical(con, i) for i in ids if i in shown]
     wa = whatsapp.wa_link(u['whatsapp'] or agency['whatsapp'], 'Hola %s, vi tu perfil y me gustaría más información.' % u['name'].split(' ')[0]) \
         if (u['whatsapp'] or agency['whatsapp']) else ''
     url = '%s/asesor/%s' % (db.site_url(agency), u['slug'])

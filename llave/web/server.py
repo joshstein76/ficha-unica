@@ -242,6 +242,9 @@ class Handler(BaseHTTPRequestHandler):
                 a = con.execute('SELECT * FROM agencies WHERE slug=?', (h[:-len(base) - 1],)).fetchone()
             else:
                 a = con.execute('SELECT * FROM agencies WHERE custom_domain=? AND domain_verified_at IS NOT NULL', (h,)).fetchone()
+                if a and not db.plan_has(a, 'domain'):  # own domain is Pro: on Gratis it points to the free address (302, back on upgrade)
+                    self.send('', 302, headers={'Location': db.site_url(a) + self.path})
+                    return
             if a:
                 return self.agency_site(con, a, method, path)
             if h in (base, 'www.' + base, 'localhost', '127.0.0.1'):

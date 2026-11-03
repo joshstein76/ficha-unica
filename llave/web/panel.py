@@ -1129,10 +1129,13 @@ def plans(con, ctx, ok='', error=''):
         manage = ('<form class="card" method="post" action="/plan/portal">%s<p class="small muted">Cambia de plan, actualiza tu tarjeta '
                   'o cancela desde tu pago.</p><button class="btn ghost">Administrar mi pago</button></form>') % csrf_field(ctx)
     foot = (STRIPE_NOTE % e(db.OWNER)) if paid else 'Precios en pesos mexicanos con IVA. Sin plazo forzoso: cambias o cancelas cuando quieras.'
-    cap = db.listing_limit(con, a)
-    body = ('%s%s<h1>Tu plan</h1><p class="muted">Usas %d de %d %s.</p><div class="grid2 wide plans">%s</div>%s'
-            '<p class="small muted">%s</p>') % (notice(ok), notice(error, 'err'), n, cap, 'propiedad' if cap == 1 else 'propiedades',
-                                                 cards, manage, foot)
+    limit = db.listing_limit(con, a)
+    over = ('<p class="small">Tu sitio muestra %s. Las demás siguen guardadas y vuelven a verse al subir de plan.</p>'
+            % ('solo la más reciente' if limit == 1 else 'solo las %d más recientes' % limit)) \
+        if con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status IN ('activa','apartada')", (a['id'],)).fetchone()[0] > limit else ''
+    body = ('%s%s<h1>Tu plan</h1><p class="muted">Usas %d de %d %s.</p>%s<div class="grid2 wide plans">%s</div>%s'
+            '<p class="small muted">%s</p>') % (notice(ok), notice(error, 'err'), n, limit, 'propiedad' if limit == 1 else 'propiedades',
+                                                 over, cards, manage, foot)
     return layout('Tu plan', body, ctx, 'sitio')
 
 

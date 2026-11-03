@@ -47,8 +47,11 @@ def _select(con, agency_id, portal):
         rows = con.execute("SELECT l.id FROM listings l JOIN portal_publications pp ON pp.listing_id=l.id "
                            "AND pp.portal=? AND pp.enabled=1 WHERE l.agency_id=? AND l.status IN %s "
                            "ORDER BY l.updated_at DESC" % (db.PUBLIC_STATUSES,), (portal, agency_id)).fetchall()
+    shown = set(db.public_listing_ids(con, agency_id, include_shared=False))  # plan limit: only what the site shows
     out = []
     for r in rows:
+        if r['id'] not in shown:
+            continue
         c = db.canonical(con, r['id'])
         if c and c['photos'] and (c['title'] or '').strip():
             out.append(c)
