@@ -429,6 +429,9 @@ class Handler(BaseHTTPRequestHandler):
         """GET: the plan page. POST: Stripe Checkout for a paid plan, the Billing Portal for agents who already pay
         (change plan / cancel there), or a direct move to Gratis for an agent with no subscription."""
         a, uid = ctx['agency'], ctx['user']['id']
+        closed = billing.paid_closed(ctx['user']['email'])  # production + Stripe TEST key + not an allowed test email
+        if closed and key != 'gratis':  # same honest "pagos muy pronto" state as Stripe off; checked here, not only in the page
+            return self.send(panel.payments_soon(ctx, key), 503 if method == 'POST' else 200)
         if method != 'POST':
             return self.send(panel.plan_checkout(ctx, key))
         if key == db.plan_of(a):
@@ -437,9 +440,10 @@ class Handler(BaseHTTPRequestHandler):
         if n > db.listing_limit(con, a, key):
             return self.send(panel.plan_checkout(ctx, key, 'Tienes %d propiedades; este plan permite %d. Marca algunas como vendidas primero.'
                                                   % (n, db.listing_limit(con, a, key))), 400)
-        if key == 'gratis' and not billing.is_paying(a):
-            con.execute("UPDATE agencies SET plan='gratis' WHERE id=?", (a['id'],))
-            db.audit(con, 'user:%d' % uid, 'plan_change_downgrade', '%s -> gratis (no subscription)' % a['plan'])
+        if key == 'gratis' and (not billing.is_paying(a) or closed):
+            # closed + paying = a TEST subscription (no real money): step down here, there is no portal to send them to
+            con.execute("UPDATE agencies SET plan='gratis'%s WHERE id=?" % (', stripe_subscription_id=NULL' if billing.is_paying(a) else ''), (a['id'],))
+            db.audit(con, 'user:%d' % uid, 'plan_change_downgrade', '%s -> gratis (%s)' % (a['plan'], 'test subscription, paid plans closed' if billing.is_paying(a) else 'no subscription'))
             con.commit()
             ghl_live.plan_changed(con, a['id'])
             ctx['agency'] = con.execute('SELECT * FROM agencies WHERE id=?', (a['id'],)).fetchone()
@@ -830,13 +834,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(panel.profile(ctx, ok='Perfil guardado.'))
             return self.send(panel.profile(ctx))
         if path == '/plan':
-            pago = query.get('pago') if billing.enabled() else None
+            pago = query.get('pago') if billing.enabled() and not billing.paid_closed(ctx['user']['email']) else None
             ok = ('Gracias: tu plan se activa en unos segundos.' if pago == 'ok' else
                   'No se hizo ningún cobro. Cuando quieras, lo intentas de nuevo.' if pago == 'cancelado' else '')
             return self.send(panel.plans(con, ctx, ok=ok))
         if path == '/plan/portal' and billing.enabled():
             if method != 'POST':
                 return self.redirect('/plan')
+            if billing.paid_closed(ctx['user']['email']):
+                return self.send(panel.payments_soon(ctx, None), 503)
             try:
                 return self.redirect(billing.portal_url(a))
             except billing.BillingError as ex:
@@ -1333,6 +1339,9 @@ def main():
     con.close()
     if db.ENV == 'production' and not billing.enabled():
         print('AVISO: Stripe no está configurado (config/stripe.env): los planes de pago están cerrados ("pagos muy pronto").', file=sys.stderr)
+    if billing.test_lock_active():
+        print('AVISO: la llave de Stripe es de PRUEBA en producción: los planes de pago están cerrados para todos, '
+              'salvo %d correo(s) en LLAVE_STRIPE_TEST_EMAILS.' % len(billing.test_emails()), file=sys.stderr)
     bind = os.environ.get('LLAVE_BIND', '127.0.0.1')  # always behind the reverse proxy; never expose directly
     srv = ThreadingHTTPServer((bind, db.PORT), Handler)
     print('Ficha Única (LLAVE) %s: panel %s · sitios %s' % (db.ENV, db.origin('app'), db.origin('<slug>')))

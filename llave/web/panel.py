@@ -1113,7 +1113,8 @@ STRIPE_NOTE = ('Pago seguro con tarjeta, procesado por Stripe para %s. Precios e
 
 def plans(con, ctx, ok='', error=''):
     a = ctx['agency']
-    paid = billing.enabled()
+    closed = billing.enabled() and billing.paid_closed(ctx['user']['email'])  # Stripe TEST key in production: no payments yet
+    paid = billing.enabled() and not closed
     n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
     cards = ''.join(
         '<div class="card plan%s"><h2>%s</h2><p class="price"><b>%s</b>%s</p><ul class="small">%s</ul>%s</div>' % (
@@ -1125,7 +1126,7 @@ def plans(con, ctx, ok='', error=''):
             '<a class="btn %s" href="/plan/%s">%s</a>' % ('' if price else 'ghost', k, 'Cambiar a %s' % name))
         for k, name, price, feats in PLANS)
     manage = ''
-    if paid and billing.is_paying(a):
+    if paid and billing.is_paying(a):  # `paid` is False while the test-key lock hides the Billing Portal
         manage = ('<form class="card" method="post" action="/plan/portal">%s<p class="small muted">Cambia de plan, actualiza tu tarjeta '
                   'o cancela desde tu pago.</p><button class="btn ghost">Administrar mi pago</button></form>') % csrf_field(ctx)
     foot = (STRIPE_NOTE % e(db.OWNER)) if paid else 'Precios en pesos mexicanos con IVA. Sin plazo forzoso: cambias o cancelas cuando quieras.'
@@ -1155,9 +1156,10 @@ def upsell(ctx, feature, title, tab='inicio'):
 
 
 def payments_soon(ctx, key):
-    name = next((x[1] for x in PLANS if x[0] == key), key)
-    body = ('<div class="auth"><h1>%s llega muy pronto</h1><p class="muted">Estamos activando los pagos con tarjeta. '
-            'Mientras tanto sigues en tu plan actual, con todo lo que ya tienes.</p><a class="btn ghost" href="/plan">Volver a planes</a></div>') % e(name)
+    name = next((x[1] for x in PLANS if x[0] == key), key) if key else None
+    body = ('<div class="auth"><h1>%s</h1><p class="muted">Estamos activando los pagos con tarjeta. '
+            'Mientras tanto sigues en tu plan actual, con todo lo que ya tienes.</p><a class="btn ghost" href="/plan">Volver a planes</a></div>') % (
+        e('%s llega muy pronto' % name) if name else 'Los pagos llegan muy pronto')
     return layout('Pagos muy pronto', body, ctx, 'sitio')
 
 
@@ -1177,6 +1179,11 @@ def plan_checkout(ctx, key, error=''):
 def _plan_checkout_paid(ctx, key, p, error):
     """Real payment screens (Stripe configured): no test notice. Payment itself happens on Stripe's page."""
     a = ctx['agency']
+    if billing.paid_closed(ctx['user']['email']):  # test-key lock: only the way down to Gratis stays open (the server blocks the rest)
+        return layout('Cambiar de plan', '<div class="auth"><h1>Cambiar a %s</h1>%s%s<a class="btn ghost" href="/plan">Volver</a></div>' % (
+            e(p[1]), notice(error, 'err'),
+            ('<form method="post" action="/plan/gratis">%s<button class="btn">Pasar a Gratis</button></form>' % csrf_field(ctx))
+            if key == 'gratis' and key != db.plan_of(a) else '<p class="muted">Este ya es tu plan.</p>'), ctx, 'sitio')
     price = '<p class="price"><b>%s</b>%s</p>' % ('Gratis' if not p[2] else '$%d MXN' % p[2],
                                                   '' if not p[2] else ' <span class="muted small">al mes, IVA incluido</span>')
     portal = ('<form method="post" action="/plan/portal">%s<button class="btn">Administrar mi pago</button></form>' % csrf_field(ctx))
