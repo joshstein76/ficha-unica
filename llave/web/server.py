@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import threading
 
-from .. import auth, billing, calculadoras, cards, db, formatos, ghl_live, operaciones, geo, importer, lead_watch, media, ml_oauth, novedades, photo_fetch, photos, price_check, replies, stats, whatsapp
+from .. import auth, billing, calculadoras, cards, db, domains, formatos, ghl_live, operaciones, geo, importer, lead_watch, media, ml_oauth, novedades, photo_fetch, photos, price_check, replies, stats, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
@@ -94,7 +94,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
         if db.ENV == 'production':
-            self.send_header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+            own = not (self.host() == db.BASE_DOMAIN or self.host().endswith('.' + db.BASE_DOMAIN))  # an agent's own domain: never pin its subdomains
+            self.send_header('Strict-Transport-Security', 'max-age=31536000' + ('' if own else '; includeSubDomains'))
             self.send_header('X-Frame-Options', 'SAMEORIGIN')
         for k, v in headers.items():
             self.send_header(k, v)
@@ -106,6 +107,14 @@ class Handler(BaseHTTPRequestHandler):
         h = {'Location': to}
         h.update(headers or {})
         self.send('', 303, headers=h)
+
+    def redirect_to(self, to, permanent=False):
+        """Host-level redirects. Permanent ones are 301 (308 for a POST, which keeps the method) with a one-hour cache: a browser
+        must not remember 'this site moved' for years, because the own domain can be taken off if its DNS breaks."""
+        if permanent:
+            code = 301 if self.command in ('GET', 'HEAD') else 308
+            return self.send('', code, headers={'Location': to, 'Cache-Control': 'max-age=3600'})
+        return self.send('', 302, headers={'Location': to})
 
     def host(self):
         return (self.headers.get('Host') or '').split(':')[0].lower()
@@ -240,11 +249,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.panel(con, method, path, query)
             if h.endswith('.' + base):
                 a = con.execute('SELECT * FROM agencies WHERE slug=?', (h[:-len(base) - 1],)).fetchone()
+                if a and db.own_domain_live(a):  # one site for Google: the free address sends everything to the own domain
+                    return self.redirect_to(db.site_url(a) + self.path, permanent=True)
             else:
-                a = con.execute('SELECT * FROM agencies WHERE custom_domain=? AND domain_verified_at IS NOT NULL', (h,)).fetchone()
+                a, kind = domains.agency_for_host(con, h)
                 if a and not db.plan_has(a, 'domain'):  # own domain is Pro: on Gratis it points to the free address (302, back on upgrade)
-                    self.send('', 302, headers={'Location': db.site_url(a) + self.path})
-                    return
+                    return self.redirect_to(db.origin(a['slug']) + self.path)
+                if a and kind == 'apex':  # micasa.mx -> www.micasa.mx (the bare name only exists to redirect)
+                    return self.redirect_to(db.site_url(a) + self.path, permanent=True)
             if a:
                 return self.agency_site(con, a, method, path)
             if h in (base, 'www.' + base, 'localhost', '127.0.0.1'):
@@ -932,19 +944,52 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(panel.site_settings(con, ctx, error=str(ex)), 400)
                 ctx['agency'] = con.execute('SELECT * FROM agencies WHERE id=?', (a['id'],)).fetchone()
                 return self.send(panel.site_settings(con, ctx, ok='Guardado. Tu sitio ya se ve así.'))
-            return self.send(panel.site_settings(con, ctx))
-        if path == '/sitio/dominio' and method == 'POST':
+            return self.send(panel.site_settings(con, ctx, ok={'guardado': 'Guardamos tu dominio. Sigue los pasos de abajo y pulsa «Verificar ahora».',
+                                                               'quitado': 'Quitamos tu dominio. Tu sitio sigue en su dirección gratis.'}.get(query.get('d'), '')))
+        if path in ('/sitio/dominio', '/sitio/dominio/verificar') and method == 'POST':
             if not db.plan_has(a, 'domain'):
                 return self.send(panel.site_settings(con, ctx, error='Tu propio dominio viene en el plan Pro.'), 403)
-            d = (f.get('domain') or '').strip().lower().replace('https://', '').replace('http://', '').strip('/')
-            if d.startswith('www.'):
-                d = d[4:]
-            if d and not re.match(r'^[a-z0-9-]+(\.[a-z0-9-]+)+$', d):
-                return self.send(panel.site_settings(con, ctx, error='Ese dominio no parece válido (ej. micasa.mx).'), 400)
-            con.execute('UPDATE agencies SET custom_domain=?, domain_verified_at=NULL WHERE id=?', (d or None, a['id']))
-            con.commit()
-            return self.redirect('/sitio')
+            if path == '/sitio/dominio':
+                try:
+                    d = domains.claim(con, a, f.get('domain'), actor=actor)
+                except ValueError as ex:
+                    return self.send(panel.site_settings(con, ctx, error=str(ex)), 400)
+                return self.redirect('/sitio?d=' + ('guardado' if d else 'quitado'))
+            who = 'agency:%d' % a['id']
+            if not a['custom_domain']:
+                return self.send(panel.site_settings(con, ctx, error='Primero escribe tu dominio y guárdalo.'), 400)
+            if not (rate_ok(con, 'domain_check', who, DOMAIN_CHECKS_5MIN, 5) and rate_ok(con, 'domain_check', who, DOMAIN_CHECKS_DAY, 24 * 60)):
+                return self.send(panel.site_settings(con, ctx, error='Ya revisaste hace un momento. Espera unos minutos y vuelve a pulsar; '
+                                                                    'además revisamos tu dominio solos cada 10 minutos.'), 429)
+            rate_hit(con, 'domain_check', who)
+            res = domains.check(con, a, source='boton', warm=False)  # the certificate warm-up can take a while: it runs in a thread below
+            ctx['agency'] = con.execute('SELECT * FROM agencies WHERE id=?', (a['id'],)).fetchone()
+            if res['state'] == 'verificado':
+                if res['www'] != 'ok':  # still verified (only the cron takes a domain off), but right now DNS does not point at us
+                    return self.send(panel.site_settings(con, ctx, warn='Ahora mismo no vemos tu dominio apuntando a Ficha Única. Revisa el registro www; '
+                                                         'si sigue así un rato, tu sitio vuelve a su dirección gratis (no pierdes nada).'))
+                if ctx['agency']['domain_tls'] != 'ok' and domains.default_warm():
+                    warm_in_background(a['id'])
+                return self.send(panel.site_settings(con, ctx, ok='¡Listo! Tu dominio ya apunta a Ficha Única y quedó activo.'
+                                                     if res['event'] == 'verified' else 'Todo bien: tu dominio sigue apuntando a Ficha Única.'))
+            return self.send(panel.site_settings(con, ctx, warn='Todavía no vemos el cambio. Abajo te decimos qué falta.'))
         return self.send(panel.layout('No encontrado', panel.notice('Página no encontrada.', 'err'), ctx), 404)
+
+
+# Own-domain "Verificar ahora": at most 4 checks in 5 minutes and 30 a day per agency (DNS lookups are not free, and propagation takes time anyway).
+DOMAIN_CHECKS_5MIN = 4
+DOMAIN_CHECKS_DAY = 30
+
+
+def warm_in_background(agency_id):
+    """After 'Verificar ahora' verified a domain: visit it once so Caddy gets its certificate now and the first visitor does not wait."""
+    def run():
+        c = db.connect()
+        try:
+            domains.warm_agency(c, agency_id)
+        finally:
+            c.close()
+    threading.Thread(target=run, daemon=True).start()
 
 
 # ---------- background photo downloads (CSV import) ----------
@@ -1285,13 +1330,18 @@ def health(con):
 
 
 def tls_allowed(con, domain):
+    """Caddy on-demand TLS asks before it requests a certificate: our own hosts, existing agency subdomains, and the www and bare
+    forms of an agent's domain ONLY once it is verified (DNS pointed at us). Anything else is refused, so nobody can make us
+    ask Let's Encrypt for a name we do not serve."""
+    domain = (domain or '').strip().lower().rstrip('.')
     base = db.BASE_DOMAIN
+    if not domain:
+        return False
     if domain in (base, 'app.' + base, 'www.' + base):
         return True
     if domain.endswith('.' + base):
         return bool(con.execute('SELECT 1 FROM agencies WHERE slug=?', (domain[:-len(base) - 1],)).fetchone())
-    d = domain[4:] if domain.startswith('www.') else domain
-    return bool(con.execute('SELECT 1 FROM agencies WHERE custom_domain=? AND domain_verified_at IS NOT NULL', (d,)).fetchone())
+    return domains.agency_for_host(con, domain)[0] is not None
 
 
 def check_production_config():
@@ -1331,6 +1381,9 @@ def main():
     con = db.connect()
     db.init(con)
     con.close()
+    if db.ENV == 'production' and not domains.public_ips():
+        print('AVISO: LLAVE_PUBLIC_IP no está en app.env: a los asesores Pro no les podemos mostrar la dirección IP para su dominio '
+              'y la verificación se apoya solo en %s (docs/CUSTOM-DOMAINS.md).' % domains.cname_target(), file=sys.stderr)
     if db.ENV == 'production' and not billing.enabled():
         print('AVISO: Stripe no está configurado (config/stripe.env): los planes de pago están cerrados ("pagos muy pronto").', file=sys.stderr)
     bind = os.environ.get('LLAVE_BIND', '127.0.0.1')  # always behind the reverse proxy; never expose directly

@@ -85,6 +85,14 @@ def init(con):
             con.execute('ALTER TABLE agencies ADD COLUMN %s TEXT' % col)
     if 'plan_until' not in cols:  # pilot: plan given free until this date (tools/set_plan.py)
         con.execute('ALTER TABLE agencies ADD COLUMN plan_until TEXT')
+    for col, ddl in (('domain_claimed_at', 'TEXT'),                    # own domain (llave/domains.py): when it was saved (claim lapses if never verified)
+                     ('domain_checked_at', 'TEXT'),                    # last DNS check
+                     ('domain_check', 'TEXT'),                         # JSON of the last check (what www / the bare name resolved to)
+                     ('domain_fail_count', 'INTEGER NOT NULL DEFAULT 0'),  # consecutive failed cron checks while verified
+                     ('domain_lost_at', 'TEXT'),                       # set when a verified domain was unverified for not resolving
+                     ('domain_tls', 'TEXT')):                          # NULL unknown/ready · 'ok' certificate confirmed · 'espera' verified, certificate not confirmed yet
+        if col not in cols:
+            con.execute('ALTER TABLE agencies ADD COLUMN %s %s' % (col, ddl))
     ocols = {r[1] for r in con.execute('PRAGMA table_info(outbox)')}
     if 'attempts' not in ocols:  # live GHL sync retries (llave/ghl_live.py)
         con.execute('ALTER TABLE outbox ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0')
@@ -100,12 +108,26 @@ def slugify(s):
     return re.sub(r'[^a-z0-9]+', '-', s.lower()).strip('-')[:80] or 'propiedad'
 
 
+def own_domain_host(custom_domain):
+    """The host an agent's own domain is served on: always www (the bare name only redirects to it)."""
+    d = (custom_domain or '').strip().lower()
+    return d if d.startswith('www.') else 'www.' + d
+
+
 def site_url(agency):
-    """Public base URL of an agency site (custom domain once verified and the plan includes it, else the free address)."""
+    """Public base URL of an agency site (own domain, www form, once verified and the plan includes it, else the free address).
+    Canonical, sitemap, robots, llms.txt, JSON-LD, feeds and photo URLs all come from here."""
     a = dict(agency)
     if a.get('custom_domain') and a.get('domain_verified_at') and plan_has(a, 'domain'):
-        return 'https://' + a['custom_domain']
+        return 'https://' + own_domain_host(a['custom_domain'])
     return origin(a['slug'])
+
+
+def own_domain_live(agency):
+    """True when the free address should send visitors to the own domain (one site for Google): verified, the plan includes
+    it, and its certificate is not known to be missing (domain_tls='espera' = verified, certificate still being issued)."""
+    a = dict(agency)
+    return bool(a.get('custom_domain') and a.get('domain_verified_at') and plan_has(a, 'domain') and a.get('domain_tls') != 'espera')
 
 
 def listing_url(agency, listing):

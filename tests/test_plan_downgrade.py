@@ -70,9 +70,9 @@ class PlanDowngrade(unittest.TestCase):
         self.set_plan('pro')
         con = db.connect()
         self.assertEqual(db.public_listing_ids(con, 1), [5, 4, 3, 2, 1])
-        self.assertEqual(db.site_url(self.agency(con)), 'https://rosabienes.mx')
+        self.assertEqual(db.site_url(self.agency(con)), 'https://www.rosabienes.mx')  # www is the one real host; the bare name redirects to it
         con.close()
-        s, body, _ = get('rosabienes.mx', '/')
+        s, body, _ = get('www.rosabienes.mx', '/')
         self.assertEqual(s, 200)
         self.assertIn('Casa 1', body)
 
@@ -97,10 +97,11 @@ class PlanDowngrade(unittest.TestCase):
                 panel.layout = saved
             self.assertIn('Tu sitio muestra solo la más reciente', page)
             con.close()
-            s, _, h = get('rosabienes.mx', '/propiedad/casa-5?x=1')  # own domain -> free address, same path
-            self.assertEqual(s, 302)
-            self.assertTrue(h['Location'].endswith('/propiedad/casa-5?x=1'))
-            self.assertNotIn('rosabienes.mx', h['Location'])
+            for host in ('www.rosabienes.mx', 'rosabienes.mx'):  # own domain (either form) -> free address, same path
+                s, _, h = get(host, '/propiedad/casa-5?x=1')
+                self.assertEqual(s, 302, host)
+                self.assertTrue(h['Location'].endswith('/propiedad/casa-5?x=1'))
+                self.assertNotIn('rosabienes.mx', h['Location'])
             self.assertEqual(get('rosa.fichaunica.localhost', '/propiedad/casa-5')[0], 200)
             self.assertEqual(get('rosa.fichaunica.localhost', '/propiedad/casa-1')[0], 404)  # saved, not public
         finally:

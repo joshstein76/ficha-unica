@@ -241,8 +241,9 @@ class LoteriaSite(unittest.TestCase):
         self.assertIn("alter column design set default 'loteria'", mig)
         self.assertIn("drop constraint if exists agencies_design_chk", mig)
         self.assertIn("check (design in ('loteria','ciudad','costa','residencia'))", mig)
-        self.assertEqual(sorted(os.path.basename(p) for p in glob.glob(os.path.join(ROOT, 'supabase', 'migrations', '*.sql')))[-1],
-                         '0006_design_loteria.sql')
+        touching = [os.path.basename(p) for p in sorted(glob.glob(os.path.join(ROOT, 'supabase', 'migrations', '*.sql')))
+                    if 'agencies_design_chk' in open(p, encoding='utf-8').read()]
+        self.assertEqual(touching[-1], '0006_design_loteria.sql')  # no later migration may change the design check again (later migrations on other topics are fine)
 
 
 if __name__ == '__main__':
