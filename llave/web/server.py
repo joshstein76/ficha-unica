@@ -1039,8 +1039,8 @@ def signup(con, f):
         raise ValueError('Ya existe una cuenta con ese correo. Entra con tu contraseña.')
     slug = unique_slug(con, agency)
     ref = con.execute('SELECT id FROM agencies WHERE slug=?', ((f.get('ref') or '').strip().lower()[:60],)).fetchone()
-    cur = con.execute('INSERT INTO agencies(slug, name, whatsapp, email, city, tagline, referred_by, design) VALUES (?,?,?,?,?,?,?,?)',
-                      (slug, agency, wa, email, 'Ciudad de México', 'Bienes raíces', ref['id'] if ref else None, db.DEFAULT_DESIGN))
+    cur = con.execute('INSERT INTO agencies(slug, name, whatsapp, email, city, tagline, referred_by, design, accent) VALUES (?,?,?,?,?,?,?,?,?)',
+                      (slug, agency, wa, email, 'Ciudad de México', 'Bienes raíces', ref['id'] if ref else None, db.DEFAULT_DESIGN, db.DEFAULT_ACCENT))
     aid = cur.lastrowid
     uid = con.execute('INSERT INTO users(agency_id, name, email, whatsapp, password_hash) VALUES (?,?,?,?,?)',
                       (aid, name, email, wa, auth.hash_password(pw))).lastrowid
