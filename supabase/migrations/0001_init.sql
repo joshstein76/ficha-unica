@@ -18,7 +18,7 @@ create table public.agencies (
   email_public       boolean not null default false,  -- NEW: email appears in public_agencies only if true
   city               text,
   logo_path          text,
-  design             text not null default 'ciudad',
+  design             text not null default 'loteria',
   accent             text not null default '#1f4e79',
   about              text,
   custom_domain      text unique,
@@ -30,7 +30,7 @@ create table public.agencies (
   first_reply_noname text,
   is_demo            boolean not null default false,
   created_at         timestamptz not null default now(),
-  constraint agencies_design_chk check (design in ('ciudad','costa','residencia')),
+  constraint agencies_design_chk check (design in ('loteria','ciudad','costa','residencia')),
   constraint agencies_plan_chk   check (plan in ('gratis','pro','agencia')),
   constraint agencies_slug_chk   check (slug ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'),
   constraint agencies_accent_chk check (accent ~ '^#[0-9a-fA-F]{6}$')

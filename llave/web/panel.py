@@ -5,7 +5,7 @@ import os
 
 from .. import academia, billing, kit_home, calculadoras, db, formatos, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
-from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS)
+from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS, DESIGN_KEYS)
 from .styles import BRAND_COLOR, FONTS, KIT_SHELL, PANEL, PRECONNECT, logo
 
 ICONS = {
@@ -626,9 +626,10 @@ def bolsa(con, ctx, q=None, flash=''):
 # ---------- my site ----------
 def site_settings(con, ctx, ok='', error=''):
     a = ctx['agency']
+    cur_design = a['design'] if a['design'] in DESIGN_KEYS else db.DEFAULT_DESIGN
     designs = ''.join('<label class="check card" style="gap:6px"><input type="radio" name="design" value="%s"%s> '
                       '<span><b>%s</b><br><span class="small muted">%s</span></span></label>'
-                      % (k, ' checked' if a['design'] == k else '', n, d) for k, n, d in DESIGNS)
+                      % (k, ' checked' if cur_design == k else '', n, d) for k, n, d in DESIGNS)
     pro = db.plan_has(a, 'domain')
     domain = ('<section class="card"><h2>Tu propio dominio</h2>%s</section>' % (
         ('<form class="stack" method="post" action="/sitio/dominio">%s<label>Dominio<input name="domain" value="%s" '

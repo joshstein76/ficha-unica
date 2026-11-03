@@ -14,9 +14,11 @@ STATUSES = [('borrador', 'Borrador'), ('activa', 'Activa'), ('apartada', 'Aparta
             ('pausada', 'Pausada'), ('vendida', 'Vendida'), ('rentada', 'Rentada')]
 LEAD_STATUSES = [('nuevo', 'Nuevo'), ('contactado', 'Contactado'), ('cita', 'Cita'),
                  ('cerrado', 'Cerrado'), ('descartado', 'Descartado')]
-DESIGNS = [('residencia', 'Residencia', 'Elegante, fotos grandes, tipografía clásica'),
+DESIGNS = [('loteria', 'Lotería', 'Con color y carácter: bordes marcados y tu color de acento'),
+           ('residencia', 'Residencia', 'Elegante, fotos grandes, tipografía clásica'),
            ('ciudad', 'Ciudad', 'Moderno y limpio, ideal para departamentos'),
            ('costa', 'Costa', 'Claro y luminoso, ideal para casas y playa')]
+DESIGN_KEYS = tuple(k for k, _, _ in DESIGNS)
 
 
 def e(s):

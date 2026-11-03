@@ -6,7 +6,8 @@ import json
 from .. import db, geo, whatsapp
 from ..leads import rentapoliza_offer
 from .common import e, money, nice_date, facts_line, label, TYPES
-from .styles import FONTS, PRECONNECT, fonts_url, site_css
+from .styles import (COIN_SVG, FONTS, PRECONNECT, fonts_url, loteria_on_accent, resolve_design, safe_accent, site_css,
+                     site_fonts_url)
 
 WA_ICON = ('<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-3.3-.9-2.8-1.2-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.4.6-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></svg>')
 
@@ -44,20 +45,21 @@ def _page(agency, title, body, head_extra='', canonical=None, description=''):
     brand = ('<img src="%s/media/%s" alt="%s">' % (e(db.site_url(a)), e(a['logo_path']), e(a['name']))
              if a['logo_path'] else e(a['name']))
     wa = whatsapp.wa_link(a['whatsapp'], 'Hola, vi su sitio y me gustaría más información.') if a['whatsapp'] else ''
+    loteria = resolve_design(a['design']) == 'loteria'
     return ('<!doctype html><html lang="es-MX"><head><meta charset="utf-8">'
-            '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">%s'
             '<title>%s</title><meta name="description" content="%s">%s'
             '%s<link rel="stylesheet" href="%s">'
             '<style>%s</style>%s</head><body><a class="skip" href="#main">Saltar al contenido</a>'
             '<header class="sh"><div class="in"><a class="brand" href="/">%s</a>%s</div></header>'
             '%s'
             '<footer class="sf"><div class="in"><span>© %s · %s</span><span><a href="/aviso-de-privacidad">Aviso de privacidad</a></span>'
-            '<span class="muted">Sitio creado con <a href="%s" rel="nofollow">Ficha Única</a></span></div></footer></body></html>') % (
-        e(title), e(description[:160]),
+            '<span class="muted">%sSitio creado con <a href="%s" rel="nofollow">Ficha Única</a></span></div></footer></body></html>') % (
+        '<meta name="color-scheme" content="light">' if loteria else '', e(title), e(description[:160]),
         ('<link rel="canonical" href="%s">' % e(canonical)) if canonical else '',
-        PRECONNECT, fonts_url(a['design']), site_css(a['design'], a['accent']), head_extra, brand,
+        PRECONNECT, site_fonts_url(a['design']), site_css(a['design'], a['accent']), head_extra, brand,
         ('<a class="wa" href="%s" rel="nofollow" aria-label="WhatsApp de %s">%s WhatsApp</a>' % (e(wa), e(a['name']), WA_ICON)) if wa else '',
-        body, e(a['name']), e(a['city'] or 'México'), e(brand_url('sitio-' + a['slug'])))
+        body, e(a['name']), e(a['city'] or 'México'), COIN_SVG if loteria else '', e(brand_url('sitio-' + a['slug'])))
 
 
 def brand_url(source):
@@ -235,6 +237,21 @@ h1{font:400 22pt/1.1 "Instrument Serif",Georgia,serif;margin:0}
 """
 
 
+# Lotería printable sheet: same page, outlined in tinta with the agent's colour in the header bar (colour fills print exactly).
+FICHA_LOTERIA_CSS = r"""
+body{color:#1B1236}
+.hd{align-items:center;padding:8px 12px;border:3px solid #1B1236;border-radius:12px;background:var(--accent);color:var(--on-accent);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.hd span{color:inherit}
+h1{font:800 26pt/1 "Bricolage Grotesque","Arial Narrow",Impact,sans-serif;font-stretch:80%;letter-spacing:-.025em}
+.main,.row3 img{border:3px solid #1B1236;border-radius:12px}
+.facts div{border:2.5px solid #1B1236;border-radius:10px}
+.facts b{font:800 14pt "Bricolage Grotesque","Arial Narrow",Impact,sans-serif;font-stretch:80%}
+.facts small{color:#5E5478}
+.ft{border-top:3px solid #1B1236}
+.noprint button{border:3px solid #1B1236;border-radius:12px;background:var(--accent);color:var(--on-accent);box-shadow:3px 3px 0 #1B1236;font:800 16px "Bricolage Grotesque","Arial Narrow",Impact,sans-serif}
+"""
+
+
 def ficha(agency, c):
     """Printable A4 listing sheet (the PDF 'ficha técnica' agents hand out; print-to-PDF from the browser).
     Later: order printed copies from a nearby print shop through Cerquito."""
@@ -246,16 +263,21 @@ def ficha(agency, c):
     where = ', '.join(x for x in (c['address']['colonia'], c['address']['municipio'], c['address']['estado']) if x)
     url = '%s/propiedad/%s' % (db.site_url(agency), c['slug'])
     price_note = ('Precio al %s, sujeto a cambio y disponibilidad.' % nice_date(c['price_date'])) if c['price_date'] and c['price'] is not None else ''
+    if resolve_design(agency['design']) == 'loteria':
+        acc = safe_accent(agency['accent'])
+        fonts, root, extra_css = site_fonts_url('loteria'), '--accent:%s;--on-accent:%s' % (acc, loteria_on_accent(acc)), FICHA_LOTERIA_CSS
+    else:
+        fonts, root, extra_css = fonts_url('residencia'), '--accent:%s' % (agency['accent'] if (agency['accent'] or '').startswith('#') else '#1b1b1b'), ''
     return ('<!doctype html><html lang="es-MX"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             '<title>Ficha %s · %s</title><meta name="robots" content="noindex"><link rel="stylesheet" href="%s">'
-            '<style>:root{--accent:%s}%s</style></head><body>'
+            '<style>:root{%s}%s%s</style></head><body>'
             '<div class="noprint"><button onclick="window.print()">Imprimir o guardar PDF</button></div>'
             '<div class="sheet"><div class="hd"><b>%s</b><span>Folio %s · %s</span></div><h1>%s</h1><span>%s</span>'
             '%s<div class="row3">%s</div><div class="facts">%s</div><p class="desc">%s</p>'
             '<div class="ft"><span><b>%s</b><br>WhatsApp %s</span><span style="text-align:right">%s<br>%s</span></div></div>'
             '</body></html>') % (
-        e(c['ref']), e(agency['name']), fonts_url('residencia'), e(agency['accent'] if (agency['accent'] or '').startswith('#') else '#1b1b1b'),
-        FICHA_CSS, e(agency['name']), e(c['ref']), 'Venta' if c['operation'] == 'venta' else 'Renta', e(c['title']), e(where),
+        e(c['ref']), e(agency['name']), fonts, e(root),
+        FICHA_CSS, extra_css, e(agency['name']), e(c['ref']), 'Venta' if c['operation'] == 'venta' else 'Renta', e(c['title']), e(where),
         ('<img class="main" src="%s" alt="">' % e(p[0]['url'])) if p else '',
         ''.join('<img src="%s" alt="">' % e(x['url_800']) for x in p[1:4]), facts_html, e(c['description'][:1200]),
         e(agency['name']), e(agency['whatsapp'] or ''), e(url), e(price_note))
