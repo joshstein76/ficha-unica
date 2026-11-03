@@ -152,6 +152,44 @@ class WithSmtp(NoRealSmtp):
         self.assertNotIn(pw, json.dumps(dict(row)))
         self.assertNotIn(pw, ''.join(str(c) for c in err.write.call_args_list))
 
+    def test_a_temporary_failure_is_retried_once_then_sent(self):
+        import smtplib
+        calls = []
+
+        def flaky(msg, cfg):
+            calls.append(msg['Message-ID'])
+            if len(calls) == 1:
+                raise smtplib.SMTPServerDisconnected('Connection unexpectedly closed')
+
+        with env(), mock.patch.object(mailer, 'RETRY_WAIT', 0):
+            r = mailer.send(self.con, 'rosa@ejemplo.test', 'Hola', 'Cuerpo', sender=flaky)
+        self.assertEqual((r['ok'], r['status']), (True, 'sent'))
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0], calls[1])
+        row, = self.rows()
+        self.assertEqual((row['status'], row['attempts']), ('sent', 2))
+
+    def test_temporary_failure_twice_is_an_error_with_two_attempts_and_final_ones_are_not_retried(self):
+        import smtplib
+        n = []
+
+        def busy(msg, cfg):
+            n.append(1)
+            raise smtplib.SMTPResponseException(451, b'try later')
+
+        def refused(msg, cfg):
+            n.append(1)
+            raise smtplib.SMTPResponseException(550, b'no such user')
+
+        with env(), mock.patch.object(mailer, 'RETRY_WAIT', 0):
+            mailer.send(self.con, 'rosa@ejemplo.test', 'Hola', 'Cuerpo', sender=busy)
+            self.assertEqual(len(n), 2)
+            del n[:]
+            mailer.send(self.con, 'rosa@ejemplo.test', 'Hola', 'Cuerpo', sender=refused)
+            self.assertEqual(len(n), 1)
+        a, b = self.rows()
+        self.assertEqual((a['status'], a['attempts'], b['status'], b['attempts']), ('error', 2, 'error', 1))
+
     def test_the_password_is_never_stored_on_success_either(self):
         with env():
             mailer.send(self.con, 'rosa@ejemplo.test', 'Hola', 'Cuerpo', sender=lambda m, c: None)

@@ -14,9 +14,11 @@ import json
 import os
 import re
 import smtplib
+import socket
 import ssl
 import sys
 import threading
+import time
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid, parseaddr
 
@@ -26,6 +28,7 @@ TIMEOUT = 15            # seconds for connect + each SMTP step
 ASYNC = True            # real SMTP from a file database runs on a worker thread (tests set False)
 PRIVATE_KINDS = ('reset',)   # their body holds a private link: the outbox keeps the subject and recipient, never the text
 MAX_STORED_TEXT = 4000
+RETRY_WAIT = 3          # seconds before the one retry of a temporary failure (tests set 0)
 _ADDR = re.compile(r'^[^@\s<>,;]+@[^@\s<>,;]+\.[^@\s<>,;]+$')
 _threads = []
 _threads_lock = threading.Lock()
@@ -76,6 +79,13 @@ def _smtp_send(msg, cfg):
         if cfg['user']:
             s.login(cfg['user'], cfg['password'])
         s.send_message(msg, from_addr=parseaddr(cfg['sender'])[1])
+
+
+def _transient(ex):
+    """True for a failure that may pass by itself: dropped or timed-out connection, or a 4xx 'try later' reply. Bad login, refused recipient and 5xx are final."""
+    if isinstance(ex, smtplib.SMTPResponseException):
+        return 400 <= ex.smtp_code < 500
+    return isinstance(ex, (smtplib.SMTPServerDisconnected, smtplib.SMTPConnectError, socket.timeout, TimeoutError, ConnectionError))
 
 
 def _scrub(text, cfg):
@@ -142,13 +152,20 @@ def send(con, to, subject, text, html=None, kind='', ref=None, sender=None):
             rid = _record(con, kind, ref, payload, 'dry_run', 'sin SMTP configurado: no se envió')
             return {'ok': True, 'status': 'dry_run', 'delivered': False, 'id': rid}
         msg = build_message(cfg, to, subject, text, html)
-        try:
-            (sender or _smtp_send)(msg, cfg)
-        except Exception as ex:  # SMTP down, bad login, refused recipient...: recorded, never raised, never with the password
-            reason = '%s: %s' % (type(ex).__name__, _scrub(ex, cfg)[:300])
-            rid = _record(con, kind, ref, payload, 'error', reason, attempts=1)
-            return {'ok': False, 'status': 'error', 'delivered': False, 'id': rid}
-        rid = _record(con, kind, ref, payload, 'sent', msg['Message-ID'], attempts=1)
+        attempts = 0
+        while True:
+            attempts += 1
+            try:
+                (sender or _smtp_send)(msg, cfg)
+                break
+            except Exception as ex:  # SMTP down, bad login, refused recipient...: recorded, never raised, never with the password
+                if attempts == 1 and _transient(ex):  # one more try for a hiccup; the same Message-ID, so a half-delivered first try dedupes
+                    time.sleep(RETRY_WAIT)
+                    continue
+                reason = '%s: %s' % (type(ex).__name__, _scrub(ex, cfg)[:300])
+                rid = _record(con, kind, ref, payload, 'error', reason, attempts=attempts)
+                return {'ok': False, 'status': 'error', 'delivered': False, 'id': rid}
+        rid = _record(con, kind, ref, payload, 'sent', msg['Message-ID'], attempts=attempts)
         return {'ok': True, 'status': 'sent', 'delivered': True, 'id': rid}
     except Exception as ex:  # even the bookkeeping failed (closed database...): the caller's request must go on
         sys.stderr.write('[llave] mailer: %s: %s\n' % (type(ex).__name__, _scrub(ex, cfg)[:200]))
