@@ -77,12 +77,13 @@ class PgParity(unittest.TestCase):
         self.assertEqual(missing, [], 'add these columns to a new supabase/migrations file')
 
     def test_new_pg_tables_have_rls(self):
-        with open(os.path.join(ROOT, 'supabase', 'migrations', '0005_runtime_parity.sql'), encoding='utf-8') as fh:
-            sql = fh.read()
-        created = set(re.findall(r'create table if not exists public\.(\w+)', sql))
-        rls = set(re.findall(r'alter table public\.(\w+)\s+enable row level security', sql))
-        self.assertTrue(created)
-        self.assertEqual(sorted(created - rls), [])
+        for name in ('0005_runtime_parity.sql', '0009_lia_chat.sql'):
+            with open(os.path.join(ROOT, 'supabase', 'migrations', name), encoding='utf-8') as fh:
+                sql = fh.read()
+            created = set(re.findall(r'create table if not exists public\.(\w+)', sql))
+            rls = set(re.findall(r'alter table public\.(\w+)\s+enable row level security', sql))
+            self.assertTrue(created, name)
+            self.assertEqual(sorted(created - rls), [], name)
 
     def test_parser_sees_known_columns(self):  # the guard itself must not pass by reading nothing
         pg = pg_schema()

@@ -5,6 +5,7 @@ import json
 
 from .. import db, geo, whatsapp
 from ..leads import rentapoliza_offer
+from . import lia_ui
 from .common import e, money, nice_date, facts_line, label, TYPES
 from .styles import (COIN_SVG, FONTS, PRECONNECT, fonts_url, loteria_on_accent, resolve_design, safe_accent, site_css,
                      site_fonts_url)
@@ -102,8 +103,8 @@ def home(con, agency):
         else '<p class="muted">Pronto publicaremos propiedades aquí.</p>',
         e(agency['about'] or ''), team_html(con, agency))
     ld = '<script type="application/ld+json">%s</script>' % json.dumps(org, ensure_ascii=False)
-    return _page(agency, '%s · Bienes raíces' % agency['name'], body, ld, db.site_url(agency) + '/',
-                 agency['about'] or agency['tagline'] or agency['name'])
+    return lia_ui.attach(con, agency, _page(agency, '%s · Bienes raíces' % agency['name'], body, ld, db.site_url(agency) + '/',
+                                            agency['about'] or agency['tagline'] or agency['name']))
 
 
 def listing_jsonld(c, page_url):
@@ -217,7 +218,7 @@ def listing(con, agency, c, shared_split=None, error=''):
     if faqs:
         ld += '<script type="application/ld+json">%s</script>' % json.dumps(geo_seo.faq_jsonld(faqs), ensure_ascii=False)
     title = '%s · %s' % (c['title'], money(c['price'], c['currency']))
-    return _page(agency, title, body, og + ld, canon, c['description'])
+    return lia_ui.attach(con, agency, _page(agency, title, body, og + ld, canon, c['description']), c)
 
 
 FICHA_CSS = r"""
