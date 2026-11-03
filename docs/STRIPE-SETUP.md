@@ -15,6 +15,10 @@ Status: nothing here has been done. No Stripe account was created and no Stripe 
 
 Until `config/stripe.env` is filled, none of this is active and plan changes stay in free TEST MODE exactly as before.
 
+## Test key in production: paid plans are closed (2026-11-03)
+Sign-up is open, so while the server runs a **test** key (`sk_test_`) anyone could pay with card 4242 and get Pro / Pro + IA for free. The app now treats paid plans as **closed for everyone** while `LLAVE_ENV=production` and the key is a test key: `/plan/pro`, `/plan/ia` and the Billing Portal answer the same "pagos muy pronto" page as when Stripe is off (the server refuses the POST with 503, not only the page). Gratis, and stepping down to Gratis, keep working.
+To let the owner run his own test purchase against production, list his login email in `app.env`: `LLAVE_STRIPE_TEST_EMAILS=josh@example.com` (comma-separated, case does not matter), restart, and sign in with it. Empty or unset = nobody. A **live** key (Part 8) lifts the lock for everyone. On start the app prints an `AVISO` while the lock is on. Local runs are never locked.
+
 ## Part 1. Stripe account and test mode
 1. Sign in at dashboard.stripe.com and switch to the **Ficha Única** account (account picker, top left). If it does not exist yet, Josh creates it inside the Ciao Bella Marketing organization. Settings → Business → Public details: public name `Ficha Única`, statement descriptor `FICHAUNICA.MX`, Ficha support email/phone, icon + logo from iCloud `Ciao Bella Marketing/05 Marketing/Brand/2026-10-29 Stripe logos (pack 1)/`. The app sends no descriptor or account ID of its own: the account's settings are what agents see.
 2. Switch to **Test mode** (toggle at the top right). If Stripe shows **Sandbox** instead of "Test mode", use the sandbox: its keys also start with `sk_test_`.
@@ -64,6 +68,7 @@ python3 -c "from llave import billing; print(billing.enabled()); print(billing.c
 Local test of the webhook before the server is live (optional, unverified): install the Stripe CLI and run `stripe listen --forward-to http://app.fichaunica.localhost:8640/stripe/webhook`; it prints a temporary `whsec_` to use as `STRIPE_WEBHOOK_SECRET`.
 
 ## Part 7. Test it (test mode, no real money)
+0. On the production server the test key keeps paid plans closed (see the section above): add your own login email to `LLAVE_STRIPE_TEST_EMAILS` first.
 1. Sign up a test agent, open **Tu plan**, choose **Pro**, tap **Pagar con tarjeta**.
 2. On Stripe's page use card `4242 4242 4242 4242`, any future date, any CVC, any name. Declined test: `4000 0000 0000 0002`.
 3. You land on `/plan?pago=ok` ("Gracias: tu plan se activa en unos segundos"). Within seconds the card shows **Tu plan = Pro** and the page shows **Administrar mi pago**.

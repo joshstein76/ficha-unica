@@ -1,7 +1,7 @@
-"""Lead intake. Nothing here messages anyone: it stores the lead and queues DRY-RUN ghl ops."""
+"""Lead intake. Nothing here messages a client: it stores the lead, queues DRY-RUN ghl ops and emails the agent (llave/agent_mail.py)."""
 import re
 
-from . import db, ghl, whatsapp
+from . import agent_mail, db, ghl, whatsapp
 from .ghl import is_blocked
 
 
@@ -52,4 +52,5 @@ def create_lead(con, agency_id, listing_id=None, name='', phone='', email='', me
     lead_id = cur.lastrowid
     con.commit()
     ghl.queue_for_lead(con, lead_id)
+    agent_mail.notify_new_lead(con, lead_id)  # email to the AGENT(S) only, never to the client; never raises
     return {'id': lead_id, 'duplicate': False, 'blocked': False, 'wa_link_for_agent': wa}

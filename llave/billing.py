@@ -124,6 +124,30 @@ def config_problems():
     return out
 
 
+# ---------- test-key lock (2026-11-03) ----------
+# Production runs a Stripe TEST key while sign-up is open. Stripe accepts card 4242 in test mode, so anyone could "pay" and get
+# Pro / Pro + IA for free. While the key is a test key in production, paid plans look closed (the same "pagos muy pronto" state
+# as when Stripe is off) for everyone except the emails in LLAVE_STRIPE_TEST_EMAILS (comma-separated: the owner's own test purchases).
+# A live key, or any non-production run, is not affected. Enforced on the server routes, never only on the page.
+TEST_EMAILS_ENV = 'LLAVE_STRIPE_TEST_EMAILS'
+
+
+def test_lock_active():
+    """True in production while the Stripe key is a TEST key."""
+    return db.ENV == 'production' and key_mode(settings()['STRIPE_SECRET_KEY']) == 'test'
+
+
+def test_emails():
+    """Lowercased emails allowed to run test purchases while the lock is on."""
+    raw = os.environ.get(TEST_EMAILS_ENV) or ''
+    return {x.strip().lower() for x in re.split(r'[,;\s]+', raw) if x.strip()}
+
+
+def paid_closed(email):
+    """True when paid plans must look closed to the person with this login email (checkout, portal and plan switch)."""
+    return test_lock_active() and (email or '').strip().lower() not in test_emails()
+
+
 def is_paying(agency):
     """A paid plan backed by a Stripe subscription (those agents manage everything in the Billing Portal)."""
     a = dict(agency)

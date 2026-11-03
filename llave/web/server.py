@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import threading
 
-from .. import auth, billing, calculadoras, cards, db, formatos, ghl_live, operaciones, geo, importer, lead_watch, media, ml_oauth, novedades, photo_fetch, photos, price_check, replies, stats, whatsapp
+from .. import auth, billing, calculadoras, cards, db, formatos, ghl_live, operaciones, geo, importer, lead_watch, mailer, media, ml_oauth, novedades, password_reset, photo_fetch, photos, price_check, replies, stats, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
@@ -68,7 +68,8 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- plumbing ----------
     def log_message(self, fmt, *args):
-        sys.stderr.write('[llave] %s %s\n' % (self.address_string(), fmt % args))
+        line = re.sub(r'(/restablecer\?t=)[^\s&"]+', r'\1[REDACTED]', fmt % args)  # a reset link is a password: it never reaches our logs
+        sys.stderr.write('[llave] %s %s\n' % (self.address_string(), line))
 
     def send(self, body, status=200, ctype='text/html; charset=utf-8', headers=None):
         data = body.encode('utf-8') if isinstance(body, str) else body
@@ -398,7 +399,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send('No encontrada', 404, 'text/plain; charset=utf-8')
             row = con.execute("SELECT id FROM listings WHERE agency_id=? AND slug=? AND status IN ('activa','apartada')",
                               (a['id'], m.group(1))).fetchone()
-            if not row:
+            if not row or row['id'] not in db.public_listing_ids(con, a['id'], include_shared=False):  # plan cap: hidden stays hidden
                 return self.send('No encontrada', 404, 'text/plain; charset=utf-8')
             rel = cards.render_cached(con, row['id'], 'post' if m.group(2) == 'post' else 'story')
             return self.media(rel)
@@ -429,6 +430,9 @@ class Handler(BaseHTTPRequestHandler):
         """GET: the plan page. POST: Stripe Checkout for a paid plan, the Billing Portal for agents who already pay
         (change plan / cancel there), or a direct move to Gratis for an agent with no subscription."""
         a, uid = ctx['agency'], ctx['user']['id']
+        closed = billing.paid_closed(ctx['user']['email'])  # production + Stripe TEST key + not an allowed test email
+        if closed and key != 'gratis':  # same honest "pagos muy pronto" state as Stripe off; checked here, not only in the page
+            return self.send(panel.payments_soon(ctx, key), 503 if method == 'POST' else 200)
         if method != 'POST':
             return self.send(panel.plan_checkout(ctx, key))
         if key == db.plan_of(a):
@@ -437,9 +441,10 @@ class Handler(BaseHTTPRequestHandler):
         if n > db.listing_limit(con, a, key):
             return self.send(panel.plan_checkout(ctx, key, 'Tienes %d propiedades; este plan permite %d. Marca algunas como vendidas primero.'
                                                   % (n, db.listing_limit(con, a, key))), 400)
-        if key == 'gratis' and not billing.is_paying(a):
-            con.execute("UPDATE agencies SET plan='gratis' WHERE id=?", (a['id'],))
-            db.audit(con, 'user:%d' % uid, 'plan_change_downgrade', '%s -> gratis (no subscription)' % a['plan'])
+        if key == 'gratis' and (not billing.is_paying(a) or closed):
+            # closed + paying = a TEST subscription (no real money): step down here, there is no portal to send them to
+            con.execute("UPDATE agencies SET plan='gratis'%s WHERE id=?" % (', stripe_subscription_id=NULL' if billing.is_paying(a) else ''), (a['id'],))
+            db.audit(con, 'user:%d' % uid, 'plan_change_downgrade', '%s -> gratis (%s)' % (a['plan'], 'test subscription, paid plans closed' if billing.is_paying(a) else 'no subscription'))
             con.commit()
             ghl_live.plan_changed(con, a['id'])
             ctx['agency'] = con.execute('SELECT * FROM agencies WHERE id=?', (a['id'],)).fetchone()
@@ -472,6 +477,50 @@ class Handler(BaseHTTPRequestHandler):
         secure = '; Secure' if db.SCHEME == 'https' else ''
         self.redirect(to, {'Set-Cookie': 'llave_s=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=%d%s' % (tok, SESSION_DAYS * 86400, secure)})
 
+    def forgot_password(self, con, method):
+        """/olvide: asks for a reset link. The page answers the same whether or not the email has an account, and the work done is
+        the same too (every attempt is counted, the link is only written for a real account). Per IP and per email limits."""
+        if not mailer.enabled():  # no way to deliver the link: say so instead of pretending
+            return self.send(panel.forgot(unavailable=True), 503 if method == 'POST' else 200)
+        if method != 'POST':
+            return self.send(panel.forgot())
+        f, _ = self.form()
+        if f.get('website'):  # honeypot: look the same, do nothing
+            return self.send(panel.forgot(sent=True))
+        email = (f.get('email') or '').strip().lower()
+        if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email) or len(email) > 200:
+            return self.send(panel.forgot('Revisa tu correo: parece incompleto.', email=email[:200]), 400)
+        ip, key = self.client_ip(), hashlib.sha256(email.encode('utf-8')).hexdigest()[:32]
+        if not rate_ok(con, 'reset_ip', ip, RESET_PER_IP_HOUR, 60) or not rate_ok(con, 'reset_email', key, RESET_PER_EMAIL_HOUR, 60):
+            return self.send(panel.forgot('Pediste varios enlaces seguidos. Espera un rato e intenta de nuevo.', email=email), 429)
+        rate_hit(con, 'reset_ip', ip)
+        rate_hit(con, 'reset_email', key)
+        made = password_reset.request(con, email)
+        if made:  # the mail server can be slow: dispatch() sends from a worker thread, so both answers take the same time
+            mailer.dispatch(con, [password_reset.email_for(*made)])
+        return self.send(panel.forgot(sent=True))
+
+    def reset_password(self, con, method, query):
+        """/restablecer?t=<token>: choose a new password. Single use, 60 minutes; success ends the user's other sessions and signs them in."""
+        if method != 'POST':
+            token = query.get('t', '')
+            if password_reset.lookup(con, token):
+                return self.send(panel.reset_form(token))
+            return self.send(panel.reset_invalid(), 400)
+        f, _ = self.form()
+        token = f.get('t', '')
+        if not password_reset.lookup(con, token):
+            return self.send(panel.reset_invalid(), 400)
+        if f.get('password') != f.get('password2'):
+            return self.send(panel.reset_form(token, 'Las dos contraseñas no coinciden.'), 400)
+        try:
+            uid = password_reset.complete(con, token, f.get('password', ''))
+        except password_reset.InvalidToken:
+            return self.send(panel.reset_invalid(), 400)
+        except ValueError as ex:
+            return self.send(panel.reset_form(token, str(ex)), 400)
+        return self.start_session(con, uid, '/')
+
     def panel(self, con, method, path, query):
         ctx = self.session(con)
         if path == '/registro':
@@ -501,6 +550,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(panel.login('Correo o contraseña incorrectos.'), 401)
                 return self.start_session(con, u['id'])
             return self.send(panel.login())
+        if path == '/olvide':
+            return self.forgot_password(con, method)
+        if path == '/restablecer':
+            return self.reset_password(con, method, query)
         if path in ('/terminos', '/privacidad'):
             return self.send(panel.legal(path[1:]))
         m = re.match(r'^/api/eco/(rentapoliza)$', path)
@@ -595,6 +648,9 @@ class Handler(BaseHTTPRequestHandler):
                     title = (f.get('title') or '').strip()
                     if len(title) < 8:
                         return self.send(panel.wizard_3(ctx, l, 'Escribe un título de al menos 8 letras.'), 400)
+                    blocked = reopen_message(con, a, l, 'activa')
+                    if blocked:
+                        return self.send(panel.wizard_3(ctx, l, blocked), 400)
                     con.execute("UPDATE listings SET title=?, description=?, status='activa', updated_at=datetime('now') WHERE id=?",
                                 (title[:100], (f.get('description') or '').strip()[:8000], l['id']))
                     db.audit(con, actor, 'wizard_publish', 'listing:%d' % l['id'])
@@ -731,15 +787,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(panel.import_page(ctx, importer.preview(con, a['id'], text), text))
         if path == '/propiedades/nueva':
             if method == 'POST':
+                if over_limit(con, a):  # the page already refuses; a direct POST must not get around it
+                    return self.send(panel.listings(con, ctx, panel.notice(limit_message(con, a), 'warn')), 403)
                 try:
                     lid = save_listing(con, a, uid, f)
                 except ValueError as ex:
                     return self.send(panel.listing_form(con, ctx, None, str(ex)), 400)
                 return self.redirect('/propiedades/%d?ok=creada' % lid)
-            n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
-            if n >= db.listing_limit(con, a):
-                return self.send(panel.listings(con, ctx, panel.notice(
-                    'Llegaste al límite de tu plan (%d propiedades). Marca alguna como vendida o cambia de plan.' % n, 'warn')))
+            if over_limit(con, a):
+                return self.send(panel.listings(con, ctx, panel.notice(limit_message(con, a), 'warn')))
             return self.send(panel.listing_form(con, ctx))
         m = re.match(r'^/propiedades/(\d+)(/.*)?$', path)
         if m:
@@ -788,6 +844,11 @@ class Handler(BaseHTTPRequestHandler):
             if method == 'POST' and not sub:
                 try:
                     save_listing(con, a, uid, f, l)
+                except ReopenBlocked as ex:  # nothing was written: the listing stays sold/rented, the form keeps their edits
+                    kept = dict(l)
+                    kept.update(ex.values)
+                    kept['status'] = l['status']
+                    return self.send(panel.listing_form(con, ctx, kept, str(ex)), 400)
                 except ValueError as ex:
                     return self.send(panel.listing_form(con, ctx, l, str(ex)), 400)
                 l = con.execute('SELECT * FROM listings WHERE id=?', (l['id'],)).fetchone()
@@ -830,13 +891,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(panel.profile(ctx, ok='Perfil guardado.'))
             return self.send(panel.profile(ctx))
         if path == '/plan':
-            pago = query.get('pago') if billing.enabled() else None
+            pago = query.get('pago') if billing.enabled() and not billing.paid_closed(ctx['user']['email']) else None
             ok = ('Gracias: tu plan se activa en unos segundos.' if pago == 'ok' else
                   'No se hizo ningún cobro. Cuando quieras, lo intentas de nuevo.' if pago == 'cancelado' else '')
             return self.send(panel.plans(con, ctx, ok=ok))
         if path == '/plan/portal' and billing.enabled():
             if method != 'POST':
                 return self.redirect('/plan')
+            if billing.paid_closed(ctx['user']['email']):
+                return self.send(panel.payments_soon(ctx, None), 503)
             try:
                 return self.redirect(billing.portal_url(a))
             except billing.BillingError as ex:
@@ -898,6 +961,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.redirect('/portales')
             cur = con.execute('SELECT enabled FROM portal_publications WHERE listing_id=? AND portal=?', (l['id'], key)).fetchone()
             on = 0 if (cur and cur['enabled']) else 1
+            if on and l['id'] not in db.public_listing_ids(con, a['id'], include_shared=False):
+                return self.send(panel.portals(con, ctx, panel.notice(
+                    'Esta propiedad no se muestra con tu plan actual, así que tampoco sale en los portales. Cambia de plan o marca otra como vendida.', 'warn')), 403)
             con.execute('INSERT INTO portal_publications(listing_id, portal, enabled, status) VALUES (?,?,?,?) '
                         'ON CONFLICT(listing_id, portal) DO UPDATE SET enabled=excluded.enabled, status=excluded.status',
                         (l['id'], key, on, 'pendiente'))
@@ -997,6 +1063,8 @@ def _limit(name, prod_default):
 SIGNUP_DAILY_CAP = _limit('LLAVE_SIGNUP_DAILY_CAP', 7)
 SIGNUP_PER_IP_DAY = _limit('LLAVE_SIGNUP_PER_IP_DAY', 3)
 LOGIN_FAILS_15MIN = _limit('LLAVE_LOGIN_FAILS_15MIN', 10)
+RESET_PER_IP_HOUR = _limit('LLAVE_RESET_PER_IP_HOUR', 5)        # reset links asked from one IP per hour
+RESET_PER_EMAIL_HOUR = _limit('LLAVE_RESET_PER_EMAIL_HOUR', 3)  # ...and for one email address per hour (so nobody can flood a mailbox)
 SIGNUP_FULL_MSG = ('Hoy ya abrimos todos los lugares del día. Vuelve mañana o escríbenos por WhatsApp y te apartamos el tuyo.')
 
 
@@ -1123,8 +1191,31 @@ def join_team(con, inv, f):
 
 
 def over_limit(con, a):
-    n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
-    return n >= db.listing_limit(con, a)
+    return db.open_listing_count(con, a['id']) >= db.listing_limit(con, a)
+
+
+def limit_message(con, a):
+    return 'Llegaste al límite de tu plan (%s). Marca alguna como vendida o rentada, o cambia de plan.' % panel.props(db.listing_limit(con, a))
+
+
+class ReopenBlocked(ValueError):
+    """Moving a vendida/rentada listing back to an open state would go past the plan limit. `values` = what the agent submitted
+    (column -> value), so the form can show it again: nothing is written and nothing is lost."""
+
+    def __init__(self, message, values=None):
+        super().__init__(message)
+        self.values = values or {}
+
+
+def reopen_message(con, a, existing, new_status):
+    """Spanish reason ('' when allowed). Only a listing that is closed now (vendida/rentada) and would become open uses a new slot."""
+    if existing is None or existing['status'] not in db.CLOSED_STATUSES or new_status in db.CLOSED_STATUSES:
+        return ''
+    limit, used = db.listing_limit(con, a), db.open_listing_count(con, a['id'], existing['id'])
+    if used < limit:
+        return ''
+    return ('No pudimos reabrir esta propiedad: tu plan permite %s y ya tienes %d abierta%s. Marca otra como vendida o rentada, o cambia de plan. '
+            'Esta propiedad sigue como %s y no se perdió nada.' % (panel.props(limit), used, '' if used == 1 else 's', existing['status']))
 
 
 def create_draft(con, a, uid, op, ptype):
@@ -1204,6 +1295,9 @@ def save_listing(con, a, uid, f, existing=None):
         vals.update(lat=pt[0], lng=pt[1])
     elif existing is not None and 'maps' in f:
         vals.update(lat=None, lng=None)
+    blocked = reopen_message(con, a, existing, status)
+    if blocked:
+        raise ReopenBlocked(blocked, vals)
     if existing:
         sets = ', '.join('%s=?' % k for k in vals)
         con.execute("UPDATE listings SET %s, updated_at=datetime('now') WHERE id=?" % sets, list(vals.values()) + [existing['id']])
@@ -1333,6 +1427,13 @@ def main():
     con.close()
     if db.ENV == 'production' and not billing.enabled():
         print('AVISO: Stripe no está configurado (config/stripe.env): los planes de pago están cerrados ("pagos muy pronto").', file=sys.stderr)
+    if billing.test_lock_active():
+        print('AVISO: la llave de Stripe es de PRUEBA en producción: los planes de pago están cerrados para todos, '
+              'salvo %d correo(s) en LLAVE_STRIPE_TEST_EMAILS.' % len(billing.test_emails()), file=sys.stderr)
+    for problem in mailer.config_problems():
+        print('AVISO: %s' % problem, file=sys.stderr)
+    if db.ENV == 'production' and not mailer.enabled():
+        print('AVISO: sin SMTP (LLAVE_SMTP_*): los correos a asesores quedan en modo prueba y no hay "olvidé mi contraseña".', file=sys.stderr)
     bind = os.environ.get('LLAVE_BIND', '127.0.0.1')  # always behind the reverse proxy; never expose directly
     srv = ThreadingHTTPServer((bind, db.PORT), Handler)
     print('Ficha Única (LLAVE) %s: panel %s · sitios %s' % (db.ENV, db.origin('app'), db.origin('<slug>')))

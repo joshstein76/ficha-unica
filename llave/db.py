@@ -90,6 +90,9 @@ def init(con):
         con.execute('ALTER TABLE outbox ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0')
     con.execute("CREATE TABLE IF NOT EXISTS stripe_events ("  # one row per Stripe event id we processed: replays are no-ops
                 "event_id TEXT PRIMARY KEY, type TEXT NOT NULL, outcome TEXT, received_at TEXT NOT NULL DEFAULT (datetime('now')))")
+    con.execute("CREATE TABLE IF NOT EXISTS password_resets ("  # llave/password_reset.py: only the SHA-256 of the emailed token is stored
+                "token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+                "expires_at TEXT NOT NULL, used_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))")
     # Operaciones (deals, deal_tasks) are new tables: CREATE TABLE IF NOT EXISTS in schema.sql covers older databases
     con.execute("UPDATE agencies SET plan='ia' WHERE plan IN ('agencia','pro_crm')")  # 10-19 plans
     con.commit()
@@ -183,10 +186,26 @@ def public_listing_ids(con, agency_id, include_shared=True):
     if a:
         ids = ids[:listing_limit(con, a)]
     if include_shared:
-        q2 = ("SELECT l.id FROM shares s JOIN listings l ON l.id=s.listing_id WHERE s.sharing_agency_id=? "
+        q2 = ("SELECT l.id, l.agency_id FROM shares s JOIN listings l ON l.id=s.listing_id WHERE s.sharing_agency_id=? "
               "AND s.status='activa' AND l.share_in_bolsa=1 AND l.status IN ('activa','apartada')")
-        ids += [r['id'] for r in con.execute(q2, (agency_id,)) if r['id'] not in ids]
+        owner_shown = {}  # a shared listing is public only while its OWNER's plan still shows it (no leak through the Bolsa)
+        for r in con.execute(q2, (agency_id,)).fetchall():
+            if r['id'] in ids:
+                continue
+            if r['agency_id'] not in owner_shown:
+                owner_shown[r['agency_id']] = set(public_listing_ids(con, r['agency_id'], include_shared=False))
+            if r['id'] in owner_shown[r['agency_id']]:
+                ids.append(r['id'])
     return ids
+
+
+CLOSED_STATUSES = ('vendida', 'rentada')  # these do not use a plan slot
+
+
+def open_listing_count(con, agency_id, exclude_id=None):
+    """Listings that use a plan slot: everything except vendida / rentada (drafts and paused ones count)."""
+    return con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada') AND id IS NOT ?",
+                       (agency_id, exclude_id)).fetchone()[0]
 
 
 def audit(con, actor, action, detail=''):

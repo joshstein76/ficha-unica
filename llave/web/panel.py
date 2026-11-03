@@ -3,7 +3,7 @@ Pages are plain functions returning HTML; server.py handles routing, sessions an
 import json
 import os
 
-from .. import academia, billing, kit_home, calculadoras, db, formatos, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
+from .. import academia, billing, kit_home, calculadoras, db, formatos, mailer, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS, DESIGN_KEYS)
 from .styles import BRAND_COLOR, FONTS, KIT_SHELL, PANEL, PRECONNECT, logo
@@ -109,13 +109,50 @@ def signup(error='', values=None, ref=''):
 
 
 def login(error=''):
+    forgot_link = '<p class="small muted"><a href="/olvide">¿Olvidaste tu contraseña?</a></p>' if mailer.enabled() else ''  # only when we can email the link
     body = ('<div class="auth pub"><div class="intro"><h1>Entrar</h1><p class="muted">Tu sitio, tus propiedades y tus clientes de WhatsApp.</p></div>%s'
             '<form class="stack card" method="post" action="/entrar">'
             '<label>Correo<input name="email" type="email" autocomplete="email" required></label>'
             '<label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>'
-            '<button class="btn">Entrar</button><p class="small muted">¿Nuevo? <a href="/registro">Crea tu sitio gratis</a></p>'
-            '</form></div>') % notice(error, 'err')
+            '<button class="btn">Entrar</button>%s<p class="small muted">¿Nuevo? <a href="/registro">Crea tu sitio gratis</a></p>'
+            '</form></div>') % (notice(error, 'err'), forgot_link)
     return layout('Entrar', body)
+
+
+def forgot(error='', sent=False, unavailable=False, email=''):
+    """/olvide. `sent` is the one answer shown whether or not the email has an account."""
+    if unavailable:
+        inner = ('<div class="intro"><h1>Recuperar contraseña</h1></div>%s<a class="btn ghost" href="/entrar">Volver a entrar</a>' % notice(
+            'Por ahora no podemos enviar correos, así que todavía no hay recuperación por correo. Estamos terminando de conectarlo.', 'warn'))
+    elif sent:
+        inner = ('<div class="intro"><h1>Revisa tu correo</h1></div>%s<a class="btn ghost" href="/entrar">Volver a entrar</a>' % notice(
+            'Si ese correo tiene cuenta en Ficha Única, te mandamos un enlace para elegir una contraseña nueva. Vale 60 minutos. '
+            'Si no llega en unos minutos, revisa tu carpeta de spam.'))
+    else:
+        inner = ('<div class="intro"><h1>Recuperar contraseña</h1><p class="muted">Escribe el correo de tu cuenta y te mandamos un enlace para elegir una nueva.</p></div>%s'
+                 '<form class="stack card" method="post" action="/olvide"><div aria-hidden="true" style="position:absolute;left:-9999px">'
+                 '<label>Sitio web<input name="website" tabindex="-1" autocomplete="off"></label></div>'
+                 '<label>Correo<input name="email" type="email" value="%s" autocomplete="email" required></label>'
+                 '<button class="btn">Enviarme el enlace</button><p class="small muted"><a href="/entrar">Volver a entrar</a></p></form>') % (
+            notice(error, 'err'), e(email))
+    return layout('Recuperar contraseña', '<div class="auth pub">%s</div>' % inner)
+
+
+def reset_form(token, error=''):
+    body = ('<div class="auth pub"><div class="intro"><h1>Elige tu contraseña nueva</h1>'
+            '<p class="muted">Al guardarla, cerramos tus otras sesiones abiertas.</p></div>%s'
+            '<form class="stack card" method="post" action="/restablecer"><input type="hidden" name="t" value="%s">'
+            '<label>Contraseña nueva<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>'
+            '<label>Repítela<input name="password2" type="password" minlength="8" autocomplete="new-password" required></label>'
+            '<button class="btn">Guardar y entrar</button></form></div>') % (notice(error, 'err'), e(token))
+    return layout('Contraseña nueva', body)
+
+
+def reset_invalid():
+    again = '<a class="btn" href="/olvide">Pedir otro enlace</a>' if mailer.enabled() else '<a class="btn ghost" href="/entrar">Volver a entrar</a>'
+    body = ('<div class="auth pub"><div class="intro"><h1>Este enlace ya no sirve</h1></div>%s%s</div>') % (
+        notice('El enlace ya se usó o venció (duran 60 minutos y se usan una sola vez).', 'err'), again)
+    return layout('Enlace vencido', body)
 
 
 # ---------- dashboard ----------
@@ -476,8 +513,16 @@ def leads(con, ctx, estado=None):
             'Al tocar "Responder por WhatsApp" se abre tu mensaje listo y lo marcamos como contactado. '
             'Con "Recordarme" el cliente vuelve a aparecer en Seguimiento hoy el día que elijas.</p>%s%s') % (
         notice('Tienes %d cliente%s esperando respuesta hace más de 5 minutos.' % (late, '' if late == 1 else 's'), 'err') if late else '',
-        tabs, _leads_list(con, rows, ctx) if rows else '<p class="muted">No hay clientes en esta vista.</p>')
+        tabs, _leads_list(con, rows, ctx) if rows else '<p class="muted">No hay clientes en esta vista.</p>' + _email_note(ctx, estado))
     return layout('Clientes', body, ctx, 'clientes')
+
+
+def _email_note(ctx, estado):
+    """Only when we can really send mail, only on the main view, and only for the account holders who get those emails."""
+    if estado or not mailer.enabled() or ctx['user']['role'] not in ('owner', 'admin'):
+        return ''
+    return ('<p class="muted small">Cuando alguien te escriba, además de verlo aquí te llega un correo a %s '
+            'con un botón para responderle por WhatsApp.</p>') % e(ctx['user']['email'])
 
 
 def stats_page(ctx, st):
@@ -510,7 +555,9 @@ def stats_page(ctx, st):
 # ---------- portals ----------
 def portals(con, ctx, flash=''):
     a = ctx['agency']
-    rows = con.execute("SELECT * FROM listings WHERE agency_id=? AND status IN ('activa','apartada') ORDER BY title", (a['id'],)).fetchall()
+    shown = set(db.public_listing_ids(con, a['id'], include_shared=False))  # only what the plan really shows can go to a portal
+    rows = [r for r in con.execute("SELECT * FROM listings WHERE agency_id=? AND status IN ('activa','apartada') ORDER BY title", (a['id'],)).fetchall()
+            if r['id'] in shown]
     base = db.site_url(a)
     # per-listing switches only where the switch matters (the open feed always carries every public listing)
     open_keys = [k for k, p in registry.PORTALS.items() if p['status'] in ('open', 'api') and k != 'llave_open']
@@ -585,7 +632,13 @@ def bolsa(con, ctx, q=None, flash=''):
     if (q.get('beds') or '').isdigit():
         sql += ' AND l.bedrooms >= ?'
         args.append(int(q['beds']))
-    rows = con.execute(sql + ' ORDER BY l.updated_at DESC LIMIT 100', args).fetchall()
+    shown = {}  # owner agency -> ids its plan still shows publicly (an over-limit listing is not offered to anyone)
+
+    def owner_shows(r):
+        if r['agency_id'] not in shown:
+            shown[r['agency_id']] = set(db.public_listing_ids(con, r['agency_id'], include_shared=False))
+        return r['id'] in shown[r['agency_id']]
+    rows = [r for r in con.execute(sql + ' ORDER BY l.updated_at DESC LIMIT 100', args).fetchall() if owner_shows(r)]
     pins = []
     mine = {r['listing_id']: r for r in con.execute("SELECT * FROM shares WHERE sharing_agency_id=? AND status='activa'", (a['id'],))}
     items = []
@@ -1113,7 +1166,8 @@ STRIPE_NOTE = ('Pago seguro con tarjeta, procesado por Stripe para %s. Precios e
 
 def plans(con, ctx, ok='', error=''):
     a = ctx['agency']
-    paid = billing.enabled()
+    closed = billing.enabled() and billing.paid_closed(ctx['user']['email'])  # Stripe TEST key in production: no payments yet
+    paid = billing.enabled() and not closed
     n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
     cards = ''.join(
         '<div class="card plan%s"><h2>%s</h2><p class="price"><b>%s</b>%s</p><ul class="small">%s</ul>%s</div>' % (
@@ -1125,7 +1179,7 @@ def plans(con, ctx, ok='', error=''):
             '<a class="btn %s" href="/plan/%s">%s</a>' % ('' if price else 'ghost', k, 'Cambiar a %s' % name))
         for k, name, price, feats in PLANS)
     manage = ''
-    if paid and billing.is_paying(a):
+    if paid and billing.is_paying(a):  # `paid` is False while the test-key lock hides the Billing Portal
         manage = ('<form class="card" method="post" action="/plan/portal">%s<p class="small muted">Cambia de plan, actualiza tu tarjeta '
                   'o cancela desde tu pago.</p><button class="btn ghost">Administrar mi pago</button></form>') % csrf_field(ctx)
     foot = (STRIPE_NOTE % e(db.OWNER)) if paid else 'Precios en pesos mexicanos con IVA. Sin plazo forzoso: cambias o cancelas cuando quieras.'
@@ -1155,9 +1209,10 @@ def upsell(ctx, feature, title, tab='inicio'):
 
 
 def payments_soon(ctx, key):
-    name = next((x[1] for x in PLANS if x[0] == key), key)
-    body = ('<div class="auth"><h1>%s llega muy pronto</h1><p class="muted">Estamos activando los pagos con tarjeta. '
-            'Mientras tanto sigues en tu plan actual, con todo lo que ya tienes.</p><a class="btn ghost" href="/plan">Volver a planes</a></div>') % e(name)
+    name = next((x[1] for x in PLANS if x[0] == key), key) if key else None
+    body = ('<div class="auth"><h1>%s</h1><p class="muted">Estamos activando los pagos con tarjeta. '
+            'Mientras tanto sigues en tu plan actual, con todo lo que ya tienes.</p><a class="btn ghost" href="/plan">Volver a planes</a></div>') % (
+        e('%s llega muy pronto' % name) if name else 'Los pagos llegan muy pronto')
     return layout('Pagos muy pronto', body, ctx, 'sitio')
 
 
@@ -1177,6 +1232,11 @@ def plan_checkout(ctx, key, error=''):
 def _plan_checkout_paid(ctx, key, p, error):
     """Real payment screens (Stripe configured): no test notice. Payment itself happens on Stripe's page."""
     a = ctx['agency']
+    if billing.paid_closed(ctx['user']['email']):  # test-key lock: only the way down to Gratis stays open (the server blocks the rest)
+        return layout('Cambiar de plan', '<div class="auth"><h1>Cambiar a %s</h1>%s%s<a class="btn ghost" href="/plan">Volver</a></div>' % (
+            e(p[1]), notice(error, 'err'),
+            ('<form method="post" action="/plan/gratis">%s<button class="btn">Pasar a Gratis</button></form>' % csrf_field(ctx))
+            if key == 'gratis' and key != db.plan_of(a) else '<p class="muted">Este ya es tu plan.</p>'), ctx, 'sitio')
     price = '<p class="price"><b>%s</b>%s</p>' % ('Gratis' if not p[2] else '$%d MXN' % p[2],
                                                   '' if not p[2] else ' <span class="muted small">al mes, IVA incluido</span>')
     portal = ('<form method="post" action="/plan/portal">%s<button class="btn">Administrar mi pago</button></form>' % csrf_field(ctx))
