@@ -1,0 +1,202 @@
+/* Ficha Única "Lotería" skin for the shared agent dashboard kit (AgentDashKit 1.2.x), used on Home only.
+   agent-dash.css and agent-dash.js stay byte-identical to the master that IDX Bloom also uses; everything that is Ficha-specific is here.
+   Everything is scoped under .adk and loaded AFTER agent-dash.css, so it wins at equal specificity (selectors copy the kit's own).
+   Rules of the look: Command Center > clients/mx-broker-platform/config/design-system/MASTER.md.
+   Text on chile, cempa, rosa, nopal and cielo is tinta. suave only on papel or blanco. No blur, no gradients, only hard offset shadows.
+   Bump kit_home.LOTERIA_VERSION when this file changes (the stylesheet link carries ?v=). */
+
+.adk {
+  --lt-tinta: #1B1236; --lt-papel: #FFF9EE; --lt-blanco: #FFFFFF; --lt-cempa: #FFB800; --lt-chile: #FF4F1F;
+  --lt-jacaranda: #5B2EE6; --lt-rosa: #FF4FA3; --lt-nopal: #0FB56D; --lt-cielo: #37C5F2; --lt-suave: #5E5478;
+  --lt-titulo: "Bricolage Grotesque", "Arial Narrow", Impact, sans-serif;
+  --lt-carta: "Shrikhand", "Cooper Black", Georgia, serif;
+  --lt-sombra: 4px 4px 0 var(--lt-tinta);
+  background: var(--lt-papel);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* focus: 3px jacaranda, 3px offset (the kit's own rule has a 2px offset) */
+.adk a:focus-visible, .adk button:focus-visible, .adk [tabindex]:focus-visible { outline: 3px solid var(--lt-jacaranda); outline-offset: 3px; }
+.adk .adk-search__box:focus-within { outline-color: var(--lt-jacaranda); outline-offset: 3px; }
+
+/* header: one cempa bar, tinta rule under it */
+.adk .adk-top { background: var(--lt-cempa); border-bottom: 3px solid var(--lt-tinta); }
+.adk .adk-top__row { gap: 12px 14px; padding-top: 12px; padding-bottom: 12px; }
+.adk .adk-logo { width: 38px; height: 38px; }
+.adk .adk-mono { border: 3px solid var(--lt-tinta); border-radius: 12px; background: var(--lt-chile); color: var(--lt-tinta); font-family: var(--lt-titulo); font-weight: 800; }
+.adk .adk-brand__name { font: 400 23px/1 var(--lt-carta); letter-spacing: 0; font-synthesis: none; color: var(--lt-tinta); }
+.adk .adk-search__box { border: 3px solid var(--lt-tinta); border-radius: 10px; background: var(--lt-blanco); color: var(--lt-tinta); }
+.adk .adk-search__input { color: var(--lt-tinta); }
+.adk .adk-search__input::placeholder { color: var(--lt-suave); }
+.adk .adk-iconbtn, .adk .adk-helpbtn {
+  border: 3px solid var(--lt-tinta); border-radius: 10px; background: var(--lt-blanco); color: var(--lt-tinta);
+  box-shadow: 2px 2px 0 var(--lt-tinta); font-family: var(--lt-titulo); font-weight: 800; font-size: 15px;
+}
+.adk .adk-iconbtn:hover, .adk .adk-helpbtn:hover, .adk .adk-avatar:hover {
+  border-color: var(--lt-tinta); transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--lt-tinta);
+}
+.adk .adk-dot { top: 5px; right: 5px; width: 13px; height: 13px; background: var(--lt-chile); border: 2px solid var(--lt-tinta); }
+.adk .adk-avatar {
+  background: var(--lt-rosa); color: var(--lt-tinta); border: 3px solid var(--lt-tinta);
+  font: 800 16px/1 var(--lt-titulo); box-shadow: 2px 2px 0 var(--lt-tinta);
+}
+.adk span.adk-avatar { box-shadow: none; }
+
+/* top tabs (desktop): pills on the cempa bar, the current one is a white chip with an outline */
+.adk .adk-tabs { gap: 6px; padding-bottom: 12px; }
+.adk .adk-tab {
+  min-height: 44px; padding: 0 16px; border: 2.5px solid transparent; border-radius: 99px;
+  color: var(--lt-tinta); font-weight: 700; font-size: 15px;
+}
+.adk .adk-tab:hover { color: var(--lt-tinta); background: var(--lt-papel); }
+.adk .adk-tab[aria-current="page"] {
+  color: var(--lt-tinta); font-weight: 800; background: var(--lt-blanco); border-color: var(--lt-tinta); box-shadow: 2px 2px 0 var(--lt-tinta);
+}
+
+/* one nav on phones: Home shows the same 5-tab bottom bar as every other page (panel.kit_page), so the kit's top tabs go away under 900px */
+@media (max-width: 899.98px) {
+  .adk .adk-tabs { display: none; }
+  .adk .adk-top__row { padding-top: 10px; padding-bottom: 10px; }
+  .adk .adk-brand { flex: 1 1 auto; }
+  .adk .adk-actions { width: auto; margin-left: auto; }
+  .adk .adk-avatar { margin-left: 0; }
+  .adk .adk-toast { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* greeting + titles: Shrikhand for the names of things, never for running text */
+.adk .adk-h1 { font: 400 clamp(30px, 8vw, 42px)/1.08 var(--lt-carta); letter-spacing: 0; font-synthesis: none; color: var(--lt-tinta); }
+.adk .adk-sub { font-weight: 600; color: var(--lt-suave); }
+.adk .adk-h2 { font: 400 24px/1.15 var(--lt-carta); letter-spacing: 0; font-synthesis: none; color: var(--lt-tinta); }
+.adk .adk-h3 { font: 400 22px/1.15 var(--lt-carta); letter-spacing: 0; font-synthesis: none; color: var(--lt-tinta); margin-bottom: 10px; }
+
+/* buttons: chile, tinta text, thick outline, hard shadow; hover lifts, press drops */
+.adk .adk-btn {
+  min-height: 48px; padding: 0 20px; border: 3px solid var(--lt-tinta); border-radius: 12px;
+  font: 800 16px/1.1 var(--lt-titulo); box-shadow: 3px 3px 0 var(--lt-tinta);
+}
+.adk .adk-btn--dark, .adk .adk-btn--accent { background: var(--lt-chile); color: var(--lt-tinta); }
+.adk .adk-btn--ghost { background: var(--lt-blanco); color: var(--lt-tinta); border-color: var(--lt-tinta); font-weight: 800; }
+.adk .adk-btn--sm { min-height: 44px; padding: 0 14px; font-size: 15px; border-radius: 10px; }
+.adk a.adk-btn:hover, .adk button.adk-btn:hover { opacity: 1; transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--lt-tinta); }
+.adk a.adk-btn:active, .adk button.adk-btn:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--lt-tinta); }
+.adk .adk-link { font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
+
+/* stats: three loud cards, numbers in Bricolage */
+.adk .adk-stats { gap: 14px; }
+.adk .adk-stat {
+  min-height: 132px; padding: 16px; background: var(--lt-blanco); border: 3px solid var(--lt-tinta); border-radius: 12px; box-shadow: var(--lt-sombra);
+}
+.adk .adk-stat:nth-child(3n+1) { background: var(--lt-cielo); }
+.adk .adk-stat:nth-child(3n+2) { background: var(--lt-nopal); }
+.adk .adk-stat:nth-child(3n) { background: var(--lt-rosa); }
+.adk .adk-stat__label { font-weight: 700; color: var(--lt-tinta); }
+.adk .adk-stat__value { font: 800 40px/1 var(--lt-titulo); font-stretch: 80%; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+.adk .adk-stat__sub { font-weight: 600; color: var(--lt-tinta); }
+
+/* next step: the cempa "lectura" card */
+.adk .adk-next { padding: 20px; gap: 14px 16px; background: var(--lt-cempa); border: 3px solid var(--lt-tinta); border-radius: 14px; box-shadow: var(--lt-sombra); }
+.adk .adk-next__icon { width: 56px; height: 56px; border: 3px solid var(--lt-tinta); border-radius: 12px; background: var(--lt-blanco); color: var(--lt-tinta); }
+.adk .adk-next__label { font: 800 13px/1.2 var(--lt-titulo); letter-spacing: .06em; color: var(--lt-tinta); }
+.adk .adk-next__body { font-size: 16px; font-weight: 500; color: var(--lt-tinta); }
+
+/* alerts: the unanswered-client one is chile with tinta text */
+.adk .adk-alerts__list { gap: 12px; }
+.adk .adk-alerts__list > .adk-alert {
+  padding: 12px 14px; background: var(--lt-blanco); border: 3px solid var(--lt-tinta); border-left: 3px solid var(--lt-tinta);
+  border-radius: 12px; box-shadow: 3px 3px 0 var(--lt-tinta);
+}
+.adk .adk-alerts__list > .adk-alert--warn { background: var(--lt-chile); border-left-color: var(--lt-tinta); }
+.adk .adk-alert__ico { width: 38px; height: 38px; border: 2.5px solid var(--lt-tinta); border-radius: 10px; background: var(--lt-blanco); color: var(--lt-tinta); }
+.adk .adk-alert__title { font-weight: 800; }
+.adk .adk-alert--warn .adk-alert__body { color: var(--lt-tinta); }
+
+/* first week: the "tabla". Done items get a ficha: chile disc, tinta outline, papel inner ring */
+.adk .adk-check__count {
+  padding: 6px 10px; border: 2.5px solid var(--lt-tinta); border-radius: 99px; background: var(--lt-blanco);
+  font: 800 14px/1 var(--lt-titulo); color: var(--lt-tinta);
+}
+.adk .adk-check__bar { height: 18px; margin-bottom: 14px; background: var(--lt-blanco); border: 3px solid var(--lt-tinta); border-radius: 99px; }
+.adk .adk-check__fill { background: var(--lt-chile); border-radius: 0; border-right: 3px solid var(--lt-tinta); }
+.adk .adk-check__fill[style*="width: 0%"] { border-right-width: 0; }
+.adk .adk-check__list { gap: 12px; }
+.adk .adk-check__item {
+  padding: 10px 14px; background: var(--lt-blanco); border: 3px solid var(--lt-tinta); border-radius: 12px; box-shadow: 3px 3px 0 var(--lt-tinta);
+}
+.adk a.adk-check__item:hover, .adk button.adk-check__item:hover { border-color: var(--lt-tinta); transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--lt-tinta); }
+.adk a.adk-check__item:active, .adk button.adk-check__item:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--lt-tinta); }
+.adk .adk-check__mark { width: 30px; height: 30px; border: 3px solid var(--lt-tinta); background: var(--lt-papel); color: var(--lt-tinta); }
+.adk .adk-check__li--done .adk-check__mark {
+  border-color: var(--lt-tinta); background: var(--lt-chile);
+  box-shadow: inset 0 0 0 3px var(--lt-chile), inset 0 0 0 5px var(--lt-papel);
+}
+.adk .adk-check__li--done .adk-check__mark svg { display: none; }
+.adk .adk-check__li--done .adk-check__item { background: var(--lt-papel); box-shadow: none; }
+.adk .adk-check__label { font-weight: 700; }
+
+/* tools: cartas with a coloured icon chip */
+.adk .adk-tools { gap: 14px; }
+.adk .adk-tool { min-height: 76px; padding: 12px; background: var(--lt-blanco); border: 3px solid var(--lt-tinta); border-radius: 12px; box-shadow: 3px 3px 0 var(--lt-tinta); }
+.adk a.adk-tool:hover, .adk button.adk-tool:hover { border-color: var(--lt-tinta); transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--lt-tinta); }
+.adk a.adk-tool:active, .adk button.adk-tool:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--lt-tinta); }
+.adk .adk-tool__ico { width: 48px; height: 48px; border: 2.5px solid var(--lt-tinta); border-radius: 10px; background: var(--lt-cempa); color: var(--lt-tinta); }
+.adk .adk-tools__item:nth-child(4n+2) .adk-tool__ico { background: var(--lt-rosa); }
+.adk .adk-tools__item:nth-child(4n+3) .adk-tool__ico { background: var(--lt-cielo); }
+.adk .adk-tools__item:nth-child(4n) .adk-tool__ico { background: var(--lt-nopal); }
+.adk .adk-tool__label { font: 800 16px/1.15 var(--lt-titulo); }
+.adk .adk-tool__hint { font-weight: 500; color: var(--lt-suave); }
+
+/* partner services */
+.adk .adk-svcs { gap: 14px; }
+.adk .adk-svc { padding: 16px; background: var(--lt-blanco); border: 3px solid var(--lt-tinta); border-radius: 12px; box-shadow: var(--lt-sombra); }
+.adk .adk-svc__mono {
+  width: 40px; height: 40px; border: 2.5px solid var(--lt-tinta); border-radius: 10px; background: var(--lt-cielo); color: var(--lt-tinta);
+  font: 800 15px/1 var(--lt-titulo);
+}
+.adk .adk-svcs > .adk-svc:nth-child(4n+2) .adk-svc__mono { background: var(--lt-rosa); }
+.adk .adk-svcs > .adk-svc:nth-child(4n+3) .adk-svc__mono { background: var(--lt-nopal); }
+.adk .adk-svcs > .adk-svc:nth-child(4n) .adk-svc__mono { background: var(--lt-cempa); }
+.adk .adk-svc__name { font: 800 17px/1.15 var(--lt-titulo); }
+.adk .adk-svc__text { font-size: 15px; color: var(--lt-tinta); }
+
+/* right column */
+.adk .adk-refer { padding: 18px; background: var(--lt-rosa); color: var(--lt-tinta); border: 3px solid var(--lt-tinta); border-radius: 14px; box-shadow: var(--lt-sombra); }
+.adk .adk-refer .adk-h3 { color: var(--lt-tinta); font-size: 23px; }
+.adk .adk-refer__body { font-size: 15px; font-weight: 500; color: var(--lt-tinta); }
+.adk .adk-code { border: 3px dashed var(--lt-tinta); border-radius: 10px; background: var(--lt-blanco); }
+.adk .adk-code__text { font: 800 16px/1 var(--lt-titulo); letter-spacing: .04em; color: var(--lt-tinta); }
+.adk .adk-code__copy { color: var(--lt-tinta); }
+.adk .adk-code__copy:hover { background: var(--lt-papel); }
+.adk .adk-refer a:focus-visible, .adk .adk-refer button:focus-visible { outline-color: var(--lt-tinta); }
+.adk .adk-card { padding: 18px; background: var(--lt-blanco); border: 3px solid var(--lt-tinta); border-radius: 14px; box-shadow: var(--lt-sombra); }
+.adk .adk-news__item { border-top: 2px dashed var(--lt-tinta); }
+.adk .adk-news__title { font-weight: 700; }
+.adk .adk-news__date { font-weight: 600; color: var(--lt-suave); }
+.adk .adk-ev__chip { border: 2.5px solid var(--lt-tinta); border-radius: 10px; background: var(--lt-cempa); }
+.adk .adk-ev__month { color: var(--lt-tinta); }
+.adk .adk-ev__title { font-weight: 700; }
+.adk .adk-pwa { border: 3px dashed var(--lt-tinta); border-radius: 14px; color: var(--lt-tinta); }
+
+/* toast */
+.adk .adk-toast { border: 3px solid var(--lt-tinta); border-radius: 12px; background: var(--lt-papel); color: var(--lt-tinta); box-shadow: 3px 3px 0 var(--lt-tinta); font-weight: 700; }
+.adk .adk-toast:empty { border-width: 0; box-shadow: none; }
+
+/* phones */
+@media (max-width: 640px) {
+  .adk .adk-stat__value { font-size: 34px; }
+  .adk .adk-next { padding: 16px; }
+  .adk .adk-stats { gap: 12px; }
+}
+
+/* motion only when the visitor has not asked to reduce it: press effect, and the ficha drops onto a finished step with a bounce */
+@keyframes lt-cae {
+  0% { transform: translateY(-140%) rotate(-40deg) scale(1.2); opacity: .2; }
+  70% { transform: translateY(6%) rotate(4deg) scale(.96); opacity: 1; }
+  100% { transform: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .adk .adk-btn, .adk .adk-tool, .adk .adk-check__item, .adk .adk-iconbtn, .adk .adk-helpbtn, .adk .adk-avatar { transition: transform .08s, box-shadow .08s; }
+  .adk .adk-check__li--done .adk-check__mark { animation: lt-cae .42s cubic-bezier(.3, 1.5, .5, 1) both; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .adk *, .adk *::before, .adk *::after { animation: none !important; transition: none !important; }
+}

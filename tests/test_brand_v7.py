@@ -1,5 +1,6 @@
-"""Ficha Única v7 brand look (owner-approved 2026-10-20): light only, Onest, mandarin, on the landing, pricing, sign-up/login,
-the agent panel and the PWA shell. Agent-site designs (Residencia / Ciudad / Costa) are NOT part of it and must stay as they were."""
+"""Ficha Única brand look: v7 (2026-10-20) was replaced by "Lotería" (approved by Josh 2026-11-03): light only, tinta outlines, hard shadows,
+Bricolage / Shrikhand / Figtree, chile buttons, on the landing, pricing, sign-up/login, the agent panel, Home and the PWA shell.
+Agent-site designs (Residencia / Ciudad / Costa) are NOT part of it and must stay as they were."""
 import json
 import os
 import re
@@ -93,30 +94,36 @@ class BrandV7(unittest.TestCase):
             self.assertNotIn('prefers-color-scheme', h, name)
             self.assertNotIn('color-scheme:dark', h, name)
         self.assertNotIn('prefers-color-scheme', styles.PANEL)
-        for k in ('--bg:#FFFFFF', 'color-scheme:light'):
+        for k in ('--papel:#FFF9EE', 'color-scheme:light'):
             self.assertIn(k, styles.BRAND_TOKENS)
 
     def test_brand_tokens_everywhere(self):
         for name, h in self.brand_pages().items():
             if name == '/offline':
-                self.assertIn('#FF6B1A', h)
+                self.assertIn(styles.BRAND_COLOR, h)
+                self.assertIn('#FF4F1F', h)
                 continue
-            self.assertIn('Onest', h, name)
-            self.assertIn('--o:#FF6B1A', h, name)
-            self.assertIn('#B83F0A', h, name)                      # orange text token
-            if 'directory' not in name:                            # the directory reuses the site layout classes (its token block still names Figtree)
-                self.assertNotIn('Figtree', h, name)               # the old panel font
+            self.assertIn('Shrikhand', h, name)                    # titles
+            self.assertIn('Bricolage', h, name)                    # numbers + buttons
+            self.assertIn('--chile:#FF4F1F', h, name)              # primary colour
+            self.assertIn('--jacaranda:#5B2EE6', h, name)          # links + focus ring
+            self.assertNotIn('Onest', h, name)                     # the v7 font
+            self.assertNotIn('#FF6B1A', h.upper(), name)           # the v7 mandarin
             self.assertNotIn('#0f5c4c', h.lower(), name)           # the old teal
+            if 'directory' not in name:                            # the directory page also carries the (gradient) hero scrim of the shared site layout
+                self.assertNotIn('gradient', h.lower(), name)
+                self.assertNotIn('blur(', h, name)
         pages = self.brand_pages()
         for name in ('/', '/planes', '/registro', '/entrar', '/terminos', '/ (logged in)', '/plan', '/propiedades (directory)'):
             h = pages[name]
-            self.assertIn('M19 6h26c7.2 0 13 5.8 13 13', h, name)    # the chat-bubble-with-a-house mark, inline
-            self.assertNotIn('i-sheet"', h, name)                    # the old sheet glyph is gone
+            self.assertIn('<circle cx="88" cy="50" r="11"/>', h, name)   # the ficha: a scalloped chile coin with a house, inline
+            self.assertIn('points="50,28 74,49 67,49 67,72 56,72', h, name)
+            self.assertNotIn('M19 6h26c7.2 0 13 5.8 13 13', h, name)     # the v7 chat-bubble mark is gone
+            self.assertNotIn('i-sheet"', h, name)                        # the old sheet glyph is gone
             self.assertRegex(h, r'<svg class="mark"[^>]*aria-hidden="true"', name)
-            ids = re.findall(r'<linearGradient id="([^"]+)"', h)
-            self.assertTrue(ids and len(ids) == len(set(ids)), (name, ids))   # one gradient id per inline copy
-        self.assertEqual(len(re.findall(r'<linearGradient id="', pages['/'])), 3)   # header, hero pill, footer
-        self.assertIn('letter-spacing:-.035em', pages['/'])
+            self.assertNotIn('<linearGradient', h, name)                 # no ids, so any number of copies can share a page
+        self.assertEqual(len(re.findall(r'<svg class="mark"', pages['/'])), 3)   # header, hero pill, footer
+        self.assertIn('font-stretch:80%', pages['/'])
 
     def test_focus_and_reduced_motion_everywhere(self):
         for name, h in self.brand_pages().items():
@@ -137,37 +144,39 @@ class BrandV7(unittest.TestCase):
         self.assertIn('Fraunces', styles.fonts_url('costa'))
 
     def test_brand_text_contrast(self):
-        ink, ink2, muted, line = '#1A1A22', '#464653', '#636371', '#E6E6EE'
-        bgs = ('#FFFFFF', '#F6F6F9')
-        for fg in (ink, ink2, muted, '#B83F0A'):
-            for bg in bgs:
+        tinta, papel, blanco, suave, jac = '#1B1236', '#FFF9EE', '#FFFFFF', '#5E5478', '#5B2EE6'
+        cempa, chile, rosa, nopal, cielo = '#FFB800', '#FF4F1F', '#FF4FA3', '#0FB56D', '#37C5F2'
+        for fg in (tinta, suave, jac):                                              # text + links on the two light surfaces
+            for bg in (papel, blanco):
                 self.assertGreaterEqual(styles.contrast(fg, bg), 4.5, (fg, bg))
-        for fg, bg in ((ink, '#FF6B1A'), (ink, '#FFC24B'), (ink, '#F2501F'), ('#B83F0A', '#FFF1E7'), ('#0F6F50', '#E3F5EC'),
-                       ('#B3261E', '#FDECEA'), ('#B83F0A', '#FDECEA'), ('#FFFFFF', '#0F8043'), ('#FFFFFF', ink), (ink, '#E3F5EC')):
-            self.assertGreaterEqual(styles.contrast(fg, bg), 4.5, (fg, bg))
-        self.assertGreaterEqual(styles.contrast('#B83F0A', '#FFFFFF'), 4.5)       # focus ring / links on white
-        self.assertGreaterEqual(styles.contrast('#8B8B99', '#FFFFFF'), 3.0)       # form-field border
-        self.assertGreaterEqual(styles.contrast(muted, '#E6E6EE'), 4.5)           # muted step labels on the line colour
+        for bg in (cempa, chile, rosa, nopal, cielo):                               # text on every colour wall is tinta
+            self.assertGreaterEqual(styles.contrast(tinta, bg), 4.5, bg)
+        self.assertGreaterEqual(styles.contrast(blanco, jac), 4.5)                  # white text only on jacaranda
+        self.assertGreaterEqual(styles.contrast(papel, tinta), 4.5)
+        self.assertGreaterEqual(styles.contrast(jac, cempa), 3.0)                   # jacaranda on cempa: large text only
+        self.assertGreaterEqual(styles.contrast(tinta, papel), 3.0)                 # form-field border and focus ring
+        self.assertGreaterEqual(styles.contrast(jac, papel), 3.0)
 
     def test_every_hex_in_brand_css_is_a_brand_colour(self):
-        allowed = {'#FFFFFF', '#F6F6F9', '#1A1A22', '#464653', '#636371', '#E6E6EE', '#8B8B99', '#FF6B1A', '#FF9A3D', '#FFC24B', '#B83F0A',
-                   '#FFF1E7', '#F2501F', '#0F8043', '#0F6F50', '#E3F5EC', '#B3261E', '#FDECEA'}
+        allowed = {'#1B1236', '#FFF9EE', '#FFFFFF', '#FFB800', '#FF4F1F', '#5B2EE6', '#FF4FA3', '#0FB56D', '#37C5F2', '#5E5478'}   # the ten Lotería colours
         self.assertEqual(hexes(styles.PANEL) - allowed, set())
+        self.assertEqual(hexes(styles.KIT_SHELL) - allowed, set())
 
     def test_pwa_shell_in_brand(self):
         s, body, _ = req(APP, '/manifest.webmanifest')
         m = json.loads(body)
-        self.assertEqual(m['theme_color'], '#FF6B1A')
-        self.assertEqual(m['background_color'], '#ffffff')
+        self.assertEqual(m['theme_color'], styles.BRAND_COLOR)
+        self.assertEqual(m['theme_color'], '#FFB800')
+        self.assertEqual(m['background_color'], '#FFF9EE')
         for ic in m['icons']:
             s, png, _ = req(APP, ic['src'])
             self.assertEqual(s, 200)
         for name, size in (('icon-192.png', 192), ('icon-512.png', 512), ('apple-touch-icon.png', 180)):  # same filenames; the lead drops the new art in
             with Image.open(os.path.join(STATIC, name)) as im:
                 self.assertEqual(im.size, (size, size), name)
-        self.assertIn('theme-color" content="#FF6B1A"', self.page('/entrar'))
+        self.assertIn('theme-color" content="#FFB800"', self.page('/entrar'))
         s, js, _ = req(APP, '/sw.js')
-        self.assertIn("const V='fu-v2'", js.decode())                             # new cache so installed apps pick up the new shell
+        self.assertIn("const V='fu-v3'", js.decode())                             # new cache so installed apps drop the old icons, logo and shell
 
     def test_landing_assets_exist_and_no_portal_promise(self):
         h = self.page('/')
