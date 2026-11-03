@@ -2,32 +2,28 @@
 in llave/ghl_live.py (no messaging)."""
 import json
 import os
-import sys
 
 from . import db, replies, whatsapp
 
-_GUARD = '/Users/joshstein/Desktop/Claude Ledger/josh-command-center/clients/vive-polanco/ops'
-FALLBACK_TERMS = ('alara', 'global luxury', 'glicka', 'paulina sierra', 'gabriella orozco', 'sheila')
-_blocked = None
-try:
-    sys.path.insert(0, _GUARD)
-    from blocklist_guard import blocked as _blocked  # noqa: E402
-except Exception:
-    _blocked = None
+TEST_TERMS = ('persona bloqueada',)  # outside production: a made-up name, so the guard can be tested anywhere
+
+
+def block_terms():
+    """Names that never get a message, lowercase: one per line in a private file on the server (LLAVE_BLOCKLIST_FILE).
+    This code is public, so the names never go here. In production, /healthz fails if the list is missing or empty."""
+    path = os.environ.get('LLAVE_BLOCKLIST_FILE', '')
+    if not path:
+        return () if db.ENV == 'production' else TEST_TERMS
+    try:
+        with open(path, encoding='utf-8') as f:
+            return tuple(t for t in (line.strip().lower() for line in f) if t and not t.startswith('#'))
+    except OSError:
+        return ()
 
 
 def is_blocked(name='', email='', company=''):
-    parts = (name or '').split(None, 1)
-    c = {'firstName': parts[0] if parts else '', 'lastName': parts[1] if len(parts) > 1 else '',
-         'name': name or '', 'email': email or '', 'companyName': company or ''}
-    if _blocked:
-        try:
-            if _blocked(c):
-                return True
-        except Exception:
-            pass
     hay = ' '.join([name or '', email or '', company or '']).lower()
-    return any(t in hay for t in FALLBACK_TERMS)
+    return any(t in hay for t in block_terms())
 
 
 def _money(c):

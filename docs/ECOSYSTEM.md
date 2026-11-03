@@ -10,7 +10,7 @@ Credits are granted only when the sister brand **confirms** the event (signed we
 | Event | Credits | Confirmed by |
 |---|---|---|
 | rentapoliza.poliza_emitida (póliza issued for the agent's rental) | 30 | RentaPóliza signed webhook |
-| vive.referido_cerrado | 50 | VIVE (Fernando/Josh). The 50/50 commission is handled by VIVE, not by us |
+| vive.referido_cerrado | 50 | VIVE's team. The 50/50 commission is handled by VIVE, not by us |
 | vive.referido_enviado | 5 | VIVE acknowledges the referral |
 | cerquito.pedido | 5 per order | Cerquito order paid |
 | idxbloom.referido_alta | 20 | IDX Bloom signup |
@@ -41,7 +41,7 @@ One GHL account family, one sub-account per company; shared tags so any workflow
 | Flow | Trigger | Webhook fired | Receiving company does |
 |---|---|---|---|
 | Ficha Única → RentaPóliza | Rentals pipeline stage "Póliza" (W8) | RentaPóliza → us on `poliza.emitida` | Agent gets a prefilled "Solicitar póliza" link; on issue, we confirm +30 |
-| Ficha Única → VIVE | Agent taps "Referir" (luxury CDMX client/property) | VIVE → us on `referido_enviado` / `referido_cerrado` | Fernando contacts the agent, agrees the 50/50 in writing |
+| Ficha Única → VIVE | Agent taps "Referir" (luxury CDMX client/property) | VIVE → us on `referido_enviado` / `referido_cerrado` | VIVE's team contacts the agent, agrees the 50/50 in writing |
 | VIVE → Ficha Única | Closed deal / VIVE broker network | tag `eco-referral-vive-fichaunica` | Broker invited to a free Ficha Única site |
 | Ficha Única ⇄ IDX Bloom | Agent sells in Miami | IDX Bloom → us on `referido_alta` | IDX Bloom onboarding; +20 on signup |
 | Ficha Única ⇄ Ciao Bella | Agent asks for marketing/SEO | Ciao Bella → us on `cliente_alta` | Ciao Bella follows up; +20 when signed |
@@ -49,7 +49,7 @@ One GHL account family, one sub-account per company; shared tags so any workflow
 
 Phase 1 receives the webhook per brand in this order: RentaPóliza (engine done), then VIVE, Cerquito, IDX Bloom, Ciao Bella (same shape: add a handler beside `handle_rentapoliza_webhook`).
 
-**Human approval points:** every message to an outside person is previewed by Josh first (exact words + recipient); reward changes, new templates, and the first real activation of each flow need Josh's yes. Until then, GHL effects are only dry-run outbox rows (`ghl.tag`). Never contacts the Alara group (blocklist honoured via `ghl.is_blocked`).
+**Human approval points:** every message to an outside person is previewed by Josh first (exact words + recipient); reward changes, new templates, and the first real activation of each flow need Josh's yes. Until then, GHL effects are only dry-run outbox rows (`ghl.tag`). Never contacts anyone on the block list (`ghl.is_blocked`).
 
 ## 5. Owner dashboard (Josh)
 `eco.owner_report(con, days=30)`: per brand events / confirmed / credits; per pair counts (`fichaunica→rentapoliza: n`, …, confirmed only); top 10 agencies by credits earned plus current balance. To add in UI: pending events awaiting confirmation, boosts active, credits outstanding (liability).

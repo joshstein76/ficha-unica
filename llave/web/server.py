@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import threading
 
-from .. import auth, billing, calculadoras, cards, db, domains, formatos, ghl_live, lia, operaciones, geo, importer, lead_watch, mailer, media, ml_oauth, novedades, password_reset, photo_fetch, photos, price_check, replies, stats, whatsapp
+from .. import auth, billing, calculadoras, cards, db, domains, formatos, ghl, ghl_live, lia, operaciones, geo, importer, lead_watch, mailer, media, ml_oauth, novedades, password_reset, photo_fetch, photos, price_check, replies, stats, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
@@ -1481,10 +1481,13 @@ def save_site(con, a, f, files):
 def health(con):
     try:
         from .. import alerts
-        return alerts.heartbeat()
+        out = alerts.heartbeat()
     except Exception:
         ok = con.execute('SELECT 1').fetchone()[0] == 1
-        return {'ok': ok, 'db_ok': ok}
+        out = {'ok': ok, 'db_ok': ok}
+    if db.ENV == 'production' and not ghl.block_terms():  # people we must never message would not be blocked: deploy.sh rolls back on this
+        out.update(ok=False, blocklist_ok=False)
+    return out
 
 
 def tls_allowed(con, domain):
@@ -1539,6 +1542,8 @@ def main():
     con = db.connect()
     db.init(con)
     con.close()
+    if db.ENV == 'production' and not ghl.block_terms():
+        print('AVISO: sin lista de bloqueo (LLAVE_BLOCKLIST_FILE): /healthz falla hasta que exista.', file=sys.stderr)
     if db.ENV == 'production' and not domains.public_ips():
         print('AVISO: LLAVE_PUBLIC_IP no está en app.env: a los asesores Pro no les podemos mostrar la dirección IP para su dominio '
               'y la verificación se apoya solo en %s (docs/CUSTOM-DOMAINS.md).' % domains.cname_target(), file=sys.stderr)

@@ -20,7 +20,7 @@ Nothing here runs until Josh answers the name, home and GHL questions and says g
 ## 4. Portals
 - Lifull Connect (Trovit/Mitula/Nestoria/Nuroa): send them our feed URL and confirm their current spec.
 - Mercado Libre: register the app, OAuth per agent, publish/update/pause from `feeds/mercadolibre.py`, and confirm per-listing fees first.
-- Propiedades.com, Proppit/Lamudi, Inmuebles24: partner asks, only with Josh's yes.
+- Other portals: partner asks, only with Josh's yes.
 
 ## 5. Before any real agent signs up
 - A lawyer reviews the privacy notice + terms (new 2025 data-protection law; we act as controller and/or processor).

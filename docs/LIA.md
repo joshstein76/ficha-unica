@@ -66,20 +66,9 @@ Raw urllib via `ai/client.py` (extended with `messages`, `max_tokens`, `retries`
 
 `lia_threads` (agency, listing, status, one-line summary, requested time, replies used, night shown, lead) and `lia_messages` (role, kind, body, model_call). Created by `db.init` from `schema.sql`; `agencies.lia_enabled` is added by `db.init` on old databases. The IP is not stored with a chat (only in `rate_events`, kept 2 days, like every other guard). A chat becomes a lead only through the form: `leads.create_lead(..., source='lia', consent=True)` (the consent rule now covers `lia`), so the blocklist, the 10-minute duplicate guard and the GHL queue apply. The lead's `message` holds the status, the summary, the unconfirmed visit request and the transcript (3,800 characters, newest lines kept); Clientes shows the summary, the visit request ("sin confirmar") and the full transcript from the tables, escaped.
 
-## For the lawyer: what the privacy notice must now say
+## Privacy notice
 
-The agent-site notice (`site.privacy`) is still the old draft and says nothing about this. It must now cover, at least:
-
-1. **An AI assistant answers the chat** and says so in her first message. The notice should say that replies are generated automatically, can be wrong, and that a person (the agent) confirms visits and anything she hands off.
-2. **What is collected in the chat**: everything the visitor types (free text can include names, family situation, budget or other financial details, which may count as patrimonial data), the property being viewed, timestamps, and the name and WhatsApp typed in the form. Phones and emails typed in the chat are not kept (they are replaced before storing), but other personal data typed freely is.
-3. **Who is responsible and who processes**: the agency is the responsable; Ficha Única (Ciao Bella Marketing) is the encargado that hosts the chat.
-4. **Third parties and transfers abroad**: the conversation is sent to Anthropic (United States) to generate each reply; a lead created from a chat is copied to GoHighLevel (United States) with the summary and the transcript; hosting. For a Bolsa listing the lead and transcript go to the listing's owner agency. The lawyer must decide how Anthropic's API data terms (retention, no training) are described.
-5. **Purposes**: answering the question, passing it to the agent, following up by WhatsApp/phone after the consent checkbox. The checkbox text today is only "Acepto el aviso de privacidad"; decide whether it must also name WhatsApp follow-up.
-6. **Retention**: transcripts are kept until deleted. There is no automatic purge yet (open decision: how long, then add a job).
-7. **ARCO rights for transcripts**: how to ask the agency, and that deleting a chat today is a manual database action by the platform (no button yet).
-8. **Storage on the device**: a signed chat token in the browser's `sessionStorage` (this tab only, no cookie) so a reload keeps the conversation.
-9. **Minors and sensitive data**: the chat is open to anyone; the prompt does not ask for sensitive data but cannot stop a visitor typing it.
-10. **No automated decisions with legal effect**: she never confirms a visit, quotes a discount, or gives legal, tax or financial advice.
+The agent-site notice (`site.privacy`) is still a draft. The lawyer updates it before she goes live for real agents.
 
 ## Cannot be proven without a real key (nothing here ever made a real call)
 

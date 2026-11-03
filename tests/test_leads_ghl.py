@@ -52,7 +52,7 @@ class T(unittest.TestCase):
                 self.assertEqual(p['body']['locationId'], 'DRY_RUN_NO_LOCATION')
 
     def test_blocked(self):
-        r = self.mk(name='Sheila Test')
+        r = self.mk(name='Persona Bloqueada Test')
         self.assertTrue(r['blocked'])
         self.assertEqual(self.con.execute('SELECT status FROM leads WHERE id=?', (r['id'],)).fetchone()[0], 'descartado')
         self.assertEqual(self.con.execute('SELECT COUNT(*) FROM outbox').fetchone()[0], 0)

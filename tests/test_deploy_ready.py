@@ -9,8 +9,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from llave import db  # noqa: E402
 from llave.web import panel  # noqa: E402
-
-COMPETITORS = re.compile(r'easy\s*broker|idxboost|wiggot', re.I)
+from guard_terms import RIVALS as COMPETITORS  # noqa: E402
 
 
 def tracked():

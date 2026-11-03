@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from llave import db, lia, leads  # noqa: E402
 from llave.ai import budget, client  # noqa: E402
 from llave.web import common, lia_ui, panel, server, site  # noqa: E402
+import guard_terms  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KEY = 'sk-ant-test-' + 'x' * 30
@@ -172,7 +173,7 @@ class Conversation(LiaCase):
         for secret in ('NOTA INTERNA SECRETA', 'maria@ejemplo.test', '55 1234 5678', '5512345678', 'commission', 'comision', '4.5'):
             self.assertNotIn(secret, facts)
         self.assertNotIn('Casa Coyoacán', lia.SYSTEM_PROMPT)                    # nothing agency-specific in the cached block
-        self.assertIsNone(re.search(r'easy\s*broker|idxboost|wiggot', lia.SYSTEM_PROMPT, re.I))   # no competitor named
+        self.assertIsNone(guard_terms.RIVALS.search(lia.SYSTEM_PROMPT))   # no competitor named
 
     def test_history_is_append_only_across_calls(self):
         fake = Fake(model_out('Son $18,500 MXN al mes. ¿Para cuándo la necesitas?'), model_out('Perfecto. ¿Cuántas personas serían?'))
@@ -416,9 +417,9 @@ class Conversation(LiaCase):
         self.assertEqual(spy.call_args[0][-2:], ('lia', True))
         # blocklist: the lead is stored as discarded (never synced), and the client sees the normal thank-you
         r2 = self.chat('Hola', Fake(model_out('Claro.')), token='', now=DAY)
-        out = lia.contact(self.con, a, r2['t'], 'Paulina Sierra', '55 4444 3333', True)
+        out = lia.contact(self.con, a, r2['t'], 'Persona Bloqueada', '55 4444 3333', True)
         self.assertTrue(out['ok'])
-        blocked = self.con.execute("SELECT * FROM leads WHERE name='Paulina Sierra'").fetchone()
+        blocked = self.con.execute("SELECT * FROM leads WHERE name='Persona Bloqueada'").fetchone()
         self.assertEqual(blocked['status'], 'descartado')
         self.assertEqual(self.con.execute("SELECT COUNT(*) FROM outbox WHERE ref=?", ('lead:%d' % blocked['id'],)).fetchone()[0], 0)
         # duplicate guard: the same phone on the same listing within ten minutes is one lead

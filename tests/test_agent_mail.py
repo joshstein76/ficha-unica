@@ -143,7 +143,7 @@ class NewLead(Base):
         self.lead()
         self.assertTrue(self.lead()['duplicate'])                                  # the existing 10-minute guard
         self.assertEqual(len(self.mails), 1)
-        r = self.lead(name='Paulina Sierra', phone='55 9999 0000', email='p@x.test')  # blocklisted person
+        r = self.lead(name='Persona Bloqueada', phone='55 9999 0000', email='p@x.test')  # blocklisted person
         self.assertTrue(r['blocked'])
         self.assertEqual(len(self.mails), 1)
 

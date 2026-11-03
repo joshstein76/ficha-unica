@@ -77,7 +77,7 @@ def main():
     L += ['', 'NO WRITES MADE']
     txt = '\n'.join(L)
     print(txt)
-    with open(os.path.join(ROOT, 'docs', 'ghl-dryrun-vive-2026-10-17.md'), 'w', encoding='utf-8') as f:
+    with open(os.path.join(ROOT, 'data', 'ghl-dryrun-vive.md'), 'w', encoding='utf-8') as f:
         f.write(txt + '\n')
 
 

@@ -16,9 +16,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from http.server import ThreadingHTTPServer  # noqa: E402
 from llave import db  # noqa: E402
 from llave.web.server import Handler  # noqa: E402
+import guard_terms  # noqa: E402
 
 PORT = 8692
-COMP = re.compile(r'easy\s*broker|idxboost|wiggot|tokko|inmuebles24|lamudi|placester', re.I)
+COMP = guard_terms.RIVALS_AND_PORTALS
 
 
 def get(path, host='app.fichaunica.localhost'):

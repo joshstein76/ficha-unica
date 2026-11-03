@@ -1,6 +1,6 @@
 # Stripe setup for Ficha Única (LLAVE): the exact clicks
 
-Stripe account: **Ficha Única**, its own account inside the Ciao Bella Marketing organization (Josh 10-29, like Cerquito / IDX Bloom / Xin Puente); Ciao Bella Marketing, LLC stays the legal owner. Not the main Ciao Bella Marketing account. Plans: **Pro MXN 499/month** and **Pro + IA MXN 999/month**, IVA included. Gratis is MXN 0 and never touches Stripe.
+Stripe account: **Ficha Única**, its own account inside the Ciao Bella Marketing organization (Josh 10-29, like the other businesses); Ciao Bella Marketing, LLC stays the legal owner. Not the main Ciao Bella Marketing account. Plans: **Pro MXN 499/month** and **Pro + IA MXN 999/month**, IVA included. Gratis is MXN 0 and never touches Stripe.
 Code: `llave/billing.py` (written 2026-10-19, never run against the real Stripe: the first test-mode purchase is its first real test).
 Status: nothing here has been done. No Stripe account was created and no Stripe call was made while building this.
 

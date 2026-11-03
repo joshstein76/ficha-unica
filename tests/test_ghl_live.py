@@ -246,7 +246,7 @@ class T(unittest.TestCase):
         self.assertEqual(len(self.rows()), 0)
 
     def test_blocked_and_discarded_leads_are_skipped(self):
-        b = self.mk_lead(name='Paulina Sierra', phone='55 9999 0000')
+        b = self.mk_lead(name='Persona Bloqueada', phone='55 9999 0000')
         self.assertTrue(b['blocked'])
         self.assertEqual(len(self.rows()), 0)
         r = self.mk_lead()

@@ -2,6 +2,7 @@ import os
 import unittest
 
 from llave import formatos
+import guard_terms
 from llave.web.common import e
 
 
@@ -37,8 +38,8 @@ class Formatos(unittest.TestCase):
 
     def test_no_competitor_names(self):
         blob = str(formatos.FORMATOS).lower()
-        for bad in ('easybroker', 'lokation', 'wiggot', 'tokko', 'realtors'):
-            self.assertNotIn(bad, blob)
+        self.assertIsNone(guard_terms.RIVALS.search(blob))
+        self.assertNotIn('realtors', blob)
 
 
 if __name__ == '__main__':

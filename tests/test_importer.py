@@ -53,7 +53,7 @@ class ImporterTests(unittest.TestCase):
         self.assertEqual(p['columns_detected']['municipio'], 'Alcaldía')
         self.assertTrue(p['ok'])
 
-    def test_english_easybroker(self):
+    def test_english_headers(self):
         con, aid, uid = make()
         p = importer.preview(con, aid, EN)
         a, b = p['rows']
