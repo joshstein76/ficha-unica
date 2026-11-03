@@ -9,7 +9,7 @@ Nothing here runs until Josh answers the name, home and GHL questions and says g
 
 ## 2. Hosting the agent sites
 - One renderer for all sites at `*.<brand>.mx`. Wildcard DNS + wildcard TLS cover the free addresses.
-- Own domains (Pro): the agent adds a CNAME `www` → `sites.<brand>.mx` + TXT `llave-verify=<slug>`. We verify, then issue the cert automatically (ACME / Caddy on-demand TLS or Cloudflare for SaaS) and set `domain_verified_at`. Root-domain A records are avoided on purpose (they pin our IP in thousands of DNS zones).
+- Own domains (Pro): built (docs/CUSTOM-DOMAINS.md). The agent points `www` to us (CNAME → `sites.<brand>.mx`, or an A record to `LLAVE_PUBLIC_IP`) and, optionally, the bare name (A record). A DNS check (button + cron) sets `domain_verified_at`; Caddy on-demand TLS issues the certificates through `/_tls/ask`. The TXT proof was dropped (stdlib resolver; decision #50). The bare name only redirects to www, so pinning our IP in the agent's zone is optional.
 - Caching: the listing pages and feeds are static per `updated_at`, so put a CDN in front and purge on save.
 
 ## 3. GoHighLevel

@@ -22,6 +22,7 @@ Owner: Ciao Bella Marketing · Code: this repo · Deploy kit: `deploy/` (dry-run
 | 8c | While the Stripe key is a test key: `LLAVE_STRIPE_TEST_EMAILS=<Josh's login email>` in `app.env`, otherwise nobody (Josh included) can start a paid plan. See `docs/STRIPE-SETUP.md` | Claude | 📋 |
 | 9 | Lawyer-reviewed privacy notice + terms replace the drafts (`/aviso-de-privacidad`, `/terminos`, `/privacidad`) | Josh | 📋 |
 | 10 | GHL "Ficha Única" sub-account + token; keep `LLAVE_GHL_LIVE` off until a 10-lead dry run is reviewed | Josh/Samantha | 📋 |
+| 11 | Own domains (Pro): `LLAVE_PUBLIC_IP` in app.env, the `domain_check_run.py` cron line, `dig +short sites.<brand>` = the VPS IP, a read-only look at the live Caddyfile. Steps, first-real-domain test and rollback: `docs/CUSTOM-DOMAINS.md` | Claude via SSH, Josh's yes | 📋 |
 
 ## Deploy (each time)
 1. `deploy/deploy.sh` (dry run). Read what it would do.

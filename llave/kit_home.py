@@ -6,7 +6,7 @@ import os
 KIT_VERSION = '1.2.1'  # cache-buster for /_s/agent-dash.* (static files are cached a year)
 LOTERIA_VERSION = '3'  # cache-buster for /_s/ficha-loteria.css (the Ficha Única skin over the kit; bump it with every change to that file)
 
-from . import db, lead_watch, novedades, price_check, replies
+from . import db, domains, lead_watch, novedades, price_check, replies
 
 
 def enabled():
@@ -64,6 +64,9 @@ def build(con, ctx, steps, services, welcome=False):
             sv.pop('cta')
     # Urgent things go in the kit's 'alerts' (1.1.0), all at once instead of only the first one.
     alerts = []
+    if domains.lost_notice(a):
+        alerts.append({'tone': 'warn', 'icon': 'globe', 'title': 'Tu dominio %s dejó de apuntar a Ficha Única' % a['custom_domain'],
+                       'body': 'Tu sitio volvió a su dirección gratis; no perdiste nada.', 'cta': {'label': 'Arreglarlo', 'href': '/sitio'}})
     if n_late:
         alerts.append({'tone': 'warn', 'icon': 'chat', 'title': '%d cliente%s sin respuesta hace más de 5 min' % (n_late, '' if n_late == 1 else 's'),
                        'body': 'Responder rápido es lo que más ayuda a avanzar.', 'cta': {'label': 'Responder', 'href': '/clientes?estado=nuevo'}})

@@ -3,7 +3,7 @@ Pages are plain functions returning HTML; server.py handles routing, sessions an
 import json
 import os
 
-from .. import academia, billing, kit_home, calculadoras, db, formatos, mailer, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
+from .. import academia, billing, kit_home, calculadoras, db, domains, formatos, mailer, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS, DESIGN_KEYS)
 from .styles import BRAND_COLOR, FONTS, KIT_SHELL, PANEL, PRECONNECT, logo
@@ -273,7 +273,8 @@ def dashboard(con, ctx, welcome=False):
     n_stale = len(price_check.stale_listings(con, a['id']))
     n_late = late_count(con, a['id'])
     n_fu = lead_watch.follow_up_count(con, a['id'])
-    body = pilot_notice(a) + (('<div class="notice err">⏰ %d cliente%s sin respuesta hace más de 5 minutos. <a href="/clientes?estado=nuevo">Respóndeles ya</a></div>'
+    body = pilot_notice(a) + (('<div class="notice err">🌐 Tu dominio %s dejó de apuntar a Ficha Única y tu sitio volvió a su dirección gratis. '
+                               '<a href="/sitio">Arréglalo aquí</a></div>' % e(a['custom_domain'])) if domains.lost_notice(a) else '') + (('<div class="notice err">⏰ %d cliente%s sin respuesta hace más de 5 minutos. <a href="/clientes?estado=nuevo">Respóndeles ya</a></div>'
              % (n_late, '' if n_late == 1 else 's')) if n_late else '') + (('<div class="notice warn">%d precio%s sin confirmar en 30 días. <a href="/precios">Confírmalos con un toque</a></div>'
              % (n_stale, '' if n_stale == 1 else 's')) if n_stale else '') + (('<div class="notice warn">📅 %d cliente%s para dar seguimiento hoy. <a href="/clientes?estado=hoy">Verlos</a></div>'
              % (n_fu, '' if n_fu == 1 else 's')) if n_fu else '') + ('%s<div><h1>%s, %s</h1><p class="muted">Tu sitio: <a href="%s" target="_blank" rel="noopener">%s</a></p></div>'
@@ -677,25 +678,97 @@ def bolsa(con, ctx, q=None, flash=''):
 
 
 # ---------- my site ----------
-def site_settings(con, ctx, ok='', error=''):
+def _dns_row(host, cls, ips, optional=False):
+    """One line of 'what we see' for a name: a pill + what is missing, in plain Spanish. cls = domains.classify() result or None (not checked yet)."""
+    other = ', '.join(e(i) for i in ips)
+    if cls == 'ok':
+        pill, txt = ('ok', 'Listo'), '<b>%s</b> apunta a Ficha Única.' % e(host)
+    elif cls == 'sin_registro':
+        pill, txt = ('pendiente', 'Opcional') if optional else ('error', 'Falta'), '<b>%s</b> todavía no existe en tu proveedor.' % e(host)
+    elif cls == 'otra':
+        pill, txt = ('pendiente', 'Opcional') if optional else ('error', 'Falta'), '<b>%s</b> apunta a otra dirección (%s), no a Ficha Única.' % (e(host), other)
+    elif cls == 'mixto':
+        pill, txt = ('pendiente', 'Opcional') if optional else ('error', 'Falta'), \
+            '<b>%s</b> apunta a Ficha Única y también a otra dirección (%s). Borra el registro viejo.' % (e(host), other)
+    elif cls == 'desconocido':
+        pill, txt = ('pendiente', 'Sin dato'), 'No pudimos consultar <b>%s</b> en este momento. Intenta de nuevo en unos minutos.' % e(host)
+    else:
+        pill, txt = ('pendiente', 'Sin revisar'), '<b>%s</b>: todavía no lo hemos revisado. Pulsa «Verificar ahora» cuando termines los pasos.' % e(host)
+    return '<li style="margin:6px 0"><span class="pill %s">%s</span> %s</li>' % (pill[0], pill[1], txt)
+
+
+def domain_card(ctx):
+    """Mi sitio > Tu propio dominio: pendiente (what is missing + the exact steps), verificado, problema (it stopped working)."""
+    a = ctx['agency']
+    s = domains.status(a)
+    d, www = s['domain'], s['www']
+    free = '<code>%s</code>' % e(db.origin(a['slug']))
+    if not s['plan_ok']:
+        keep = (' Tu dominio <b>%s</b> queda guardado y se activa solo cuando vuelvas a Pro.' % e(d)) if d else ''
+        return ('<section class="card"><h2>Tu propio dominio</h2><p class="muted">Incluido en el plan <a href="/plan">Pro</a>. '
+                'Mientras tanto tu sitio vive gratis en %s.%s</p></section>') % (free, keep)
+    if not d:
+        return ('<section class="card"><h2>Tu propio dominio</h2><p class="muted">¿Ya compraste tu dominio, por ejemplo <b>micasa.mx</b>? '
+                'Escríbelo aquí y te decimos, paso a paso, qué cambiar donde lo compraste. Mientras tanto tu sitio sigue en %s.</p>'
+                '<form class="stack" method="post" action="/sitio/dominio">%s<label>Dominio<input name="domain" value="" placeholder="micasa.mx" '
+                'autocapitalize="none" autocomplete="off" spellcheck="false"></label><button class="btn ghost">Guardar dominio</button></form></section>'
+                ) % (free, csrf_field(ctx))
+    det, state = s['detail'], s['state']
+    checked = ('<p class="small muted">Última revisión: %s.</p>' % e(domains.ago_es(s['checked_at']))) if s['checked_at'] else ''
+    head = ''
+    if state == 'verificado':
+        head = '<div class="notice">✓ Tu dominio está activo: tu sitio vive en <b>%s</b> y la dirección gratis te lleva ahí.</div>' % e(www)
+        if det.get('www') in ('sin_registro', 'otra', 'mixto'):  # failed the last check but not yet taken off (3 failed checks in a row)
+            head = ('<div class="notice warn">Ahora mismo <b>%s</b> no apunta a Ficha Única. Arréglalo en tu proveedor: si sigue así un rato, tu sitio '
+                    'vuelve a su dirección gratis (no pierdes nada).</div>' % e(www))
+        if s['tls'] == 'espera':
+            head += ('<div class="notice warn" style="margin-top:8px">Estamos activando el candado (HTTPS) de tu dominio. Suele tardar unos minutos; '
+                     'mientras tanto tu sitio sigue abriendo en %s. Si pasa más de una hora, escríbenos.</div>' % free)
+    elif state == 'problema':
+        head = ('<div class="notice err">Tu dominio <b>%s</b> dejó de apuntar a Ficha Única%s. Tu sitio volvió a su dirección gratis (%s) y no perdiste '
+                'nada: propiedades, fotos y clientes siguen igual. Revisa el registro <b>www</b> en tu proveedor y pulsa «Verificar ahora»; '
+                'cuando vuelva a apuntar, lo activamos de nuevo.</div>') % (
+            e(d), (' (%s)' % e(domains.ago_es(s['lost_at']))) if s['lost_at'] else '', free)
+    else:
+        head = ('<div class="notice warn">Falta un paso para activar <b>%s</b>. Tu sitio sigue en %s mientras tanto.</div>' % (e(www), free))
+    rows = '<ul class="small" style="list-style:none;padding:0;margin:10px 0">%s%s</ul>' % (
+        _dns_row(www, det.get('www'), det.get('www_ips', [])), _dns_row(d, det.get('apex'), det.get('apex_ips', []), optional=True))
+    if not det.get('configured', True) and det:
+        rows += '<p class="small muted">Estamos terminando de configurar la verificación en este servidor. Intenta de nuevo más tarde.</p>'
+    if state == 'verificado' and det.get('apex') == 'ok' and det.get('www') == 'ok':
+        steps = ''
+    else:
+        ip_www = (' Si tu proveedor no deja crear un CNAME, usa mejor un registro tipo <b>A</b>, nombre <code>www</code>, valor <code>%s</code>.'
+                  % e(s['ips'][0])) if s['ips'] else ''
+        ip_apex = (' Para eso crea un registro tipo <b>A</b>, nombre <code>@</code> (en algunos proveedores se deja vacío), valor <code>%s</code>, '
+                   'y borra los otros registros A del mismo nombre.' % e(s['ips'][0])) if s['ips'] else ''
+        steps = ('<h3>Qué hacer donde compraste tu dominio</h3><ol class="small">'
+                 '<li>Entra a tu cuenta de GoDaddy, Hostinger, Wix, Namecheap, NIC México, Cloudflare o donde lo compraste y busca <b>DNS</b>, '
+                 '«Administrar DNS» o «Zona DNS» de <b>%(d)s</b>.</li>'
+                 '<li>Crea un registro tipo <b>CNAME</b>, nombre <code>www</code>, que apunte a <code>%(cname)s</code>. Si ya existe un registro '
+                 '<code>www</code>, cámbialo en vez de crear otro.%(ipw)s</li>'
+                 '<li>Opcional, para que también abra <b>%(d)s</b> sin www (si no lo haces, solo abrirá <b>%(www)s</b>).%(ipa)s</li>'
+                 '<li>Guarda los cambios y pulsa «Verificar ahora». Puede tardar de unos minutos a unas horas; además revisamos solos cada 10 minutos.</li></ol>'
+                 '<p class="small muted">No toques los registros MX ni TXT: son de tu correo. Si usas Cloudflare, deja la nube en gris (solo DNS).</p>') % {
+            'd': e(d), 'www': e(www), 'cname': e(s['cname']), 'ipw': ip_www, 'ipa': ip_apex}
+    verify = ('<form method="post" action="/sitio/dominio/verificar" style="margin:12px 0 4px">%s<button class="btn">Verificar ahora</button></form>%s'
+              % (csrf_field(ctx), checked))
+    change = ('<form class="stack" method="post" action="/sitio/dominio" style="margin-top:14px">%s<label>Dominio<input name="domain" value="%s" '
+              'placeholder="micasa.mx" autocapitalize="none" autocomplete="off" spellcheck="false"></label>'
+              '<span class="row"><button class="btn ghost">Guardar dominio</button></span></form>'
+              '<form method="post" action="/sitio/dominio" style="margin-top:6px">%s<input type="hidden" name="domain" value="">'
+              '<button class="btn ghost small">Quitar mi dominio</button></form>') % (csrf_field(ctx), e(d), csrf_field(ctx))
+    return '<section class="card"><h2>Tu propio dominio</h2>%s%s%s%s%s</section>' % (head, rows, verify, steps, change)
+
+
+def site_settings(con, ctx, ok='', error='', warn=''):
     a = ctx['agency']
     cur_design = a['design'] if a['design'] in DESIGN_KEYS else db.DEFAULT_DESIGN
     designs = ''.join('<label class="check card" style="gap:6px"><input type="radio" name="design" value="%s"%s> '
                       '<span><b>%s</b><br><span class="small muted">%s</span></span></label>'
                       % (k, ' checked' if cur_design == k else '', n, d) for k, n, d in DESIGNS)
-    pro = db.plan_has(a, 'domain')
-    domain = ('<section class="card"><h2>Tu propio dominio</h2>%s</section>' % (
-        ('<form class="stack" method="post" action="/sitio/dominio">%s<label>Dominio<input name="domain" value="%s" '
-         'placeholder="micasa.mx"></label><button class="btn ghost">Guardar dominio</button></form>%s' % (
-             csrf_field(ctx), e(a['custom_domain']),
-             ('<p class="small">Para conectarlo crea en tu proveedor de dominio un registro <b>CNAME</b> de <code>www</code> '
-              'hacia <code>sites.%s</code> y un registro <b>TXT</b> <code>llave-verify=%s</code>. Estado: %s.</p>' % (
-                  e(db.BASE_DOMAIN), e(a['slug']),
-                  'verificado' if a['domain_verified_at'] else 'pendiente (la verificación se activa en producción)'))
-             if a['custom_domain'] else ''))
-        if pro else '<p class="muted">Incluido en el plan <a href="/plan">Pro</a>. Mientras tanto tu sitio vive gratis en '
-                    '<code>%s</code>.</p>' % e(db.site_url(a))))
-    body = ('%s%s<div class="row" style="justify-content:space-between"><h1>Mi sitio</h1>'
+    domain = domain_card(ctx)
+    body = ('%s%s%s<div class="row" style="justify-content:space-between"><h1>Mi sitio</h1>'
             '<span class="row"><a class="btn ghost small" href="/perfil">Mi perfil</a><a class="btn ghost small" href="/equipo">Equipo</a>'
             '<a class="btn ghost small" href="/plan">Tu plan</a>'
             '<a class="btn ghost small" href="%s" target="_blank" rel="noopener">Ver sitio ↗</a></span></div>'
@@ -715,7 +788,7 @@ def site_settings(con, ctx, ok='', error=''):
             '<label>Cuando no sabemos su nombre<textarea name="first_reply_noname" rows="3" placeholder="%s">%s</textarea></label>'
             '<p class="small"><b>Así se verá:</b> %s</p></section>'
             '<button class="btn">Guardar cambios</button></form>%s') % (
-        notice(ok), notice(error, 'err'), e(db.site_url(a)), csrf_field(ctx), designs, e(a['accent']), e(a['name']),
+        notice(ok), notice(warn, 'warn'), notice(error, 'err'), e(db.site_url(a)), csrf_field(ctx), designs, e(a['accent']), e(a['name']),
         e(a['tagline']), e(a['about']), e(a['whatsapp']), e(a['email']), e(a['city']),
         e(replies.DEFAULT_FIRST_REPLY), e(a['first_reply']), e(replies.DEFAULT_FIRST_REPLY_NONAME), e(a['first_reply_noname']),
         e(replies.render(a, 'Ana Pérez', 'Departamento con terraza en la Roma Norte', ctx['user']['name'])), domain)
@@ -1152,7 +1225,7 @@ def profile(ctx, ok='', error=''):
 # ---------- plans (TEST MODE until llave/billing.py is configured; then Stripe takes the payment) ----------
 PLANS = [
     ('gratis', 'Gratis', 0, ['Tu sitio en una dirección gratis', '1 propiedad', 'Clientes directo a tu WhatsApp']),
-    ('pro', 'Pro', 499, ['Todo lo de Gratis', '5 propiedades', 'Tu propio dominio (muy pronto)', 'Imágenes para Instagram y ficha para imprimir',
+    ('pro', 'Pro', 499, ['Todo lo de Gratis', '5 propiedades', 'Tu propio dominio', 'Imágenes para Instagram y ficha para imprimir',
                          'Importa tus propiedades desde Excel (archivo CSV)', 'Bolsa 50/50 con otros asesores', 'Estadísticas completas']),
     ('ia', 'Pro + IA', 999, ['Todo lo de Pro', '25 propiedades', 'Títulos y descripciones con IA, en español e inglés', 'Revisión y orden de tus fotos',
                              'Precio sugerido con propiedades parecidas', 'Qué publicar cada semana en tus redes']),

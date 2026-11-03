@@ -1,3 +1,7 @@
+# Cloudflare-wildcard variant (needs DNS on Cloudflare + a Caddy build with the cloudflare module). NOT what production runs today:
+# production uses deploy/Caddyfile.on-demand (on-demand certificates, DNS on Hostinger; fichaunica.mx and www are WordPress, not this app).
+# Own domains work with either file as long as the global `ask`, the `https://` on_demand catch-all and an `http://` redirect exist; this
+# file has no `http://` block, so add the one from Caddyfile.on-demand if you ever switch to it (docs/CUSTOM-DOMAINS.md).
 # VPS reverse proxy with automatic HTTPS. Free subdomains use one wildcard cert (DNS challenge plugin needed for the
 # wildcard: build caddy with the DNS provider module, e.g. cloudflare); agents' own domains use on-demand TLS, allowed
 # only if the app says so (/_tls/ask checks: our hosts + verified custom domains).

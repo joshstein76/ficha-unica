@@ -1,0 +1,24 @@
+# What the production server should run (KVM 2, DNS on Hostinger, free sites AND agents' own domains on on-demand certificates).
+# Source: 2026-10-21-LIVE-IN-AN-HOUR-RUNBOOK.md T+25 + ledger 10-26/10-27; the LIVE /etc/caddy/Caddyfile was not read when this was written.
+# Compare it with the live file BEFORE touching anything (docs/CUSTOM-DOMAINS.md, step 1). deploy/Caddyfile is the later Cloudflare-wildcard variant.
+#
+# What own domains need from Caddy: the global `ask` (the app approves only its hosts + VERIFIED own domains at /_tls/ask), the
+# `https://` catch-all with on_demand (serves www.<agent-domain> and the bare name), and the `http://` redirect.
+# Do not add a named block for the brand domain here: fichaunica.mx and www are WordPress on Hostinger hosting.
+{
+	on_demand_tls {
+		ask http://127.0.0.1:8640/_tls/ask
+	}
+}
+
+http:// {
+	redir https://{host}{uri} permanent
+}
+
+https:// {
+	tls {
+		on_demand
+	}
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8640
+}
