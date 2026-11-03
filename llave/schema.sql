@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS agencies (
   first_reply TEXT,                       -- NULL = default approved by Josh 10-17 (llave/replies.py)
   first_reply_noname TEXT,
   is_demo INTEGER NOT NULL DEFAULT 0,
+  lia_enabled INTEGER NOT NULL DEFAULT 0, -- the agent's own switch for Lía, the AI chat on the site (llave/lia.py); OFF by default
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -149,6 +150,31 @@ CREATE TABLE IF NOT EXISTS deal_tasks (
   position INTEGER NOT NULL DEFAULT 0
 );
 
+-- Lía, the AI chat on agent sites (llave/lia.py, docs/LIA.md). One thread per chat, one row per message. A thread becomes a lead
+-- only through the contact form (leads.create_lead, source 'lia'); lead_id links them so Clientes can show the transcript.
+CREATE TABLE IF NOT EXISTS lia_threads (
+  id INTEGER PRIMARY KEY,
+  agency_id INTEGER NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+  listing_id INTEGER REFERENCES listings(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'answering', -- answering | handoff | visit_requested (the furthest it got)
+  summary TEXT,                           -- one line for the agent
+  requested_time TEXT,                    -- the visit time the client asked for, in their words; NEVER a confirmed visit
+  replies INTEGER NOT NULL DEFAULT 0,     -- model replies used (per-thread cap)
+  night_shown INTEGER NOT NULL DEFAULT 0, -- the after-hours message was already shown once
+  lead_id INTEGER REFERENCES leads(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS lia_messages (
+  id INTEGER PRIMARY KEY,
+  thread_id INTEGER NOT NULL REFERENCES lia_threads(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,                     -- user | assistant
+  kind TEXT NOT NULL DEFAULT 'text',      -- greeting | text | guard | error | night | cap | contact
+  body TEXT NOT NULL,                     -- client phones and emails typed in the chat are replaced before they are stored
+  model_call INTEGER NOT NULL DEFAULT 0,  -- 1 when this reply used a model call (per-agency daily cap)
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Outbox for every outside call (GHL, portals). Dry-run writes here and stops.
 CREATE TABLE IF NOT EXISTS outbox (
   id INTEGER PRIMARY KEY,
@@ -172,3 +198,5 @@ CREATE INDEX IF NOT EXISTS ix_listings_bolsa ON listings(share_in_bolsa, status)
 CREATE INDEX IF NOT EXISTS ix_leads_agency ON leads(agency_id, created_at);
 CREATE INDEX IF NOT EXISTS ix_deals_agency ON deals(agency_id, stage);
 CREATE INDEX IF NOT EXISTS ix_deal_tasks_deal ON deal_tasks(deal_id, position);
+CREATE INDEX IF NOT EXISTS ix_lia_threads_agency ON lia_threads(agency_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_lia_messages_thread ON lia_messages(thread_id, id);

@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import threading
 
-from .. import auth, billing, calculadoras, cards, db, formatos, ghl_live, operaciones, geo, importer, lead_watch, media, ml_oauth, novedades, photo_fetch, photos, price_check, replies, stats, whatsapp
+from .. import auth, billing, calculadoras, cards, db, formatos, ghl_live, lia, operaciones, geo, importer, lead_watch, media, ml_oauth, novedades, photo_fetch, photos, price_check, replies, stats, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
@@ -26,6 +26,8 @@ from .common import csrf_ok, to_cents, to_num, DESIGN_KEYS
 from .styles import BRAND_COLOR
 
 MAX_UPLOAD = 40 * 1024 * 1024
+LIA_PATHS = ('/lia/mensaje', '/lia/contacto', '/lia/historial')
+LIA_MAX_BODY = 8192
 _SCHEMA_OK = set()
 SESSION_DAYS = 30
 
@@ -318,8 +320,68 @@ class Handler(BaseHTTPRequestHandler):
             return self.send('User-agent: *\nAllow: /\n', ctype='text/plain; charset=utf-8')
         return self.send(panel.landing((query.get('ref') or '')[:60]))
 
+    # ---------- Lía, the AI chat on agent sites (llave/lia.py, docs/LIA.md) ----------
+    def lia_api(self, con, a, path):
+        """JSON in, JSON out, same origin only. The message text is never logged (log_message prints the request line only, and every
+        failure below prints a class name at most). Any AI problem is a friendly line + the contact form, never an error page."""
+        def out(obj, status=200):
+            return self.send(json.dumps(obj, ensure_ascii=False), status, 'application/json', headers={'Cache-Control': 'no-store'})
+        origin = (self.headers.get('Origin') or '').strip()
+        try:
+            same_origin = bool(origin) and (urllib.parse.urlsplit(origin).hostname or '').lower() == self.host()
+        except ValueError:
+            same_origin = False
+        if not same_origin:
+            return out({'ok': False, 'error': 'Solicitud no permitida.'}, 403)
+        if not (self.headers.get('Content-Type') or '').lower().startswith('application/json'):
+            return out({'ok': False, 'error': 'Solicitud no válida.'}, 415)
+        try:
+            length = int(self.headers.get('Content-Length') or 0)
+        except ValueError:
+            length = -1
+        if length < 0 or length > LIA_MAX_BODY:  # body left unread: send() closes the connection
+            return out({'ok': False, 'error': 'Solicitud demasiado grande.'}, 413)
+        raw = self.rfile.read(length)
+        self._body_read = True
+        try:
+            f = json.loads(raw.decode('utf-8'))
+            if not isinstance(f, dict):
+                raise ValueError
+        except ValueError:
+            return out({'ok': False, 'error': 'Solicitud no válida.'}, 400)
+        if f.get('website'):  # honeypot: bots fill every field; pretend it went fine, store nothing, spend nothing
+            return out({'ok': True, 'reply': '', 'ask_contact': False, 'night': False, 'lead': False})
+        ip = self.client_ip()
+        token = str(f.get('t') or '')
+        busy = {'ok': False, 'reply': 'Estás escribiendo muy rápido. Espera un momento o deja tus datos aquí abajo.', 'ask_contact': True}
+        try:
+            if path == '/lia/mensaje':
+                if lia.is_new_chat(con, a, token) and not rate_ok(con, 'lia_thread', ip, lia.limit('IP_THREAD_HOUR'), 60):
+                    return out(busy, 429)
+                if not rate_ok(con, 'lia_msg', ip, lia.limit('IP_MSG_HOUR'), 60):
+                    return out(busy, 429)
+                if lia.is_new_chat(con, a, token):
+                    rate_hit(con, 'lia_thread', ip)
+                rate_hit(con, 'lia_msg', ip)
+                lid = f.get('l')
+                lid = int(lid) if str(lid or '').isdigit() else None
+                return out(lia.message(con, a, token, f.get('m'), lid))
+            if path == '/lia/contacto':
+                if not rate_ok(con, 'lia_contact', ip, lia.limit('IP_CONTACT_HOUR'), 60):
+                    return out({'ok': False, 'error': 'Demasiados intentos. Prueba más tarde o usa el formulario de la página.'}, 429)
+                rate_hit(con, 'lia_contact', ip)
+                return out(lia.contact(con, a, token, f.get('name'), f.get('phone'), f.get('consent')))
+            return out(lia.history(con, a, token))
+        except lia.LiaError as ex:
+            return out({'ok': False, 'error': str(ex)}, ex.status)
+        except Exception as ex:  # a bug must not leak text or a traceback to the client or the logs
+            sys.stderr.write('[lia] error %s\n' % type(ex).__name__)
+            return out({'ok': False, 'ask_contact': True}, 500)
+
     # ---------- agent site ----------
     def agency_site(self, con, a, method, path):
+        if method == 'POST' and path in LIA_PATHS and (lia.contact_enabled(a) if path == '/lia/contacto' else lia.enabled_for(con, a)):
+            return self.lia_api(con, a, path)  # Lía's chat; with any gate off these paths fall through to the normal 404
         if method == 'POST' and path == '/contacto':
             f, _ = self.form()
             if f.get('website'):  # honeypot: bots fill every field; pretend success, store nothing
@@ -1267,6 +1329,8 @@ def save_site(con, a, f, files):
     logo = a['logo_path']
     if files.get('logo'):
         logo = media.save_brand_image(files['logo'][0], 'logo')
+    if f.get('lia_seen') == '1' and db.plan_has(a, lia.FEATURE) and lia.flag_on():  # the form carried Lía's switch (plan allows it)
+        con.execute('UPDATE agencies SET lia_enabled=? WHERE id=?', (1 if f.get('lia_enabled') == '1' else 0, a['id']))
     con.execute('UPDATE agencies SET first_reply=?, first_reply_noname=? WHERE id=?', (fr or None, frn or None, a['id']))
     con.execute('UPDATE agencies SET name=?, tagline=?, about=?, whatsapp=?, email=?, city=?, design=?, accent=?, logo_path=? WHERE id=?',
                 (name[:80], (f.get('tagline') or '').strip()[:90], (f.get('about') or '').strip()[:2000], wa,

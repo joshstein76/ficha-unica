@@ -71,8 +71,10 @@ def enabled(con=None):
             c.close()
 
 
-def build_request(system, user, schema, effort='medium'):
-    """-> (headers, body_dict). Raises AIUnavailable when no credential is set."""
+def build_request(system, user, schema, effort='medium', messages=None, max_tokens=None):
+    """-> (headers, body_dict). Raises AIUnavailable when no credential is set.
+    `system` is a string or a list of content blocks (cache_control goes on a block). `messages` (a full turn list, used by the
+    Lía chat) replaces the single `user` turn; `max_tokens` overrides the default ceiling (thinking is always on and counts)."""
     if effort not in EFFORTS:
         raise ValueError('effort must be one of %s' % (EFFORTS,))
     key, tok = _creds()
@@ -88,26 +90,29 @@ def build_request(system, user, schema, effort='medium'):
     headers['anthropic-beta'] = ','.join(betas)
     body = {
         'model': MODEL,
-        'max_tokens': MAX_TOKENS,
+        'max_tokens': max_tokens or MAX_TOKENS,
         'system': system,
-        'messages': [{'role': 'user', 'content': user}],
+        'messages': messages if messages is not None else [{'role': 'user', 'content': user}],
         'output_config': {'effort': effort, 'format': {'type': 'json_schema', 'schema': schema}},
         'fallbacks': 'default',
     }
     return headers, body
 
 
-def _urllib_transport(url, headers, body):
+def _urllib_transport(url, headers, body, timeout=120):
     req = urllib.request.Request(url, data=body, headers=headers, method='POST')
     try:
-        with urllib.request.urlopen(req, timeout=120) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, r.read()
     except urllib.error.HTTPError as ex:
         return ex.code, ex.read()
 
 
 def parse_response(raw):
-    data = json.loads(raw.decode('utf-8') if isinstance(raw, bytes) else raw)
+    try:
+        data = json.loads(raw.decode('utf-8') if isinstance(raw, bytes) else raw)
+    except ValueError:  # an empty or HTML body with a 200 is an AI failure, not a crash
+        raise AIError('La respuesta no es JSON válido')
     stop = data.get('stop_reason')
     if stop == 'refusal':
         raise AIRefused('El modelo rechazó la solicitud')
@@ -122,27 +127,29 @@ def parse_response(raw):
         raise AIError('La respuesta no es JSON válido')
 
 
-def complete_json(system, user, schema, effort='medium', transport=None, budget_con=None):
-    """Real calls (no injected transport) always go through the monthly cap: checked before, recorded after."""
-    headers, body = build_request(system, user, schema, effort)
+def complete_json(system, user, schema, effort='medium', transport=None, budget_con=None, messages=None, max_tokens=None, retries=None):
+    """Real calls (no injected transport) always go through the monthly cap: checked before, recorded after.
+    A caller that passes `budget_con` gets the cap with an injected transport too (Lía does, so tests exercise it)."""
+    headers, body = build_request(system, user, schema, effort, messages=messages, max_tokens=max_tokens)
     payload = json.dumps(body).encode('utf-8')
     send = transport or _urllib_transport
     from . import budget
     from .. import db
     bcon = budget_con or (db.connect() if transport is None else None)
-    if bcon is not None and not budget.allow(bcon, MODEL, len(payload) // 3 + 500, MAX_TOKENS):
+    if bcon is not None and not budget.allow(bcon, MODEL, len(payload) // 3 + 500, body['max_tokens']):
         raise AIUnavailable('Se alcanzó el límite mensual de IA; usamos el texto automático.')
     try:
-        return _send(send, headers, payload, bcon)
+        return _send(send, headers, payload, bcon, retries)
     finally:
         if bcon is not None and budget_con is None:
             bcon.close()
 
 
-def _send(send, headers, payload, bcon):
+def _send(send, headers, payload, bcon, retries=None):
     from . import budget
     last = None
-    for attempt in range(RETRIES + 1):
+    tries = RETRIES if retries is None else retries
+    for attempt in range(tries + 1):
         try:
             status, raw = send(URL, headers, payload)
         except (urllib.error.URLError, OSError) as ex:
@@ -162,6 +169,6 @@ def _send(send, headers, payload, bcon):
                 last = AIError('La API respondió HTTP %d' % status)
             else:
                 raise AIError('La API respondió HTTP %d' % status)
-        if attempt < RETRIES:
+        if attempt < tries:
             time.sleep(BACKOFF * (2 ** attempt))
     raise last

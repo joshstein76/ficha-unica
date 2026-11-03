@@ -3,7 +3,7 @@ Pages are plain functions returning HTML; server.py handles routing, sessions an
 import json
 import os
 
-from .. import academia, billing, kit_home, calculadoras, db, formatos, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
+from .. import academia, billing, kit_home, calculadoras, db, formatos, lia, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS, DESIGN_KEYS)
 from .styles import BRAND_COLOR, FONTS, KIT_SHELL, PANEL, PRECONNECT, logo
@@ -413,6 +413,22 @@ def _short_day(iso):
         return iso or ''
 
 
+def lia_block(con, lead_id):
+    """Clientes card extra for a lead that came from Lía: her one-line summary, the visit time asked for (never confirmed), and the transcript.
+    Everything is escaped. Returns (summary_html, transcript_html); ('', '') when the lead has no Lía thread."""
+    t = lia.thread_for_lead(con, lead_id)
+    if not t:
+        return '', ''
+    th = t['thread']
+    top = '<span class="pill%s">%s</span> <b>Resumen de Lía:</b> %s' % (
+        ' ok' if th['status'] != 'answering' else '', e(lia.STATUS_LABEL.get(th['status'], th['status'])), e(th['summary'] or 'sin resumen'))
+    if th['requested_time']:
+        top += '<br><b>Visita solicitada (sin confirmar):</b> %s. Confírmala tú con el cliente.' % e(th['requested_time'])
+    lines = ''.join('<p class="small" style="margin:4px 0;white-space:pre-wrap"><b>%s:</b> %s</p>' % (
+        'Cliente' if m['role'] == 'user' else 'Lía', e(m['body'])) for m in t['messages'])
+    return top, ('<details><summary class="small" style="min-height:44px;display:flex;align-items:center;cursor:pointer">Ver la conversación con Lía</summary>%s</details>' % lines)
+
+
 def _leads_list(con, rows, ctx=None, today=None):
     out = []
     for r in rows:
@@ -435,12 +451,13 @@ def _leads_list(con, rows, ctx=None, today=None):
                 chips += ('<form class="row" method="post" action="/clientes/%d/seguimiento">%s<span class="small muted">Recordarme:</span>%s</form>'
                           % (r['id'], csrf_field(ctx), ''.join('<button class="btn ghost small" name="dias" value="%d">%s</button>' % (d, t)
                                                                for d, t in FOLLOW_UP_CHOICES + ([(0, 'Quitar')] if fu else []))))
+        lia_top, lia_talk = lia_block(con, r['id']) if r['source'] == 'lia' else ('', '')
         out.append('<div class="card%s" style="gap:6px"><div class="row" style="justify-content:space-between"><b>%s</b>'
                    '<span class="row">%s<span class="pill %s">%s</span></span></div><span class="small muted">%s · %s · %s</span>%s'
-                   '<p class="small" style="margin:0">%s</p><div class="row">%s%s</div>%s</div>' % (
+                   '<p class="small" style="margin:0">%s</p>%s<div class="row">%s%s</div>%s</div>' % (
                        ' late' if late else '', e(r['name'] or 'Sin nombre'), badge, e(r['status']), e(label(LEAD_STATUSES, r['status'])),
                        e(nice_date(r['created_at'])), e(r['source']), e(lst['ref'] if lst else 'general'),
-                       ('<span class="small">%s</span>' % e(lst['title'])) if lst else '', e(r['message']),
+                       ('<span class="small">%s</span>' % e(lst['title'])) if lst else '', lia_top or e(r['message']), lia_talk,
                        ('<a class="btn wa small" href="/clientes/%d/whatsapp" target="_blank" rel="noopener">Responder por WhatsApp</a>' % r['id'])
                        if r['phone'] else '',
                        ('<a class="btn ghost small" href="mailto:%s">Correo</a>' % e(r['email'])) if r['email'] else '', chips))
@@ -624,6 +641,16 @@ def bolsa(con, ctx, q=None, flash=''):
 
 
 # ---------- my site ----------
+def lia_card(a):
+    return ('<section class="card"><h2>Lía</h2><input type="hidden" name="lia_seen" value="1">'
+            '<label class="check"><input type="checkbox" name="lia_enabled" value="1"%s> Lía contesta en tu sitio</label>'
+            '<p class="small muted">Lía es una asistente de inteligencia artificial: contesta el chat de tu sitio con los datos de tu perfil y tus '
+            'propiedades públicas, y siempre dice que es una asistente de IA. No confirma visitas (las confirmas tú), no habla de comisiones, '
+            'temas legales ni dinero, y lo que no sabe te lo pasa a ti. Contesta de 7:00 a.m. a 8:00 p.m. (hora de Ciudad de México); '
+            'fuera de ese horario avisa que le responden en la mañana. Cada conversación que deja sus datos aparece en Clientes con su resumen. '
+            'Viene apagada.</p></section>') % (' checked' if lia.switch_on(a) else '')
+
+
 def site_settings(con, ctx, ok='', error=''):
     a = ctx['agency']
     cur_design = a['design'] if a['design'] in DESIGN_KEYS else db.DEFAULT_DESIGN
@@ -666,6 +693,8 @@ def site_settings(con, ctx, ok='', error=''):
         e(a['tagline']), e(a['about']), e(a['whatsapp']), e(a['email']), e(a['city']),
         e(replies.DEFAULT_FIRST_REPLY), e(a['first_reply']), e(replies.DEFAULT_FIRST_REPLY_NONAME), e(a['first_reply_noname']),
         e(replies.render(a, 'Ana Pérez', 'Departamento con terraza en la Roma Norte', ctx['user']['name'])), domain)
+    if lia.flag_on() and db.plan_has(a, lia.FEATURE):  # inside the same form, just before its save button
+        body = body.replace('<button class="btn">Guardar cambios</button></form>', lia_card(a) + '<button class="btn">Guardar cambios</button></form>', 1)
     return layout('Mi sitio', body, ctx, 'sitio')
 
 

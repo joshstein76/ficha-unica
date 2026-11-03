@@ -44,6 +44,7 @@ PLAN_FEATURES = {
     'tools': ('pro', 'ia'),   # Instagram images, printable sheet, Excel/CSV import, Bolsa 50/50, full stats
     'ai': ('ia',),            # AI writer, photo review + order, suggested price, weekly social kit
     'team': (),               # team invites: off until teams come back (Josh 10-19: drop Agencia)
+    'lia': ('ia',),           # Lía, the AI chat on the agent's own site (llave/lia.py); also needs LLAVE_LIA_LIVE=1 + the agency's switch
 }
 PUBLIC_STATUSES = ('activa', 'apartada')  # shown on sites + fed to portals
 REFERRAL_BONUS_LISTINGS = 1  # extra listing per invited colleague who publishes (Claude's call; was 5 until the 10-19 plans, when 5 = the whole Pro plan)
@@ -83,6 +84,8 @@ def init(con):
     for col in ('stripe_customer_id', 'stripe_subscription_id'):  # Stripe billing (llave/billing.py)
         if col not in cols:
             con.execute('ALTER TABLE agencies ADD COLUMN %s TEXT' % col)
+    if 'lia_enabled' not in cols:  # Lía's per-agency switch, OFF by default (llave/lia.py)
+        con.execute('ALTER TABLE agencies ADD COLUMN lia_enabled INTEGER NOT NULL DEFAULT 0')
     if 'plan_until' not in cols:  # pilot: plan given free until this date (tools/set_plan.py)
         con.execute('ALTER TABLE agencies ADD COLUMN plan_until TEXT')
     ocols = {r[1] for r in con.execute('PRAGMA table_info(outbox)')}
