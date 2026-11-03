@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import threading
 
-from .. import auth, billing, calculadoras, cards, db, formatos, ghl_live, operaciones, geo, importer, lead_watch, media, ml_oauth, novedades, photo_fetch, photos, price_check, replies, stats, whatsapp
+from .. import auth, billing, calculadoras, cards, db, formatos, ghl_live, operaciones, geo, importer, lead_watch, mailer, media, ml_oauth, novedades, photo_fetch, photos, price_check, replies, stats, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
@@ -1379,6 +1379,10 @@ def main():
     if billing.test_lock_active():
         print('AVISO: la llave de Stripe es de PRUEBA en producción: los planes de pago están cerrados para todos, '
               'salvo %d correo(s) en LLAVE_STRIPE_TEST_EMAILS.' % len(billing.test_emails()), file=sys.stderr)
+    for problem in mailer.config_problems():
+        print('AVISO: %s' % problem, file=sys.stderr)
+    if db.ENV == 'production' and not mailer.enabled():
+        print('AVISO: sin SMTP (LLAVE_SMTP_*): los correos a asesores quedan en modo prueba y no hay "olvidé mi contraseña".', file=sys.stderr)
     bind = os.environ.get('LLAVE_BIND', '127.0.0.1')  # always behind the reverse proxy; never expose directly
     srv = ThreadingHTTPServer((bind, db.PORT), Handler)
     print('Ficha Única (LLAVE) %s: panel %s · sitios %s' % (db.ENV, db.origin('app'), db.origin('<slug>')))
