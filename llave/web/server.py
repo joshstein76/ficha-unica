@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import threading
 
-from .. import auth, billing, calculadoras, cards, db, formatos, ghl_live, operaciones, geo, importer, lead_watch, mailer, media, ml_oauth, novedades, photo_fetch, photos, price_check, replies, stats, whatsapp
+from .. import auth, billing, calculadoras, cards, db, formatos, ghl_live, operaciones, geo, importer, lead_watch, mailer, media, ml_oauth, novedades, password_reset, photo_fetch, photos, price_check, replies, stats, whatsapp
 from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
@@ -476,6 +476,50 @@ class Handler(BaseHTTPRequestHandler):
         secure = '; Secure' if db.SCHEME == 'https' else ''
         self.redirect(to, {'Set-Cookie': 'llave_s=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=%d%s' % (tok, SESSION_DAYS * 86400, secure)})
 
+    def forgot_password(self, con, method):
+        """/olvide: asks for a reset link. The page answers the same whether or not the email has an account, and the work done is
+        the same too (every attempt is counted, the link is only written for a real account). Per IP and per email limits."""
+        if not mailer.enabled():  # no way to deliver the link: say so instead of pretending
+            return self.send(panel.forgot(unavailable=True), 503 if method == 'POST' else 200)
+        if method != 'POST':
+            return self.send(panel.forgot())
+        f, _ = self.form()
+        if f.get('website'):  # honeypot: look the same, do nothing
+            return self.send(panel.forgot(sent=True))
+        email = (f.get('email') or '').strip().lower()
+        if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email) or len(email) > 200:
+            return self.send(panel.forgot('Revisa tu correo: parece incompleto.', email=email[:200]), 400)
+        ip, key = self.client_ip(), hashlib.sha256(email.encode('utf-8')).hexdigest()[:32]
+        if not rate_ok(con, 'reset_ip', ip, RESET_PER_IP_HOUR, 60) or not rate_ok(con, 'reset_email', key, RESET_PER_EMAIL_HOUR, 60):
+            return self.send(panel.forgot('Pediste varios enlaces seguidos. Espera un rato e intenta de nuevo.', email=email), 429)
+        rate_hit(con, 'reset_ip', ip)
+        rate_hit(con, 'reset_email', key)
+        made = password_reset.request(con, email)
+        if made:  # the mail server can be slow: dispatch() sends from a worker thread, so both answers take the same time
+            mailer.dispatch(con, [password_reset.email_for(*made)])
+        return self.send(panel.forgot(sent=True))
+
+    def reset_password(self, con, method, query):
+        """/restablecer?t=<token>: choose a new password. Single use, 60 minutes; success ends the user's other sessions and signs them in."""
+        if method != 'POST':
+            token = query.get('t', '')
+            if password_reset.lookup(con, token):
+                return self.send(panel.reset_form(token))
+            return self.send(panel.reset_invalid(), 400)
+        f, _ = self.form()
+        token = f.get('t', '')
+        if not password_reset.lookup(con, token):
+            return self.send(panel.reset_invalid(), 400)
+        if f.get('password') != f.get('password2'):
+            return self.send(panel.reset_form(token, 'Las dos contraseñas no coinciden.'), 400)
+        try:
+            uid = password_reset.complete(con, token, f.get('password', ''))
+        except password_reset.InvalidToken:
+            return self.send(panel.reset_invalid(), 400)
+        except ValueError as ex:
+            return self.send(panel.reset_form(token, str(ex)), 400)
+        return self.start_session(con, uid, '/')
+
     def panel(self, con, method, path, query):
         ctx = self.session(con)
         if path == '/registro':
@@ -505,6 +549,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(panel.login('Correo o contraseña incorrectos.'), 401)
                 return self.start_session(con, u['id'])
             return self.send(panel.login())
+        if path == '/olvide':
+            return self.forgot_password(con, method)
+        if path == '/restablecer':
+            return self.reset_password(con, method, query)
         if path in ('/terminos', '/privacidad'):
             return self.send(panel.legal(path[1:]))
         m = re.match(r'^/api/eco/(rentapoliza)$', path)
@@ -1014,6 +1062,8 @@ def _limit(name, prod_default):
 SIGNUP_DAILY_CAP = _limit('LLAVE_SIGNUP_DAILY_CAP', 7)
 SIGNUP_PER_IP_DAY = _limit('LLAVE_SIGNUP_PER_IP_DAY', 3)
 LOGIN_FAILS_15MIN = _limit('LLAVE_LOGIN_FAILS_15MIN', 10)
+RESET_PER_IP_HOUR = _limit('LLAVE_RESET_PER_IP_HOUR', 5)        # reset links asked from one IP per hour
+RESET_PER_EMAIL_HOUR = _limit('LLAVE_RESET_PER_EMAIL_HOUR', 3)  # ...and for one email address per hour (so nobody can flood a mailbox)
 SIGNUP_FULL_MSG = ('Hoy ya abrimos todos los lugares del día. Vuelve mañana o escríbenos por WhatsApp y te apartamos el tuyo.')
 
 

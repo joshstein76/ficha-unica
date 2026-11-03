@@ -90,6 +90,9 @@ def init(con):
         con.execute('ALTER TABLE outbox ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0')
     con.execute("CREATE TABLE IF NOT EXISTS stripe_events ("  # one row per Stripe event id we processed: replays are no-ops
                 "event_id TEXT PRIMARY KEY, type TEXT NOT NULL, outcome TEXT, received_at TEXT NOT NULL DEFAULT (datetime('now')))")
+    con.execute("CREATE TABLE IF NOT EXISTS password_resets ("  # llave/password_reset.py: only the SHA-256 of the emailed token is stored
+                "token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+                "expires_at TEXT NOT NULL, used_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))")
     # Operaciones (deals, deal_tasks) are new tables: CREATE TABLE IF NOT EXISTS in schema.sql covers older databases
     con.execute("UPDATE agencies SET plan='ia' WHERE plan IN ('agencia','pro_crm')")  # 10-19 plans
     con.commit()

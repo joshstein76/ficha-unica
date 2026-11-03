@@ -3,7 +3,7 @@ Pages are plain functions returning HTML; server.py handles routing, sessions an
 import json
 import os
 
-from .. import academia, billing, kit_home, calculadoras, db, formatos, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
+from .. import academia, billing, kit_home, calculadoras, db, formatos, mailer, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS, DESIGN_KEYS)
 from .styles import BRAND_COLOR, FONTS, KIT_SHELL, PANEL, PRECONNECT, logo
@@ -109,13 +109,50 @@ def signup(error='', values=None, ref=''):
 
 
 def login(error=''):
+    forgot_link = '<p class="small muted"><a href="/olvide">¿Olvidaste tu contraseña?</a></p>' if mailer.enabled() else ''  # only when we can email the link
     body = ('<div class="auth pub"><div class="intro"><h1>Entrar</h1><p class="muted">Tu sitio, tus propiedades y tus clientes de WhatsApp.</p></div>%s'
             '<form class="stack card" method="post" action="/entrar">'
             '<label>Correo<input name="email" type="email" autocomplete="email" required></label>'
             '<label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>'
-            '<button class="btn">Entrar</button><p class="small muted">¿Nuevo? <a href="/registro">Crea tu sitio gratis</a></p>'
-            '</form></div>') % notice(error, 'err')
+            '<button class="btn">Entrar</button>%s<p class="small muted">¿Nuevo? <a href="/registro">Crea tu sitio gratis</a></p>'
+            '</form></div>') % (notice(error, 'err'), forgot_link)
     return layout('Entrar', body)
+
+
+def forgot(error='', sent=False, unavailable=False, email=''):
+    """/olvide. `sent` is the one answer shown whether or not the email has an account."""
+    if unavailable:
+        inner = ('<div class="intro"><h1>Recuperar contraseña</h1></div>%s<a class="btn ghost" href="/entrar">Volver a entrar</a>' % notice(
+            'Por ahora no podemos enviar correos, así que todavía no hay recuperación por correo. Estamos terminando de conectarlo.', 'warn'))
+    elif sent:
+        inner = ('<div class="intro"><h1>Revisa tu correo</h1></div>%s<a class="btn ghost" href="/entrar">Volver a entrar</a>' % notice(
+            'Si ese correo tiene cuenta en Ficha Única, te mandamos un enlace para elegir una contraseña nueva. Vale 60 minutos. '
+            'Si no llega en unos minutos, revisa tu carpeta de spam.'))
+    else:
+        inner = ('<div class="intro"><h1>Recuperar contraseña</h1><p class="muted">Escribe el correo de tu cuenta y te mandamos un enlace para elegir una nueva.</p></div>%s'
+                 '<form class="stack card" method="post" action="/olvide"><div aria-hidden="true" style="position:absolute;left:-9999px">'
+                 '<label>Sitio web<input name="website" tabindex="-1" autocomplete="off"></label></div>'
+                 '<label>Correo<input name="email" type="email" value="%s" autocomplete="email" required></label>'
+                 '<button class="btn">Enviarme el enlace</button><p class="small muted"><a href="/entrar">Volver a entrar</a></p></form>') % (
+            notice(error, 'err'), e(email))
+    return layout('Recuperar contraseña', '<div class="auth pub">%s</div>' % inner)
+
+
+def reset_form(token, error=''):
+    body = ('<div class="auth pub"><div class="intro"><h1>Elige tu contraseña nueva</h1>'
+            '<p class="muted">Al guardarla, cerramos tus otras sesiones abiertas.</p></div>%s'
+            '<form class="stack card" method="post" action="/restablecer"><input type="hidden" name="t" value="%s">'
+            '<label>Contraseña nueva<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>'
+            '<label>Repítela<input name="password2" type="password" minlength="8" autocomplete="new-password" required></label>'
+            '<button class="btn">Guardar y entrar</button></form></div>') % (notice(error, 'err'), e(token))
+    return layout('Contraseña nueva', body)
+
+
+def reset_invalid():
+    again = '<a class="btn" href="/olvide">Pedir otro enlace</a>' if mailer.enabled() else '<a class="btn ghost" href="/entrar">Volver a entrar</a>'
+    body = ('<div class="auth pub"><div class="intro"><h1>Este enlace ya no sirve</h1></div>%s%s</div>') % (
+        notice('El enlace ya se usó o venció (duran 60 minutos y se usan una sola vez).', 'err'), again)
+    return layout('Enlace vencido', body)
 
 
 # ---------- dashboard ----------
