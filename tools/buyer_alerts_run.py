@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Match buyer alerts to new public listings; queue agency alerts (dry-run). Run hourly once production exists."""
+"""Match buyer alerts to new public listings; queue agency alerts (dry-run) and email the AGENT (llave/agent_mail.py; never the buyer). Run hourly (deploy/crontab.example)."""
 import os
 import sys
 

@@ -269,6 +269,17 @@ class Web(unittest.TestCase):
             self.assertIn('Este enlace ya no sirve', page)
         self.assertEqual(self.web.req('/entrar', {'email': self.u['email'], 'password': 'clave-nueva-123'})[0], 303)
 
+    def test_the_token_never_reaches_the_access_log(self):
+        with mail_env():
+            self.ask(self.u['email'])
+        token = link_in(self.mails[-1])
+        with mock.patch('sys.stderr') as err:
+            self.web.req('/restablecer?t=' + token)
+            self.web.req('/restablecer?t=' + token + '&x=1')
+        logged = ''.join(str(c.args[0]) for c in err.write.call_args_list)
+        self.assertIn('/restablecer?t=[REDACTED]', logged)
+        self.assertNotIn(token, logged)
+
     def test_an_expired_link_is_refused(self):
         with mail_env():
             self.ask(self.u['email'])

@@ -18,13 +18,15 @@ Owner: Ciao Bella Marketing · Code: this repo · Deploy kit: `deploy/` (dry-run
 | 6 | Cron from `deploy/crontab.example` (daily backups, the 1-minute lead watch, the weekly price check) | Claude | 📋 |
 | 7 | Off-site copy of backups (e.g. `--offsite-cmd "rclone copy {file} remote:fichaunica-backups"` to a bucket or Drive) | Josh picks the destination | 📋 |
 | 8 | Error alerts: `LLAVE_ALERT_WEBHOOK` (a GHL inbound webhook → internal contact → WhatsApp to Samantha's alert line) and/or email | Samantha | 📋 |
+| 8b | Email to agents: a mailbox on the domain (e.g. `avisos@fichaunica.mx`) and its SMTP settings in `app.env` (`LLAVE_SMTP_HOST/PORT/USER/PASSWORD/FROM`). Turns on the new-lead email, the 5-minute and daily emails, buyer-alert emails and "¿Olvidaste tu contraseña?". Without it all of those are dry-run outbox rows and the forgot-password link stays hidden | Josh creates the mailbox, Claude fills `app.env` | 📋 |
+| 8c | While the Stripe key is a test key: `LLAVE_STRIPE_TEST_EMAILS=<Josh's login email>` in `app.env`, otherwise nobody (Josh included) can start a paid plan. See `docs/STRIPE-SETUP.md` | Claude | 📋 |
 | 9 | Lawyer-reviewed privacy notice + terms replace the drafts (`/aviso-de-privacidad`, `/terminos`, `/privacidad`) | Josh | 📋 |
 | 10 | GHL "Ficha Única" sub-account + token; keep `LLAVE_GHL_LIVE` off until a 10-lead dry run is reviewed | Josh/Samantha | 📋 |
 
 ## Deploy (each time)
 1. `deploy/deploy.sh` (dry run). Read what it would do.
 2. `deploy/deploy.sh --go`: tests, then a server backup, upload of the release, symlink switch, restart, and a health check, with an automatic rollback if `/healthz` fails.
-3. Smoke test: sign up a test agency, run the 3-step wizard with one listing, check the public page, feed, card and ficha, send a test lead from our own phone, and confirm it shows in Clientes and reaches the alert.
+3. Smoke test: sign up a test agency, run the 3-step wizard with one listing, check the public page, feed, card and ficha, send a test lead from our own phone, and confirm it shows in Clientes **and that the alert email reaches the agent's inbox** (check the outbox row `email.lead_nuevo` says `sent`, and that no email went to the test lead). Then "¿Olvidaste tu contraseña?" on `/entrar`: the link arrives, works once, and the old session is closed.
 
 ## The app refuses to start in production if
 - `LLAVE_SECRET` is missing or the dev default (`check_production_config`).

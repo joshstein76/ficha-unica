@@ -68,7 +68,8 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- plumbing ----------
     def log_message(self, fmt, *args):
-        sys.stderr.write('[llave] %s %s\n' % (self.address_string(), fmt % args))
+        line = re.sub(r'(/restablecer\?t=)[^\s&"]+', r'\1[REDACTED]', fmt % args)  # a reset link is a password: it never reaches our logs
+        sys.stderr.write('[llave] %s %s\n' % (self.address_string(), line))
 
     def send(self, body, status=200, ctype='text/html; charset=utf-8', headers=None):
         data = body.encode('utf-8') if isinstance(body, str) else body
