@@ -398,7 +398,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send('No encontrada', 404, 'text/plain; charset=utf-8')
             row = con.execute("SELECT id FROM listings WHERE agency_id=? AND slug=? AND status IN ('activa','apartada')",
                               (a['id'], m.group(1))).fetchone()
-            if not row:
+            if not row or row['id'] not in db.public_listing_ids(con, a['id'], include_shared=False):  # plan cap: hidden stays hidden
                 return self.send('No encontrada', 404, 'text/plain; charset=utf-8')
             rel = cards.render_cached(con, row['id'], 'post' if m.group(2) == 'post' else 'story')
             return self.media(rel)
@@ -599,6 +599,9 @@ class Handler(BaseHTTPRequestHandler):
                     title = (f.get('title') or '').strip()
                     if len(title) < 8:
                         return self.send(panel.wizard_3(ctx, l, 'Escribe un título de al menos 8 letras.'), 400)
+                    blocked = reopen_message(con, a, l, 'activa')
+                    if blocked:
+                        return self.send(panel.wizard_3(ctx, l, blocked), 400)
                     con.execute("UPDATE listings SET title=?, description=?, status='activa', updated_at=datetime('now') WHERE id=?",
                                 (title[:100], (f.get('description') or '').strip()[:8000], l['id']))
                     db.audit(con, actor, 'wizard_publish', 'listing:%d' % l['id'])
@@ -735,15 +738,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(panel.import_page(ctx, importer.preview(con, a['id'], text), text))
         if path == '/propiedades/nueva':
             if method == 'POST':
+                if over_limit(con, a):  # the page already refuses; a direct POST must not get around it
+                    return self.send(panel.listings(con, ctx, panel.notice(limit_message(con, a), 'warn')), 403)
                 try:
                     lid = save_listing(con, a, uid, f)
                 except ValueError as ex:
                     return self.send(panel.listing_form(con, ctx, None, str(ex)), 400)
                 return self.redirect('/propiedades/%d?ok=creada' % lid)
-            n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
-            if n >= db.listing_limit(con, a):
-                return self.send(panel.listings(con, ctx, panel.notice(
-                    'Llegaste al límite de tu plan (%d propiedades). Marca alguna como vendida o cambia de plan.' % n, 'warn')))
+            if over_limit(con, a):
+                return self.send(panel.listings(con, ctx, panel.notice(limit_message(con, a), 'warn')))
             return self.send(panel.listing_form(con, ctx))
         m = re.match(r'^/propiedades/(\d+)(/.*)?$', path)
         if m:
@@ -792,6 +795,11 @@ class Handler(BaseHTTPRequestHandler):
             if method == 'POST' and not sub:
                 try:
                     save_listing(con, a, uid, f, l)
+                except ReopenBlocked as ex:  # nothing was written: the listing stays sold/rented, the form keeps their edits
+                    kept = dict(l)
+                    kept.update(ex.values)
+                    kept['status'] = l['status']
+                    return self.send(panel.listing_form(con, ctx, kept, str(ex)), 400)
                 except ValueError as ex:
                     return self.send(panel.listing_form(con, ctx, l, str(ex)), 400)
                 l = con.execute('SELECT * FROM listings WHERE id=?', (l['id'],)).fetchone()
@@ -904,6 +912,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.redirect('/portales')
             cur = con.execute('SELECT enabled FROM portal_publications WHERE listing_id=? AND portal=?', (l['id'], key)).fetchone()
             on = 0 if (cur and cur['enabled']) else 1
+            if on and l['id'] not in db.public_listing_ids(con, a['id'], include_shared=False):
+                return self.send(panel.portals(con, ctx, panel.notice(
+                    'Esta propiedad no se muestra con tu plan actual, así que tampoco sale en los portales. Cambia de plan o marca otra como vendida.', 'warn')), 403)
             con.execute('INSERT INTO portal_publications(listing_id, portal, enabled, status) VALUES (?,?,?,?) '
                         'ON CONFLICT(listing_id, portal) DO UPDATE SET enabled=excluded.enabled, status=excluded.status',
                         (l['id'], key, on, 'pendiente'))
@@ -1129,8 +1140,31 @@ def join_team(con, inv, f):
 
 
 def over_limit(con, a):
-    n = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')", (a['id'],)).fetchone()[0]
-    return n >= db.listing_limit(con, a)
+    return db.open_listing_count(con, a['id']) >= db.listing_limit(con, a)
+
+
+def limit_message(con, a):
+    return 'Llegaste al límite de tu plan (%s). Marca alguna como vendida o rentada, o cambia de plan.' % panel.props(db.listing_limit(con, a))
+
+
+class ReopenBlocked(ValueError):
+    """Moving a vendida/rentada listing back to an open state would go past the plan limit. `values` = what the agent submitted
+    (column -> value), so the form can show it again: nothing is written and nothing is lost."""
+
+    def __init__(self, message, values=None):
+        super().__init__(message)
+        self.values = values or {}
+
+
+def reopen_message(con, a, existing, new_status):
+    """Spanish reason ('' when allowed). Only a listing that is closed now (vendida/rentada) and would become open uses a new slot."""
+    if existing is None or existing['status'] not in db.CLOSED_STATUSES or new_status in db.CLOSED_STATUSES:
+        return ''
+    limit, used = db.listing_limit(con, a), db.open_listing_count(con, a['id'], existing['id'])
+    if used < limit:
+        return ''
+    return ('No pudimos reabrir esta propiedad: tu plan permite %s y ya tienes %d abierta%s. Marca otra como vendida o rentada, o cambia de plan. '
+            'Esta propiedad sigue como %s y no se perdió nada.' % (panel.props(limit), used, '' if used == 1 else 's', existing['status']))
 
 
 def create_draft(con, a, uid, op, ptype):
@@ -1210,6 +1244,9 @@ def save_listing(con, a, uid, f, existing=None):
         vals.update(lat=pt[0], lng=pt[1])
     elif existing is not None and 'maps' in f:
         vals.update(lat=None, lng=None)
+    blocked = reopen_message(con, a, existing, status)
+    if blocked:
+        raise ReopenBlocked(blocked, vals)
     if existing:
         sets = ', '.join('%s=?' % k for k in vals)
         con.execute("UPDATE listings SET %s, updated_at=datetime('now') WHERE id=?" % sets, list(vals.values()) + [existing['id']])

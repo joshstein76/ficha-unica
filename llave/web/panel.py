@@ -510,7 +510,9 @@ def stats_page(ctx, st):
 # ---------- portals ----------
 def portals(con, ctx, flash=''):
     a = ctx['agency']
-    rows = con.execute("SELECT * FROM listings WHERE agency_id=? AND status IN ('activa','apartada') ORDER BY title", (a['id'],)).fetchall()
+    shown = set(db.public_listing_ids(con, a['id'], include_shared=False))  # only what the plan really shows can go to a portal
+    rows = [r for r in con.execute("SELECT * FROM listings WHERE agency_id=? AND status IN ('activa','apartada') ORDER BY title", (a['id'],)).fetchall()
+            if r['id'] in shown]
     base = db.site_url(a)
     # per-listing switches only where the switch matters (the open feed always carries every public listing)
     open_keys = [k for k, p in registry.PORTALS.items() if p['status'] in ('open', 'api') and k != 'llave_open']
@@ -585,7 +587,13 @@ def bolsa(con, ctx, q=None, flash=''):
     if (q.get('beds') or '').isdigit():
         sql += ' AND l.bedrooms >= ?'
         args.append(int(q['beds']))
-    rows = con.execute(sql + ' ORDER BY l.updated_at DESC LIMIT 100', args).fetchall()
+    shown = {}  # owner agency -> ids its plan still shows publicly (an over-limit listing is not offered to anyone)
+
+    def owner_shows(r):
+        if r['agency_id'] not in shown:
+            shown[r['agency_id']] = set(db.public_listing_ids(con, r['agency_id'], include_shared=False))
+        return r['id'] in shown[r['agency_id']]
+    rows = [r for r in con.execute(sql + ' ORDER BY l.updated_at DESC LIMIT 100', args).fetchall() if owner_shows(r)]
     pins = []
     mine = {r['listing_id']: r for r in con.execute("SELECT * FROM shares WHERE sharing_agency_id=? AND status='activa'", (a['id'],))}
     items = []

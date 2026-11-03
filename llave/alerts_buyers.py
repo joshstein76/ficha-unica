@@ -50,7 +50,8 @@ def matches(con, search):
         args.append(s['min_beds'])
     sql += ' AND id NOT IN (SELECT listing_id FROM saved_search_matches WHERE search_id=?)'
     args.append(s['id'])
-    return [r['id'] for r in con.execute(sql, args)]
+    shown = set(db.public_listing_ids(con, s['agency_id'], include_shared=False))  # a listing the plan hides has no page to send
+    return [r['id'] for r in con.execute(sql, args) if r['id'] in shown]
 
 
 def run(con):

@@ -183,10 +183,26 @@ def public_listing_ids(con, agency_id, include_shared=True):
     if a:
         ids = ids[:listing_limit(con, a)]
     if include_shared:
-        q2 = ("SELECT l.id FROM shares s JOIN listings l ON l.id=s.listing_id WHERE s.sharing_agency_id=? "
+        q2 = ("SELECT l.id, l.agency_id FROM shares s JOIN listings l ON l.id=s.listing_id WHERE s.sharing_agency_id=? "
               "AND s.status='activa' AND l.share_in_bolsa=1 AND l.status IN ('activa','apartada')")
-        ids += [r['id'] for r in con.execute(q2, (agency_id,)) if r['id'] not in ids]
+        owner_shown = {}  # a shared listing is public only while its OWNER's plan still shows it (no leak through the Bolsa)
+        for r in con.execute(q2, (agency_id,)).fetchall():
+            if r['id'] in ids:
+                continue
+            if r['agency_id'] not in owner_shown:
+                owner_shown[r['agency_id']] = set(public_listing_ids(con, r['agency_id'], include_shared=False))
+            if r['id'] in owner_shown[r['agency_id']]:
+                ids.append(r['id'])
     return ids
+
+
+CLOSED_STATUSES = ('vendida', 'rentada')  # these do not use a plan slot
+
+
+def open_listing_count(con, agency_id, exclude_id=None):
+    """Listings that use a plan slot: everything except vendida / rentada (drafts and paused ones count)."""
+    return con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada') AND id IS NOT ?",
+                       (agency_id, exclude_id)).fetchone()[0]
 
 
 def audit(con, actor, action, detail=''):
