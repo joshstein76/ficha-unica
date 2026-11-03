@@ -103,7 +103,7 @@ def pick_urls(unit, urls):
         low = fn.lower()
         if any(x in low for x in ('logo', 'agent-circle', 'vive-ad', 'planta-tipo')):
             continue
-        if any(x in low for x in ('thompson', 'sudermann', 'ocean-terrace', 'st-residences')):
+        if any(x in low for x in ('thompson', 'ocean-terrace', 'st-residences')):
             continue
         nums = re.findall(r'(?<!\d)([45]\d{3})(?!\d)', low)
         if any(n != unit for n in nums):
