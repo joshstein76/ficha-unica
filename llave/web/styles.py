@@ -109,6 +109,7 @@ p{margin:0}
 .top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px max(16px,env(safe-area-inset-left,0px));
 background:var(--cempa);border-bottom:3px solid var(--tinta);position:sticky;top:0;z-index:5}
 .top .logo{font-size:19px;min-width:0}.top .logo .mark{width:32px;height:32px}
+.top .row{flex-wrap:nowrap;flex:none;gap:6px}.top .row a{white-space:nowrap}.top .btn.small{min-height:40px;padding:0 10px;font-size:14px}
 .top a:not(.btn):not(.logo){color:var(--tinta);font-weight:700;display:inline-flex;align-items:center;min-height:44px;padding:0 4px}
 .wrap{max-width:860px;margin:0 auto;padding:20px max(16px,env(safe-area-inset-left,0px)) 32px;display:grid;gap:18px}
 .card{background:var(--blanco);border:3px solid var(--tinta);border-radius:14px;box-shadow:4px 4px 0 var(--tinta);padding:18px;display:grid;gap:12px;min-width:0}

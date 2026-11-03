@@ -195,12 +195,18 @@
   .adk .adk-top__row { flex-wrap: nowrap; gap: 8px; }
   .adk .adk-brand { flex: 1 1 auto; flex-basis: auto; }
   .adk .adk-logo { width: 34px; height: 34px; }
-  .adk .adk-brand__name { font-size: 19px; white-space: nowrap; }
+  .adk .adk-brand__name { font-size: 18px; white-space: nowrap; }
   .adk .adk-actions { flex: none; gap: 6px; }
+  .adk .adk-helpbtn { padding: 0 8px; font-size: 14px; }
   /* tools as a tabla: two columns of small cards */
   .adk .adk-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .adk .adk-tool { flex-direction: column; align-items: flex-start; gap: 8px; height: 100%; padding: 10px; }
   .adk .adk-tool__ico { width: 42px; height: 42px; }
+}
+
+/* very small phones: the coin alone says who we are */
+@media (max-width: 360px) {
+  .adk .adk-brand__name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 }
 
 /* motion only when the visitor has not asked to reduce it: press effect, and the ficha drops onto a finished step with a bounce */
