@@ -6,7 +6,7 @@ import os
 from .. import academia, billing, kit_home, calculadoras, db, formatos, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS)
-from .styles import BRAND_COLOR, FONTS, PANEL, PRECONNECT, logo
+from .styles import BRAND_COLOR, FONTS, KIT_SHELL, PANEL, PRECONNECT, logo
 
 ICONS = {
     'inicio': '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -51,16 +51,20 @@ SHARE_META = ('<meta name="description" content="%s"><meta property="og:site_nam
               '<meta name="twitter:card" content="summary_large_image">') % (SHARE_TEXT, SHARE_TEXT)
 
 
+def _nav(on, kit, extra=''):
+    """The bottom bar on phones / tab row on desktop. Same five (kit) or six tabs on every page, Home included."""
+    return '<nav class="tabs%s" aria-label="Secciones">%s</nav>' % (extra, ''.join(
+        '<a href="%s" class="%s"%s>%s<span>%s</span></a>' % (href, ('on ' if k == on else '') + ('desk' if k in DESKTOP_ONLY and not kit else ''),
+                                                             ' aria-current="page"' if k == on else '', _icon(k), lab)
+        for k, lab, href in (kit_home.KIT_TABS if kit else TABS)))
+
+
 def layout(title, body, ctx=None, tab=None, flash=''):
     nav = ''
     top_right = '<a class="btn ghost small" href="/entrar">Entrar</a>'
     if ctx:
         kit = kit_home.enabled()
-        on = kit_home.TAB_OF.get(tab, tab) if kit else tab
-        nav = '<nav class="tabs" aria-label="Secciones">%s</nav>' % ''.join(
-            '<a href="%s" class="%s"%s>%s<span>%s</span></a>' % (href, ('on ' if k == on else '') + ('desk' if k in DESKTOP_ONLY and not kit else ''),
-                                                                 ' aria-current="page"' if k == on else '', _icon(k), lab)
-            for k, lab, href in (kit_home.KIT_TABS if kit else TABS))
+        nav = _nav(kit_home.TAB_OF.get(tab, tab) if kit else tab, kit)
         top_right = ('<span class="row small">' + ('<a href="/admin">Admin</a>' if ctx['user']['role'] == 'admin' else '') +
                      '<a href="%s" target="_blank" rel="noopener">Ver mi sitio ↗</a>'
                      '<form method="post" action="/salir" style="margin:0">%s<button class="btn ghost small">Salir</button></form></span>'
@@ -184,7 +188,8 @@ def first_week(done, total, steps):
 
 
 def kit_page(con, ctx, steps, welcome=False):
-    """Home on the shared agent dashboard kit (LLAVE_KIT_HOME=1). The kit draws its own header and five tabs."""
+    """Home on the shared agent dashboard kit (LLAVE_KIT_HOME=1). The kit draws its own header and, from 900 px up, its own top tabs;
+    on phones the top tabs are hidden (ficha-loteria.css) and Home gets the same bottom bar as every other page."""
     data = kit_home.build(con, ctx, steps, SERVICES, welcome)
     brand = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'ficha-unica-brand.json'), encoding='utf-8').read()
     return ('<!doctype html><html lang="es-MX"><head><meta charset="utf-8">'
@@ -192,16 +197,18 @@ def kit_page(con, ctx, steps, welcome=False):
             '<title>Inicio · Ficha Única</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="%s">'
             '<link rel="apple-touch-icon" href="/_s/apple-touch-icon.png">%s<link rel="stylesheet" href="%s">'
             '<link rel="stylesheet" href="/_s/agent-dash.css?v=%s">'
-            '<style>.skip{position:absolute;left:-9999px}.skip:focus{left:8px;top:8px;background:#fff;padding:8px;z-index:9}</style></head><body style="margin:0">'
-            '<a class="skip" href="#dash">Saltar al contenido</a>%s%s<div id="dash"></div>'
+            '<link rel="stylesheet" href="/_s/ficha-loteria.css?v=%s">'
+            '<style>%s</style></head><body>'
+            '<a class="skip" href="#dash">Saltar al contenido</a>%s%s<div id="dash"></div>%s'
             '<footer class="small muted" style="padding:16px;text-align:center">'
             '<form method="post" action="/salir" style="display:inline">%s<button class="btn ghost small">Salir</button></form> · '
             '<a href="/terminos">Términos</a> · <a href="/privacidad">Privacidad</a></footer>'
             '<script src="/_s/agent-dash.js?v=%s"></script>'
             '<script>AgentDashKit.mount(document.getElementById("dash"),{brand:%s,data:%s,onAction:function(){}});'
             'if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js").catch(function(){})</script></body></html>') % (
-        BRAND_COLOR, PRECONNECT, FONTS, kit_home.KIT_VERSION, pilot_notice(ctx['agency']),
+        BRAND_COLOR, PRECONNECT, FONTS, kit_home.KIT_VERSION, kit_home.LOTERIA_VERSION, KIT_SHELL, pilot_notice(ctx['agency']),
         notice('¡Listo! Tu sitio ya existe. Ahora sube tu primera propiedad.') if welcome else '',
+        _nav('inicio', True, ' kitnav'),
         csrf_field(ctx), kit_home.KIT_VERSION, kit_home.js(json.loads(brand)), kit_home.js(data))
 
 

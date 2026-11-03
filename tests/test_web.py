@@ -367,12 +367,24 @@ class WebFlow(unittest.TestCase):
             s, page, _ = req('app.fichaunica.localhost', '/academia', cookie=cookie)
             self.assertEqual(page.count('<nav class="tabs"'), 1)
             self.assertIn('aria-current="page"', page)
-            for name in ('agent-dash.js', 'agent-dash.css', 'ficha-unica-brand.json', 'fu-mark.svg'):
+            for name in ('agent-dash.js', 'agent-dash.css', 'ficha-loteria.css', 'ficha-unica-brand.json', 'fu-mark.svg'):
                 s, _p, _ = req('app.fichaunica.localhost', '/_s/' + name)
                 self.assertEqual(s, 200, name)
             # kit 1.2.0 (logo) / 1.1.0: first week as a checklist, lesson 1 as the next step, no alerts on a fresh account
             self.assertIn('/_s/agent-dash.js?v=1.2.1', req('app.fichaunica.localhost', '/', cookie=cookie)[1])
             self.assertIn('"logo": "/_s/fu-mark.svg"', req('app.fichaunica.localhost', '/', cookie=cookie)[1])
+            # Lotería skin + one nav on phones: Home gets the same 5-tab bottom bar as every other page, the kit's top tabs hide under 900 px
+            home = req('app.fichaunica.localhost', '/', cookie=cookie)[1]
+            self.assertIn('/_s/ficha-loteria.css?v=', home)
+            self.assertLess(home.index('/_s/agent-dash.css'), home.index('/_s/ficha-loteria.css'))        # loaded after the kit's own css
+            self.assertEqual(home.count('<nav class="tabs kitnav" aria-label="Secciones">'), 1)
+            bar = home[home.index('<nav class="tabs kitnav"'):]
+            bar = bar[:bar.index('</nav>')]
+            self.assertEqual(re.findall(r'<span>([^<]+)</span>', bar), ['Inicio', 'Clientes', 'Mi sitio', 'Crecer', 'Cuenta'])
+            self.assertEqual(len(re.findall(r'aria-current="page"', bar)), 1)
+            self.assertIn('<a href="/" class="on " aria-current="page">', bar)
+            s, page, _ = req('app.fichaunica.localhost', '/academia', cookie=cookie)
+            self.assertNotIn('ficha-loteria.css', page)                                                    # only Home loads the kit skin
             self.assertEqual(len(data['checklist']['items']), 5)
             self.assertNotIn('done', data['checklist']['items'][0])  # no property yet
             self.assertEqual(data['next']['cta']['href'], '/academia/primera-propiedad')

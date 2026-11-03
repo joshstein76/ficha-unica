@@ -9,20 +9,25 @@ from .styles import BRAND_COLOR, BRAND_TOKENS, FONTS, MARK_CSS, PRECONNECT, logo
 
 PER_PAGE = 24
 
-# The directory is a brand page (not an agent's site): Ficha Única v7 look, light only. It reuses the site layout classes,
+# The directory is a brand page (not an agent's site): Ficha Única Lotería look, light only. It reuses the site layout classes,
 # so the brand tokens are laid over them (agent sites keep their own designs and dark mode; this page has none).
 BRAND_CSS = BRAND_TOKENS + MARK_CSS + (
-    ':root{--bg:#fff;--card:#fff;--fg:#1A1A22;--muted:#636371;--line:#E6E6EE;--hdr:#fff;--br:22px;'
-    '--display:"Onest",system-ui,sans-serif;--dw:800;--body:"Onest",system-ui,sans-serif;'
-    '--accent:#FF6B1A;--on-accent:#1A1A22;--accent-text:#B83F0A;--field-border:#8B8B99}'
-    'body{background:var(--soft);-webkit-font-smoothing:antialiased}header.sh{background:rgba(255,255,255,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}'
-    'h1,h2,h3{letter-spacing:-.025em}.brand.logo{font-size:20px}.sh .btn-s{display:inline-flex;align-items:center;min-height:44px;padding:0 18px;border-radius:99px;'
-    'background:var(--card);color:var(--fg);font-weight:700;text-decoration:none;box-shadow:inset 0 0 0 1.5px var(--line)}'
-    '.tag{font-weight:800}.lc h3{font-size:19px;font-weight:800;line-height:1.25}.lc{box-shadow:none}'
+    ':root{--bg:var(--papel);--card:var(--blanco);--fg:var(--tinta);--muted:var(--suave);--line:var(--tinta);--hdr:var(--cempa);--br:12px;'
+    '--display:var(--titulo);--dw:800;--body:var(--texto);'
+    '--accent:var(--chile);--on-accent:var(--tinta);--accent-text:var(--jacaranda);--field-border:var(--tinta)}'
+    'body{background:var(--papel);-webkit-font-smoothing:antialiased;overflow-x:clip}header.sh{background:var(--cempa);border-bottom:3px solid var(--tinta)}'
+    'h1,h2{font-family:var(--carta);font-weight:400;font-synthesis:none;letter-spacing:0}h1{font-size:clamp(32px,8vw,46px);line-height:1.08}h2{font-size:24px}'
+    '.brand.logo{font-size:22px}.sh .btn-s{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border:3px solid var(--tinta);border-radius:10px;'
+    'background:var(--blanco);color:var(--tinta);font:800 15px var(--titulo);text-decoration:none;box-shadow:3px 3px 0 var(--tinta)}'
+    '.tag{font-weight:800}.lc h3{font:800 19px/1.25 var(--titulo)}.cards{gap:24px}'
+    '.lc{border:3px solid var(--tinta);border-radius:12px;box-shadow:4px 4px 0 var(--tinta);overflow:hidden}.lc img{border-bottom:3px solid var(--tinta)}'
+    '.box{border:3px solid var(--tinta);border-radius:14px;box-shadow:4px 4px 0 var(--tinta)}.map{border:3px solid var(--tinta);border-radius:14px}'
     '.filters{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}'
-    '.filters input,.filters select,.box input,.box textarea,.alertf input,.alertf select{font:16px var(--body);padding:12px 14px;border:1.5px solid var(--field-border);border-radius:14px;background:#fff;color:var(--fg)}'
-    '.filters button,.box button{min-height:48px;border:0;border-radius:99px;background:var(--accent);color:var(--on-accent);font:800 16px var(--body);cursor:pointer;box-shadow:0 10px 22px -12px rgba(255,107,26,.75)}'
-    '.notice{padding:13px 16px;border-radius:16px;background:var(--ok-soft);box-shadow:inset 0 0 0 1px rgba(15,111,80,.18)}'
+    '.filters input,.filters select,.box input,.box textarea,.alertf input,.alertf select{font:16px var(--body);padding:12px 14px;min-height:48px;border:3px solid var(--tinta);border-radius:10px;background:var(--papel);color:var(--fg)}'
+    '.box input[type=checkbox]{min-height:0}'
+    '.filters button,.box button{min-height:48px;border:3px solid var(--tinta);border-radius:12px;background:var(--accent);color:var(--on-accent);font:800 16px var(--titulo);cursor:pointer;box-shadow:3px 3px 0 var(--tinta)}'
+    '.notice{padding:12px 16px;border:3px solid var(--tinta);border-radius:12px;background:var(--ok-soft);color:var(--tinta);box-shadow:3px 3px 0 var(--tinta);font-weight:600}'
+    'footer.sf{border-top:3px solid var(--tinta)}'
     '::placeholder{color:var(--muted);opacity:1}'
     '@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}')
 

@@ -110,7 +110,7 @@ class Landing(unittest.TestCase):
         self.assertEqual(self.prec, self.planes)
 
     def test_no_invented_social_proof(self):
-        self.assertIsNone(re.search(r'testimonio|\d+\s*(asesores|agentes|clientes)\s+(ya|conf)|★|#1|el mejor', self.land, re.I))
+        self.assertIsNone(re.search(r'testimonio|\d+\s*(asesores|agentes|clientes)\s+(ya|conf)|★|#1\b|el mejor', self.land, re.I))
 
     def test_mobile_basics(self):
         r = self.raw
