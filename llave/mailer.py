@@ -9,6 +9,7 @@ send(con, to, subject, text, html=None, kind='') never raises:
   - SMTP configured    -> sent, and the outbox row says `sent` or `error` (the password is never stored, printed or logged);
   - an empty subject or body (or a bad address) is REFUSED and recorded as `error`: we once sent empty emails, that is a hard rule now.
 Every message is plain text + optional HTML. Tests inject the transport (`sender=` or patch `_smtp_send`) and never open a connection."""
+import atexit
 import json
 import os
 import re
@@ -178,14 +179,15 @@ def _run_items(path, items):
             c.close()
 
 
-def dispatch(con, items):
-    """Send several messages (dicts of send() arguments). With real SMTP and a file database they go out on a worker thread with its
-    own connection, so a slow or dead mail server never holds up a web request; otherwise (dry run, tests, memory db) they go inline."""
+def dispatch(con, items, background=True):
+    """Send several messages (dicts of send() arguments). In a web request (background=True) real SMTP from a file database goes out on a
+    worker thread with its own connection, so a slow or dead mail server never holds up the visitor; otherwise (dry run, tests, memory
+    db, cron jobs that pass background=False because the process may end right after) they go inline."""
     items = [i for i in items if i]
     if not items:
         return
     path = _db_file(con)
-    if ASYNC and enabled() and path:
+    if background and ASYNC and enabled() and path:
         t = threading.Thread(target=_run_items, args=(path, items), daemon=True)
         with _threads_lock:
             _threads[:] = [x for x in _threads if x.is_alive()] + [t]
@@ -201,3 +203,6 @@ def wait(timeout=10):
         pending = list(_threads)
     for t in pending:
         t.join(timeout)
+
+
+atexit.register(wait)   # a process that ends (a seed script, a restart) still delivers what its worker threads hold

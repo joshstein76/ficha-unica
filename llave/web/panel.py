@@ -513,8 +513,16 @@ def leads(con, ctx, estado=None):
             'Al tocar "Responder por WhatsApp" se abre tu mensaje listo y lo marcamos como contactado. '
             'Con "Recordarme" el cliente vuelve a aparecer en Seguimiento hoy el día que elijas.</p>%s%s') % (
         notice('Tienes %d cliente%s esperando respuesta hace más de 5 minutos.' % (late, '' if late == 1 else 's'), 'err') if late else '',
-        tabs, _leads_list(con, rows, ctx) if rows else '<p class="muted">No hay clientes en esta vista.</p>')
+        tabs, _leads_list(con, rows, ctx) if rows else '<p class="muted">No hay clientes en esta vista.</p>' + _email_note(ctx, estado))
     return layout('Clientes', body, ctx, 'clientes')
+
+
+def _email_note(ctx, estado):
+    """Only when we can really send mail, only on the main view, and only for the account holders who get those emails."""
+    if estado or not mailer.enabled() or ctx['user']['role'] not in ('owner', 'admin'):
+        return ''
+    return ('<p class="muted small">Cuando alguien te escriba, además de verlo aquí te llega un correo a %s '
+            'con un botón para responderle por WhatsApp.</p>') % e(ctx['user']['email'])
 
 
 def stats_page(ctx, st):

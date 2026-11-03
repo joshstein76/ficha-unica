@@ -1,7 +1,7 @@
 """Buyer property alerts ("Avísame de propiedades similares"): a buyer subscribes on an agent's site with consent;
 when a matching listing goes public, the AGENCY gets the match and a ready WhatsApp message to forward (dry-run outbox).
 We never message the buyer automatically until a template is approved (Josh's preview rule)."""
-from . import db, whatsapp
+from . import agent_mail, db, whatsapp
 from .web.common import money
 
 
@@ -71,6 +71,7 @@ def run(con):
             con.execute("INSERT INTO outbox(kind, ref, payload, status) VALUES ('ghl.agent_alert', ?, ?, 'dry_run')",
                         ('saved_search:%d:%d' % (s['id'], lid), json.dumps(payload, ensure_ascii=False)))
             con.execute('INSERT OR IGNORE INTO saved_search_matches(search_id, listing_id) VALUES (?,?)', (s['id'], lid))
+            agent_mail.notify_buyer_match(con, a, s, c, whatsapp.wa_link(s['phone'], forward))  # email to the AGENT, who forwards it
             n += 1
     con.commit()
     return n

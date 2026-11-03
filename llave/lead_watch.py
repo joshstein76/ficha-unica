@@ -1,9 +1,9 @@
-"""Speed-to-lead watchdog: first reply within 5 minutes. Alerts go to the AGENCY only (dry-run outbox);
-this module never messages the lead."""
+"""Speed-to-lead watchdog: first reply within 5 minutes. Alerts go to the AGENCY only (dry-run outbox, plus an email to the agent
+through llave/agent_mail.py); this module never messages the lead."""
 import datetime
 import json
 
-from . import db, replies, whatsapp
+from . import agent_mail, db, replies, whatsapp
 
 STATUSES = ('nuevo', 'contactado', 'cita', 'cerrado', 'descartado')
 FMT = '%Y-%m-%d %H:%M:%S'
@@ -111,7 +111,8 @@ def follow_up_digest(con, now=None):
         return 0
     day = local.date().isoformat()
     rows = con.execute(
-        "SELECT l.agency_id, l.name, a.whatsapp AS agency_whatsapp FROM leads l JOIN agencies a ON a.id=l.agency_id "
+        "SELECT l.agency_id, l.name, l.phone, a.whatsapp AS agency_whatsapp, "
+        "(SELECT li.title FROM listings li WHERE li.id=l.listing_id) AS listing_title FROM leads l JOIN agencies a ON a.id=l.agency_id "
         "WHERE l.follow_up_on IS NOT NULL AND l.follow_up_on <= ? AND l.status IN ('nuevo','contactado','cita')"
         " ORDER BY l.agency_id, l.follow_up_on, l.id", (day,)).fetchall()
     by_agency = {}
@@ -131,6 +132,7 @@ def follow_up_digest(con, now=None):
                    'to_whatsapp': leads[0]['agency_whatsapp'], 'body': {'text': text}}
         con.execute("INSERT INTO outbox(kind, ref, payload, status) VALUES ('ghl.agent_alert', ?, ?, 'dry_run')",
                     (ref, json.dumps(payload, ensure_ascii=False)))
+        agent_mail.notify_digest(con, agency_id, leads, day)  # the same once-a-day dedupe and hours: one email per account holder
         count += 1
     con.commit()
     return count
@@ -179,6 +181,7 @@ def remind(con, now=None):
         con.execute("INSERT INTO outbox(kind, ref, payload, status) VALUES ('ghl.agent_alert', ?, ?, 'dry_run')",
                     (ref, json.dumps(payload, ensure_ascii=False)))
         con.execute('UPDATE leads SET reminded_at=? WHERE id=?', (n.strftime(FMT), lead['id']))
+        agent_mail.notify_reminder(con, lead, mins)  # once, exactly when the reminder row is queued (same dedupe)
         count += 1
     con.commit()
     return count
