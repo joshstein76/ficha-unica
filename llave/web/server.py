@@ -22,7 +22,7 @@ from .. import auth, billing, calculadoras, cards, db, formatos, ghl_live, opera
 from ..feeds import build_feed, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
-from .common import csrf_ok, to_cents, to_num
+from .common import csrf_ok, to_cents, to_num, DESIGN_KEYS
 from .styles import BRAND_COLOR
 
 MAX_UPLOAD = 40 * 1024 * 1024
@@ -1039,8 +1039,8 @@ def signup(con, f):
         raise ValueError('Ya existe una cuenta con ese correo. Entra con tu contraseña.')
     slug = unique_slug(con, agency)
     ref = con.execute('SELECT id FROM agencies WHERE slug=?', ((f.get('ref') or '').strip().lower()[:60],)).fetchone()
-    cur = con.execute('INSERT INTO agencies(slug, name, whatsapp, email, city, tagline, referred_by) VALUES (?,?,?,?,?,?,?)',
-                      (slug, agency, wa, email, 'Ciudad de México', 'Bienes raíces', ref['id'] if ref else None))
+    cur = con.execute('INSERT INTO agencies(slug, name, whatsapp, email, city, tagline, referred_by, design) VALUES (?,?,?,?,?,?,?,?)',
+                      (slug, agency, wa, email, 'Ciudad de México', 'Bienes raíces', ref['id'] if ref else None, db.DEFAULT_DESIGN))
     aid = cur.lastrowid
     uid = con.execute('INSERT INTO users(agency_id, name, email, whatsapp, password_hash) VALUES (?,?,?,?,?)',
                       (aid, name, email, wa, auth.hash_password(pw))).lastrowid
@@ -1255,7 +1255,7 @@ def save_site(con, a, f, files):
     wa = whatsapp.norm_phone(f.get('whatsapp'))
     if not wa:
         raise ValueError('Revisa el WhatsApp.')
-    design = f.get('design') if f.get('design') in ('residencia', 'ciudad', 'costa') else a['design']
+    design = f.get('design') if f.get('design') in DESIGN_KEYS else a['design']
     accent = f.get('accent') if re.match(r'^#[0-9a-fA-F]{6}$', f.get('accent') or '') else a['accent']
     fr, frn = (f.get('first_reply') or '').strip(), (f.get('first_reply_noname') or '').strip()
     err = replies.check(fr) or replies.check(frn, need_name=False)

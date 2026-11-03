@@ -48,6 +48,7 @@ PLAN_FEATURES = {
 PUBLIC_STATUSES = ('activa', 'apartada')  # shown on sites + fed to portals
 REFERRAL_BONUS_LISTINGS = 1  # extra listing per invited colleague who publishes (Claude's call; was 5 until the 10-19 plans, when 5 = the whole Pro plan)
 
+DEFAULT_DESIGN = 'loteria'      # site design for NEW agencies (Josh 2026-11-03); existing rows keep theirs. Same value as styles.DEFAULT_DESIGN_FALLBACK
 BRAND = 'Ficha Única'                 # public name (Josh 10-17); LLAVE = internal code name
 OWNER = 'Ciao Bella Marketing'        # legal owner of the platform (Josh 10-17)
 

@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS agencies (
   email TEXT,
   city TEXT,
   logo_path TEXT,
-  design TEXT NOT NULL DEFAULT 'ciudad',  -- ciudad | costa | residencia
+  design TEXT NOT NULL DEFAULT 'loteria',  -- loteria | ciudad | costa | residencia  (10-19: default was ciudad; existing rows keep theirs)
   accent TEXT NOT NULL DEFAULT '#1f4e79',
   about TEXT,
   custom_domain TEXT UNIQUE,              -- Pro: own domain (Wix model)

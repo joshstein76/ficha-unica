@@ -210,6 +210,11 @@ fieldset{border:0;margin:0;padding:0}
 """
 
 DESIGN_TOKENS = {
+    # Lotería (Josh 2026-11-03): white page, tinta text + 3 px outlines, hard offset shadows. Light only, no dark theme.
+    'loteria': ':root{--bg:#ffffff;--card:#ffffff;--fg:#1B1236;--muted:#5E5478;--line:#1B1236;--hdr:#ffffff;--br:12px;'
+               '--display:"Bricolage Grotesque","Arial Narrow",Impact,sans-serif;--dw:800;'
+               '--body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;'
+               '--papel:#FFF9EE;--nopal:#0FB56D;--jac:#5B2EE6;color-scheme:light}',
     'residencia': ':root{--bg:#f7f5f2;--card:#fff;--fg:#1b1a19;--muted:#6b665f;--line:#e6e1da;--hdr:#f7f5f2;--br:2px;'
                   '--display:"Instrument Serif",Georgia,serif;--dw:400;--body:"Figtree",system-ui,sans-serif}',
     'ciudad': ':root{--bg:#ffffff;--card:#f6f7f9;--fg:#121417;--muted:#5d6570;--line:#e3e6ea;--hdr:#ffffff;--br:10px;'
@@ -254,14 +259,152 @@ def accent_text(accent, bg, dark=False):
     return out
 
 
+# ---------------------------------------------------------------- Lotería (Josh 2026-11-03)
+TINTA = '#1B1236'
+LOTERIA_FONTS = ('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,800&%s&display=swap' % _FIG)
+# The "ficha" coin from the design system (config/design-system/logo/ficha-unica-mark.svg), inline, decorative
+# (the text link beside it says the name).
+COIN_SVG = ('<svg class="coin" width="24" height="24" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g fill="#1B1236">'
+            '<circle cx="50" cy="50" r="40"/><circle cx="88" cy="50" r="11"/><circle cx="82.9" cy="69" r="11"/><circle cx="69" cy="82.9" r="11"/>'
+            '<circle cx="50" cy="88" r="11"/><circle cx="31" cy="82.9" r="11"/><circle cx="17.1" cy="69" r="11"/><circle cx="12" cy="50" r="11"/>'
+            '<circle cx="17.1" cy="31" r="11"/><circle cx="31" cy="17.1" r="11"/><circle cx="50" cy="12" r="11"/><circle cx="69" cy="17.1" r="11"/>'
+            '<circle cx="82.9" cy="31" r="11"/></g><g fill="#FF4F1F" transform="translate(50 50) scale(.87) translate(-50 -50)">'
+            '<circle cx="50" cy="50" r="40"/><circle cx="88" cy="50" r="11"/><circle cx="82.9" cy="69" r="11"/><circle cx="69" cy="82.9" r="11"/>'
+            '<circle cx="50" cy="88" r="11"/><circle cx="31" cy="82.9" r="11"/><circle cx="17.1" cy="69" r="11"/><circle cx="12" cy="50" r="11"/>'
+            '<circle cx="17.1" cy="31" r="11"/><circle cx="31" cy="17.1" r="11"/><circle cx="50" cy="12" r="11"/><circle cx="69" cy="17.1" r="11"/>'
+            '<circle cx="82.9" cy="31" r="11"/></g><circle cx="50" cy="50" r="31" fill="#FFF9EE"/>'
+            '<polygon points="50,28 74,49 67,49 67,72 56,72 56,57 44,57 44,72 33,72 33,49 26,49" fill="#1B1236"/></svg>')
+
+# Layered after SITE_BASE, so the HTML and class names are the ones every design shares. Colours come from the tokens
+# (--fg = tinta, --accent = the agent's colour, --on-accent = readable text on it). No dark block: the page is light on purpose.
+LOTERIA_CSS = r"""
+body{overflow-x:clip}
+h1,h2,h3{font-stretch:80%;letter-spacing:-.025em;line-height:1.02}
+h1{font-size:clamp(34px,9.4vw,60px)}h2{font-size:clamp(28px,7.4vw,42px)}h3{font-size:21px;line-height:1.08}
+h1,h2,h3,.desc,.lc .f{overflow-wrap:break-word}
+main h2{text-decoration:underline;text-decoration-color:var(--accent);text-decoration-thickness:.16em;text-underline-offset:.1em;text-decoration-skip-ink:none}
+.small{font-size:14px}
+::placeholder{color:var(--muted);opacity:1}
+:focus-visible{outline:3px solid var(--jac);outline-offset:3px}
+main a:not([class]){font-weight:700;text-decoration-thickness:2px}
+main>p>a:only-child:not(.wa),a.small{display:inline-flex;align-items:center;min-height:44px}
+header.sh{border-bottom:3px solid var(--fg)}
+header.sh .in{min-height:68px;flex-wrap:nowrap}
+.brand{display:inline-flex;align-items:center;min-width:0;min-height:44px;font:800 clamp(20px,5.8vw,26px)/1 var(--display);font-stretch:80%;letter-spacing:-.025em;overflow-wrap:anywhere}
+.brand img{max-width:100%}
+.wa,.box button,.alertf button,.mbar .ask,.lc,a.agent{transition:transform .08s,box-shadow .08s}
+.wa{flex:none;gap:8px;padding:0 14px;border:3px solid var(--fg);border-radius:10px;background:var(--nopal);color:var(--fg);box-shadow:3px 3px 0 var(--fg);font:800 15px/1 var(--display);letter-spacing:-.005em}
+.hero{position:relative;width:min(1088px,calc(100% - 2 * max(16px,env(safe-area-inset-left,0px))));margin:20px auto 0;overflow:hidden;
+border:3px solid var(--fg);border-radius:18px;box-shadow:6px 6px 0 var(--fg);background:var(--accent);color:var(--on-accent)}
+.hero img{height:clamp(320px,62vw,520px);opacity:1}
+.hero .cap{position:static;padding:30px 18px;background:none}
+.hero .cap .in{max-width:none;padding:0}
+.hero h1{font-size:clamp(34px,9.4vw,62px)}
+.hero p{margin:10px 0 0;max-width:46ch;opacity:1;font-size:clamp(16px,4.2vw,19px);line-height:1.35;font-weight:600}
+.hero p:empty{display:none}
+.hero picture+.cap{position:absolute;inset:auto 12px 12px 12px;padding:12px 14px 14px;background:var(--accent);border:3px solid var(--fg);border-radius:12px;box-shadow:3px 3px 0 var(--fg)}
+.cards{grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:22px}
+.lc{position:relative;gap:0;background:#fff;border:3px solid var(--fg);border-radius:14px;box-shadow:4px 4px 0 var(--fg)}
+.lc picture{border-bottom:3px solid var(--fg)}
+.lc .t{padding:12px 14px 15px;gap:3px}
+.lc .t h3{margin:2px 0 4px}
+.lc .p{font:800 26px/1 var(--display);font-stretch:80%;letter-spacing:-.025em}
+.lc .f{font-size:15px;line-height:1.3}
+.lc picture+.t .tag{position:absolute;left:10px;top:10px}
+.tag{justify-self:start;padding:6px 8px;border:2px solid var(--fg);border-radius:6px;background:var(--accent);color:var(--on-accent);font:700 12px/1 var(--body);letter-spacing:.05em}
+main>div>.tag{margin-bottom:12px}
+.gal{gap:14px}
+.gal picture{overflow:visible}
+.gal img,.strip img,.swipe img{border:3px solid var(--fg);border-radius:12px}
+.gal img{box-shadow:4px 4px 0 var(--fg)}
+.strip{gap:14px;padding:2px 6px 10px}.strip img{box-shadow:3px 3px 0 var(--fg)}
+.swipe{gap:12px;padding-bottom:8px}.swipe img{box-shadow:3px 3px 0 var(--fg)}
+.lp-price{margin:10px 0 0;font:800 clamp(32px,9vw,48px)/1 var(--display);font-stretch:80%;letter-spacing:-.025em}
+.lp-price .muted{display:block;margin-top:8px;font:600 16px/1.4 var(--body);letter-spacing:0}
+.facts{gap:12px}
+.facts div{padding:10px 12px;border:3px solid var(--fg);border-radius:12px;background:#fff;box-shadow:3px 3px 0 var(--fg)}
+.facts b{font:800 24px/1.05 var(--display);font-stretch:80%;letter-spacing:-.02em;overflow-wrap:anywhere}
+.facts small{font-size:14px;font-weight:600}
+.am{gap:8px}.am li{padding:6px 12px;border:2.5px solid var(--fg);background:var(--papel);font-weight:700}
+.box{padding:18px;gap:14px;border:3px solid var(--fg);border-radius:16px;box-shadow:6px 6px 0 var(--fg)}
+.box h2{font-size:26px}
+.box input,.box select,.box textarea,.alertf input,.alertf select{min-height:48px;padding:12px 14px;border:3px solid var(--fg);border-radius:10px;background:var(--papel);color:var(--fg);font:500 16px/1.3 var(--body);width:100%}
+.box textarea{min-height:104px;resize:vertical}
+.box input[type=checkbox]{width:24px;height:24px;min-height:0;margin:0;padding:0;border:0;background:none;accent-color:var(--fg)}
+.check{align-items:center;min-height:44px;font-size:14px}
+.box label{font-weight:700}.box label.check{font-weight:500}
+.box button,.alertf button,.mbar .ask{display:flex;align-items:center;justify-content:center;min-height:52px;padding:10px 18px;border:3px solid var(--fg);border-radius:12px;
+background:var(--accent);color:var(--on-accent);box-shadow:4px 4px 0 var(--fg);font:800 18px/1.1 var(--display);letter-spacing:-.01em;text-align:center;cursor:pointer}
+@media (hover:hover){.box button:hover,.alertf button:hover,.mbar .ask:hover{transform:translate(-1px,-1px);box-shadow:5px 5px 0 var(--fg)}
+.wa:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--fg)}
+.lc:hover,a.agent:hover{transform:translate(-1px,-1px);box-shadow:6px 6px 0 var(--fg)}}
+.lc:active,a.agent:active,.box button:active,.alertf button:active,.mbar .ask:active{transform:translate(3px,3px);box-shadow:1px 1px 0 var(--fg)}
+.wa:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--fg)}
+.faq{margin-top:12px;padding:0;border:3px solid var(--fg);border-radius:12px;background:#fff}
+.faq summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:52px;padding:10px 14px;list-style:none;font-weight:700}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";flex:none;font:800 26px/1 var(--display)}
+.faq[open] summary::after{content:"\2212"}
+.faq p{margin:0;padding:0 14px 14px}
+.notice{margin:0;padding:12px 14px;border:3px solid var(--fg);border-radius:12px;background:var(--papel);font-weight:600}
+.map{position:relative;z-index:0;border:3px solid var(--fg);border-radius:14px;overflow:hidden}
+.agent .av{border:3px solid var(--fg);background:var(--accent);color:var(--on-accent);font:800 24px/1 var(--display)}
+.agent.big .av{box-shadow:4px 4px 0 var(--fg);font-size:44px}
+.agent>div{min-width:0}.agent h1,.agent b{overflow-wrap:anywhere}
+a.agent{padding:12px;border:3px solid var(--fg);border-radius:14px;background:#fff;box-shadow:4px 4px 0 var(--fg)}
+.team{gap:18px}
+footer.sf{padding-block:22px;border-top:3px solid var(--fg);background:var(--papel);font-size:15px}
+footer.sf .in{align-items:center;gap:4px 24px}
+footer.sf .in>span{display:inline-flex;align-items:center;flex-wrap:wrap;column-gap:6px;min-height:44px}
+footer.sf a{display:inline-flex;align-items:center;min-height:44px;color:var(--fg);font-weight:700}
+.coin{flex:none;width:24px;height:24px}
+.float{box-shadow:4px 4px 0 var(--fg)}
+.wa.float{width:56px;height:56px;padding:0;justify-content:center;border-radius:14px}.wa.float svg{width:26px;height:26px}
+@media(max-width:700px){.hero img{height:clamp(320px,86vw,420px)}.mbar{gap:12px;border-top:3px solid var(--fg)}.mbar a{min-height:50px}body:has(.mbar){padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+"""
+
+DEFAULT_DESIGN_FALLBACK = 'loteria'  # same value as db.DEFAULT_DESIGN (a test keeps them equal); styles stays free of db imports
+
+
+def resolve_design(design):
+    """The design key to render: any key we do not know (old rows, typos) falls back to Lotería."""
+    return design if design in DESIGN_TOKENS else DEFAULT_DESIGN_FALLBACK
+
+
+def site_fonts_url(design):
+    """Google Fonts URL for an agent site: Lotería needs Bricolage Grotesque (with the width axis); the rest are unchanged."""
+    design = resolve_design(design)
+    return LOTERIA_FONTS if design == 'loteria' else fonts_url(design)
+
+
+def safe_accent(accent):
+    accent = accent if re.match(r'^#[0-9a-fA-F]{6}$', accent or '') else '#1f4e79'
+    return accent.lower()
+
+
+def loteria_on_accent(accent):
+    """Text colour on the agent's accent in Lotería. on_accent() decides light or dark; the dark one becomes tinta when tinta
+    reads too, and black/white is the last resort, so text is >= 4.5:1 on any accent (on_accent alone dips to ~4.3 around mid tones)."""
+    pick = on_accent(accent)
+    if pick == '#121212' and contrast(TINTA, accent) >= 4.5:
+        return TINTA
+    if contrast(pick, accent) >= 4.5:
+        return pick
+    return max(('#ffffff', '#000000'), key=lambda c: contrast(c, accent))
+
+
 def site_css(design, accent, dark_mode=True):
-    tokens = DESIGN_TOKENS.get(design, DESIGN_TOKENS['ciudad'])
-    safe_accent = accent if re.match(r'^#[0-9a-fA-F]{6}$', accent or '') else '#1f4e79'
-    safe_accent = safe_accent.lower()
+    design = resolve_design(design)
+    tokens = DESIGN_TOKENS[design]
+    safe = safe_accent(accent)
     light_bg = re.search(r'--bg:(#[0-9a-fA-F]{6})', tokens).group(1)
+    root = ':root{--accent:%s;--on-accent:%s;--accent-text:%s;--field-border:#7a8594}' % (
+        safe, on_accent(safe), accent_text(safe, light_bg))
+    if design == 'loteria':  # light only: dark_mode is ignored, there is no dark block to opt out of
+        return tokens + root + ':root{--on-accent:%s}' % loteria_on_accent(safe) + SITE_BASE + LOTERIA_CSS
     # A near-black or very dark accent disappears on the dark theme: swap in a light neutral there.
-    dark_accent = '#d8d2c8' if luminance(safe_accent) < 0.05 else safe_accent
+    dark_accent = '#d8d2c8' if luminance(safe) < 0.05 else safe
     dark = DARK.replace('color-scheme:dark}', '--accent:%s;--on-accent:%s;--accent-text:%s;--field-border:#7d8a99;color-scheme:dark}' % (
         dark_accent, on_accent(dark_accent), accent_text(dark_accent, '#121212', dark=True)))
-    return (tokens + ':root{--accent:%s;--on-accent:%s;--accent-text:%s;--field-border:#7a8594}' % (
-        safe_accent, on_accent(safe_accent), accent_text(safe_accent, light_bg)) + (dark if dark_mode else '') + SITE_BASE)
+    return tokens + root + (dark if dark_mode else '') + SITE_BASE
