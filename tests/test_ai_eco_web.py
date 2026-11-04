@@ -162,9 +162,15 @@ class AIEcoWeb(unittest.TestCase):
         finally:
             os.environ.pop('LLAVE_ECO_SECRET_RENTAPOLIZA', None)
         s, page, _ = req('app.fichaunica.localhost', '/servicios', cookie=c)
-        self.assertIn('Tus créditos', page)
-        s, page, _ = req('app.fichaunica.localhost', '/servicios/canjear/destacar_7d', {'csrf': k, 'listing': lid}, cookie=c)
-        self.assertIn('canjeado', page)
+        self.assertNotIn('Tus créditos', page)                    # credits are off unless LLAVE_ECO_LIVE=1 (tests/test_eco_live.py)
+        os.environ['LLAVE_ECO_LIVE'] = '1'
+        try:
+            s, page, _ = req('app.fichaunica.localhost', '/servicios', cookie=c)
+            self.assertIn('Tus créditos', page)
+            s, page, _ = req('app.fichaunica.localhost', '/servicios/canjear/destacar_7d', {'csrf': k, 'listing': lid}, cookie=c)
+            self.assertIn('canjeado', page)
+        finally:
+            os.environ.pop('LLAVE_ECO_LIVE', None)
         con = db.connect()
         self.assertTrue(eco.active_boost(con, lid))
         self.assertEqual(eco.balance(con, con.execute("SELECT id FROM agencies WHERE slug='eco-casas'").fetchone()[0]), 10)

@@ -7,6 +7,7 @@ Pure stdlib, SQLite. No network: GHL effects are only queued to the dry-run outb
 import datetime
 import hashlib
 import hmac
+import os
 import time
 import json
 
@@ -40,6 +41,13 @@ FREE_LEADS_DEFINITION = (
 BRANDS = ('rentapoliza', 'vive', 'cerquito', 'idxbloom', 'ciaobella', 'fichaunica')
 STATUSES = ('pendiente', 'confirmado', 'rechazado')
 REPLAY_WINDOW_S = 300
+
+
+def live():
+    """The credits side of Ecosistema (balance, 'Cómo ganas créditos', the redeem catalog and /servicios/canjear) is shown and
+    usable only with LLAVE_ECO_LIVE=1. Off by default: no sister company confirms anything yet, so nobody can earn (docs/DECISIONS.md).
+    Read on every call. The engine, the tables and the signed webhook stay as they are."""
+    return os.environ.get('LLAVE_ECO_LIVE') == '1'
 
 
 def _now(now=None):

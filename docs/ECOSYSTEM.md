@@ -5,6 +5,8 @@ Josh (verbatim): "if you need a póliza for a rental and you use RentaPóliza wi
 Engine: `llave/eco.py` (tables `eco_events`, `eco_ledger`, `eco_boosts`). Status: engine + tests only; routes/UI not wired; GHL is dry-run (outbox). All numbers below are **Claude's proposal, Josh can change** (they are data in `eco.RULES` / `eco.CATALOG`).
 
 ## 1. Rewards (credits)
+**Shown to agents only with `LLAVE_ECO_LIVE=1` (off by default; docs/DECISIONS.md #84).** No sister company confirms anything yet, so Servicios lists the four services and nothing about credits; the redeem route answers 400 and writes nothing. The engine and the signed webhook below are unchanged.
+
 Credits are granted only when the sister brand **confirms** the event (signed webhook/API) or an admin does. Never on the agent's claim alone. One event per (brand, ref): a repeat changes nothing.
 
 | Event | Credits | Confirmed by |
