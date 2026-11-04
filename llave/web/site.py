@@ -96,6 +96,11 @@ def pool_section(con, agency):
             '<div class="cards">%s</div></section>') % ''.join(_card(c) for c in cards)
 
 
+def swipe_hint(n):
+    """Only when there is something to swipe to: '1 fotos · desliza →' on a one-photo listing read like a bug to the client."""
+    return ('<p class="swipe-hint muted small">%d fotos · desliza →</p>' % n) if n > 1 else ''
+
+
 def about_section(con, agency):
     """'Sobre nosotros' only when there is something under it: a new agent has no text and no team yet, and a bare heading reads unfinished."""
     about, team = (agency['about'] or '').strip(), team_html(con, agency)
@@ -209,7 +214,7 @@ def listing(con, agency, c, shared_split=None, error=''):
     swipe = ''.join(picture(p, '', '88vw') for p in photos)
     body = ('<main id="main" class="in sec"><div><span class="tag">%s · %s · folio %s</span><h1>%s</h1>'
             '<p class="muted">%s</p><p class="lp-price">%s <span class="muted">%s</span></p></div>'
-            '<div class="gal">%s</div>%s<div class="swipe" aria-hidden="true">%s</div><p class="swipe-hint muted small">%d fotos · desliza →</p>'
+            '<div class="gal">%s</div>%s<div class="swipe" aria-hidden="true">%s</div>%s'
             '<div class="lp"><div class="sec" style="padding:0"><div class="facts">%s</div>'
             '%s<div><h2>Descripción</h2><p class="desc">%s</p></div>%s%s</div>'
             '<aside class="box" id="contacto"><h2 class="vh">Contacto</h2><div class="agent">%s<div><b>%s</b>%s<br>'
@@ -226,7 +231,7 @@ def listing(con, agency, c, shared_split=None, error=''):
             '<button type="submit">Quiero más información</button></form></aside></div></main>%s') % (
         'Venta' if c['operation'] == 'venta' else 'Renta', e(label(TYPES, c['property_type'])), e(c['ref']),
         e(c['title']), e(where), e(money(c['price'], c['currency'])), e(facts_line(c)), gal,
-        ('<div class="strip">%s</div>' % strip) if strip else '', swipe, len(photos),
+        ('<div class="strip">%s</div>' % strip) if strip else '', swipe, swipe_hint(len(photos)),
         ''.join(facts),
         ('<p class="muted small">Precio confirmado el %s. Sujeto a cambio y disponibilidad.</p>' % nice_date(c['price_date']))
         if c['price_date'] and c['price'] is not None else '',

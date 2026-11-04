@@ -329,6 +329,18 @@ class FirstAgent(unittest.TestCase):
         con.close()
         self.assertIn('© Casa Tapatía · Guadalajara', self.web.req('/', host=self.site_host(u))[1])
 
+    def test_listing_page_swipe_hint_only_when_there_is_more_than_one_photo(self):
+        u = self.agent(agency='Casa Galería')
+        lid = self.publish(u)                       # one photo
+        slug = self.web.one('SELECT slug FROM listings WHERE id=?', lid)['slug']
+        page = self.web.req('/propiedad/' + slug, host=self.site_host(u))[1]
+        self.assertNotIn('desliza', page)
+        self.assertNotIn('1 fotos', page)
+        body, ct = multipart({'csrf': u['csrf']}, [('fotos', ('b.jpg', jpeg(1000, 700))), ('fotos', ('c.jpg', jpeg(1100, 700)))])
+        self.assertEqual(self.web.req('/propiedades/%d/fotos' % lid, body, u['cookie'], {'Content-Type': ct})[0], 200)
+        page = self.web.req('/propiedad/' + slug, host=self.site_host(u))[1]
+        self.assertIn('3 fotos · desliza →', page)
+
 
 if __name__ == '__main__':
     unittest.main()
