@@ -5,7 +5,7 @@ import os
 
 from .. import academia, billing, kit_home, calculadoras, db, domains, formatos, mailer, lia, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
-from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS, DESIGN_KEYS)
+from .common import (e, money, nice_date, facts_line, label, props, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS, DESIGN_KEYS)
 from .styles import BRAND_COLOR, FONTS, KIT_SHELL, PANEL, PRECONNECT, logo
 
 ICONS = {
@@ -26,10 +26,6 @@ ICONS = {
     'calculadoras': '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/>',
     'publicar': '<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/>',
 }
-def props(n):
-    return '1 propiedad' if n == 1 else '%d propiedades' % n
-
-
 TABS = [('inicio', 'Inicio', '/'), ('propiedades', 'Propiedades', '/propiedades'), ('clientes', 'Clientes', '/clientes'),
         ('portales', 'Portales', '/portales'), ('bolsa', 'Bolsa', '/bolsa'), ('sitio', 'Mi sitio', '/sitio'),
         ('estadisticas', 'Estadísticas', '/estadisticas'), ('publicar', 'Qué publicar', '/que-publicar'), ('invitar', 'Invitar', '/invitar'), ('servicios', 'Servicios', '/servicios'),
@@ -279,7 +275,7 @@ def dashboard(con, ctx, welcome=False):
              % (n_stale, '' if n_stale == 1 else 's')) if n_stale else '') + (('<div class="notice warn">📅 %d cliente%s para dar seguimiento hoy. <a href="/clientes?estado=hoy">Verlos</a></div>'
              % (n_fu, '' if n_fu == 1 else 's')) if n_fu else '') + ('%s<div><h1>%s, %s</h1><p class="muted">Tu sitio: <a href="%s" target="_blank" rel="noopener">%s</a></p></div>'
             '<div class="stats"><div class="stat"><b>%d</b><small>Propiedades publicadas</small></div>'
-            '<a class="stat" href="/plan" style="text-decoration:none;color:inherit"><b>%d/%d</b><small>Usadas en plan %s · cambiar</small></a>'
+            '<a class="stat" href="/plan" style="text-decoration:none;color:inherit"><b>%s</b><small>%s</small></a>'
             '<div class="stat"><b>%d</b><small>Clientes nuevos</small></div>'
             '<div class="stat"><b>%d</b><small>Publicaciones en portales</small></div></div>'
             '%s%s%s'
@@ -298,7 +294,8 @@ def dashboard(con, ctx, welcome=False):
         notice('¡Listo! Tu sitio ya existe. Ahora sube tu primera propiedad.') if welcome else '',
         greeting(), e(a['name'] if ctx['user']['name'].split(' ')[0].lower() in replies.GENERIC_ACCOUNT else ctx['user']['name'].split(' ')[0]),
         e(db.site_url(a)), e(db.site_url(a).split('//')[1]),
-        n_list, n_all, limit, e(a['plan']), n_new, n_feed,
+        n_list, ('%d' % n_all) if db.is_unlimited(limit) else ('%d/%d' % (n_all, limit)),
+        ('Usadas, sin límite, en plan %s · cambiar' if db.is_unlimited(limit) else 'Usadas en plan %s · cambiar') % e(a['plan']), n_new, n_feed,
         home_tiles(), novedades_card(ctx),
         first_week(done, len(steps), steps) if done < len(steps) else '<div class="notice">✓ Tu primera semana está completa. <a href="/nueva">Sube otra propiedad</a></div>',
         _leads_list(con, leads) if leads else '<p class="muted">Aún no tienes clientes. Cuando alguien te deje sus datos en tu sitio, aparece aquí.</p>', props(db.REFERRAL_BONUS_LISTINGS))
@@ -423,7 +420,7 @@ def listing_form(con, ctx, l=None, error='', ok='', suggestion=None):
         ('%s, %s' % (v['lat'], v['lng'])) if v.get('lat') is not None else '',
         ' checked' if v.get('show_exact_location') else '',
         ' checked' if v.get('share_in_bolsa') else '',
-        '' if db.plan_has(ctx['agency'], 'tools') else ' <a class="small" href="/plan">(plan Pro)</a>',
+        '' if db.plan_has(ctx['agency'], 'bolsa') else ' <a class="small" href="/plan">(plan Pro)</a>',
         e(v.get('share_split_pct', 50)), num('commission_pct'),
         rp_box, e(v.get('internal_note')), 'Guardar' if lid else 'Crear y subir fotos', photos_html, ai_html if lid else '')
     return layout('Propiedad', body, ctx, 'propiedades')
@@ -624,6 +621,15 @@ def _ml_card(con, ctx):
 
 
 # ---------- Bolsa ----------
+def _bolsa_site_hint(a):
+    """One line about "Más propiedades de la Bolsa" (only while LLAVE_PLANS_V2=1; '' otherwise, so the page is today's)."""
+    if not (db.plans_v2() and db.plan_has(a, 'bolsa')):
+        return ''
+    if db.pool_enabled(a):
+        return '<p class="small muted">Tu sitio muestra solas hasta %d propiedades de la Bolsa. Lo cambias en <a href="/sitio">Mi sitio</a>.</p>' % db.POOL_MAX
+    return '<p class="small muted">¿Quieres que tu sitio se vea más completo? En <a href="/sitio">Mi sitio</a> puedes mostrar propiedades de la Bolsa.</p>'
+
+
 def bolsa(con, ctx, q=None, flash=''):
     a = ctx['agency']
     q = q or {}
@@ -659,6 +665,7 @@ def bolsa(con, ctx, q=None, flash=''):
     rows = [r for r in con.execute(sql + ' ORDER BY l.updated_at DESC LIMIT 100', args).fetchall() if owner_shows(r)]
     pins = []
     mine = {r['listing_id']: r for r in con.execute("SELECT * FROM shares WHERE sharing_agency_id=? AND status='activa'", (a['id'],))}
+    pool = set(db.pool_listing_ids(con, a['id']))  # shown on the site by "Más propiedades de la Bolsa" (empty unless that is on)
     items = []
     for r in rows:
         c = db.canonical(con, r['id'])
@@ -669,14 +676,16 @@ def bolsa(con, ctx, q=None, flash=''):
             pins.append({'lat': la, 'lng': ln, 't': c['title'], 'p': money(c['price'], c['currency']), 'a': r['agency_name']})
         items.append('<div class="item" style="grid-template-columns:84px 1fr">%s<div style="min-width:0"><b>%s</b>'
                      '<span class="small muted">%s · %s · de %s</span><br><span class="small">Comisión compartida: '
-                     'tú recibes %d%%</span><form method="post" action="/bolsa/%d/%s" style="margin-top:6px">%s'
+                     'tú recibes %d%%</span>%s<form method="post" action="/bolsa/%d/%s" style="margin-top:6px">%s'
                      '<button class="btn small %s">%s</button></form></div></div>' % (
                          ('<img src="%s" alt="">' % e(img)) if img else '<span class="ph"></span>', e(c['title']),
                          e(money(c['price'], c['currency'])), e(facts_line(c)), e(r['agency_name']),
-                         100 - int(r['share_split_pct'] or 50), r['id'], 'retirar' if shared else 'compartir', csrf_field(ctx),
+                         100 - int(r['share_split_pct'] or 50),
+                         ' <span class="pill ok">Sale en tu sitio</span>' if r['id'] in pool else '',
+                         r['id'], 'retirar' if shared else 'compartir', csrf_field(ctx),
                          'ghost' if shared else '', 'En mi sitio ✓ (quitar)' if shared else 'Mostrar en mi sitio'))
     body = ('%s<h1>Bolsa</h1><p class="muted">Propiedades que otros asesores comparten. Muéstralas en tu sitio: '
-            'si tu cliente compra, la comisión se divide como indica cada una.</p>'
+            'si tu cliente compra, la comisión se divide como indica cada una.</p>%s'
             '<form class="card filters" method="get" action="/bolsa"><input name="colonia" placeholder="Colonia" value="%s">'
             '<select name="operation"><option value="">Venta y renta</option>%s</select>'
             '<select name="property_type"><option value="">Cualquier tipo</option>%s</select>'
@@ -686,7 +695,7 @@ def bolsa(con, ctx, q=None, flash=''):
             '<select name="currency"><option value="">MXN o USD</option>%s</select>'
             '<button class="btn small">Buscar</button></form>'
             '<p class="small muted">%d resultado%s · ubicaciones aproximadas</p>%s<div class="list">%s</div>') % (
-        flash, e(q.get('colonia')), _opt([('venta', 'Venta'), ('renta', 'Renta')], q.get('operation')),
+        flash, _bolsa_site_hint(a), e(q.get('colonia')), _opt([('venta', 'Venta'), ('renta', 'Renta')], q.get('operation')),
         _opt(TYPES, q.get('property_type')), _opt([(str(n), '%d+' % n) for n in (1, 2, 3, 4)], q.get('beds')),
         e(q.get('min')), e(q.get('max')), _opt([('MXN', 'MXN'), ('USD', 'USD')], q.get('currency')),
         len(rows), '' if len(rows) == 1 else 's', map_block(pins),
@@ -788,6 +797,15 @@ def lia_card(a):
             'Viene apagada.</p></section>') % (' checked' if lia.switch_on(a) else '')
 
 
+def bolsa_card(a):
+    return ('<section class="card"><h2>Más propiedades de la Bolsa</h2><input type="hidden" name="bolsa_seen" value="1">'
+            '<label class="check"><input type="checkbox" name="bolsa_section" value="1"%s> Mostrar propiedades de la Bolsa en mi sitio</label>'
+            '<p class="small muted">Tu sitio se ve completo aunque tengas pocas propiedades: debajo de las tuyas salen hasta %d propiedades '
+            'que otros asesores comparten en la Bolsa. Quien te escribe por una te llega a ti, y la comisión se divide como indica cada una '
+            '(lo ves en Bolsa, nunca en tu sitio). Viene apagada y la quitas cuando quieras.</p></section>') % (
+        ' checked' if a['bolsa_section'] else '', db.POOL_MAX)
+
+
 def site_settings(con, ctx, ok='', error='', warn=''):
     a = ctx['agency']
     cur_design = a['design'] if a['design'] in DESIGN_KEYS else db.DEFAULT_DESIGN
@@ -819,6 +837,8 @@ def site_settings(con, ctx, ok='', error='', warn=''):
         e(a['tagline']), e(a['about']), e(a['whatsapp']), e(a['email']), e(a['city']),
         e(replies.DEFAULT_FIRST_REPLY), e(a['first_reply']), e(replies.DEFAULT_FIRST_REPLY_NONAME), e(a['first_reply_noname']),
         e(replies.render(a, 'Ana Pérez', 'Departamento con terraza en la Roma Norte', ctx['user']['name'])), domain)
+    if db.plans_v2() and db.plan_has(a, 'bolsa'):  # the new plans only: inside the same form, just before its save button
+        body = body.replace('<button class="btn">Guardar cambios</button></form>', bolsa_card(a) + '<button class="btn">Guardar cambios</button></form>', 1)
     if lia.flag_on() and db.plan_has(a, lia.FEATURE):  # inside the same form, just before its save button
         body = body.replace('<button class="btn">Guardar cambios</button></form>', lia_card(a) + '<button class="btn">Guardar cambios</button></form>', 1)
     return layout('Mi sitio', body, ctx, 'sitio')
@@ -1261,6 +1281,30 @@ PLANS = [
 ]
 COMING_SOON = set()  # Josh 10-19: Pro + IA is on sale from launch day
 
+_AI_FEATURES = ['Títulos y descripciones con IA, en español e inglés', 'Revisión y orden de tus fotos',
+                'Precio sugerido con propiedades parecidas', 'Qué publicar cada semana en tus redes']
+
+
+def _limit_feature(n):
+    t = props(n)
+    return t[0].upper() + t[1:] if db.is_unlimited(n) else t  # '25 propiedades' / 'Propiedades sin límite'
+
+
+_L2 = db.PLAN_LIMITS_V2
+# The same three plans while LLAVE_PLANS_V2=1: same prices, new limits (read from db.PLAN_LIMITS_V2), the Bolsa listed under Gratis.
+PLANS_V2 = [
+    ('gratis', 'Gratis', 0, ['Tu sitio en una dirección gratis', _limit_feature(_L2['gratis']), 'Bolsa 50/50 con otros asesores',
+                             'Clientes directo a tu WhatsApp']),
+    ('pro', 'Pro', 499, ['Todo lo de Gratis', _limit_feature(_L2['pro']), 'Tu propio dominio', 'Imágenes para Instagram y ficha para imprimir',
+                         'Importa tus propiedades desde Excel (archivo CSV)', 'Estadísticas completas']),
+    ('ia', 'Pro + IA', 999, ['Todo lo de Pro', _limit_feature(_L2['ia'])] + _AI_FEATURES),
+]
+
+
+def plan_list():
+    """The plan cards for the state of the switch (PLANS stays today's list)."""
+    return PLANS_V2 if db.plans_v2() else PLANS
+
 
 STRIPE_NOTE = ('Pago seguro con tarjeta, procesado por Stripe para %s. Precios en pesos mexicanos (MXN), IVA incluido. '
                'Cancelas cuando quieras.')
@@ -1279,7 +1323,7 @@ def plans(con, ctx, ok='', error=''):
             '<span class="pill ok">Tu plan</span>' if k == a['plan'] else
             '<span class="pill pendiente">Próximamente</span>' if k in COMING_SOON else
             '<a class="btn %s" href="/plan/%s">%s</a>' % ('' if price else 'ghost', k, 'Cambiar a %s' % name))
-        for k, name, price, feats in PLANS)
+        for k, name, price, feats in plan_list())
     manage = ''
     if paid and billing.is_paying(a):  # `paid` is False while the test-key lock hides the Billing Portal
         manage = ('<form class="card" method="post" action="/plan/portal">%s<p class="small muted">Cambia de plan, actualiza tu tarjeta '
@@ -1289,9 +1333,10 @@ def plans(con, ctx, ok='', error=''):
     over = ('<p class="small">Tu sitio muestra %s. Las demás siguen guardadas y vuelven a verse al subir de plan.</p>'
             % ('solo la más reciente' if limit == 1 else 'solo las %d más recientes' % limit)) \
         if con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status IN ('activa','apartada')", (a['id'],)).fetchone()[0] > limit else ''
-    body = ('%s%s<h1>Tu plan</h1><p class="muted">Usas %d de %d %s.</p>%s<div class="grid2 wide plans">%s</div>%s'
-            '<p class="small muted">%s</p>') % (notice(ok), notice(error, 'err'), n, limit, 'propiedad' if limit == 1 else 'propiedades',
-                                                 over, cards, manage, foot)
+    usage = ('Usas %d %s. Tu plan no tiene límite.' % (n, 'propiedad' if n == 1 else 'propiedades')) if db.is_unlimited(limit) \
+        else 'Usas %d de %d %s.' % (n, limit, 'propiedad' if limit == 1 else 'propiedades')
+    body = ('%s%s<h1>Tu plan</h1><p class="muted">%s</p>%s<div class="grid2 wide plans">%s</div>%s'
+            '<p class="small muted">%s</p>') % (notice(ok), notice(error, 'err'), usage, over, cards, manage, foot)
     return layout('Tu plan', body, ctx, 'sitio')
 
 
@@ -1302,16 +1347,23 @@ UPSELL = {
                        'precio sugerido y qué publicar cada semana, con 25 propiedades.'),
 }
 
+UPSELL_V2 = {  # while LLAVE_PLANS_V2=1: the Bolsa is not a Pro tool any more, and the numbers come from db.PLAN_LIMITS_V2
+    'tools': ('Pro', 'Esta herramienta viene en el plan Pro: imágenes para Instagram, ficha para imprimir, importar desde Excel '
+                     'y estadísticas completas, con %s y tu propio dominio.' % props(_L2['pro'])),
+    'ai': ('Pro + IA', 'Esta herramienta viene en el plan Pro + IA: textos con IA en español e inglés, revisión y orden de fotos, '
+                       'precio sugerido y qué publicar cada semana, con %s.' % props(_L2['ia'])),
+}
+
 
 def upsell(ctx, feature, title, tab='inicio'):
-    plan, text = UPSELL[feature]
+    plan, text = (UPSELL_V2 if db.plans_v2() else UPSELL)[feature]
     body = ('<div class="auth"><h1>%s</h1><p class="muted">%s</p><a class="btn" href="/plan">Ver el plan %s</a>'
             '<a class="btn ghost" href="/">Volver al inicio</a></div>') % (e(title), e(text), e(plan))
     return layout(title, body, ctx, tab)
 
 
 def payments_soon(ctx, key):
-    name = next((x[1] for x in PLANS if x[0] == key), key) if key else None
+    name = next((x[1] for x in plan_list() if x[0] == key), key) if key else None
     body = ('<div class="auth"><h1>%s</h1><p class="muted">Estamos activando los pagos con tarjeta. '
             'Mientras tanto sigues en tu plan actual, con todo lo que ya tienes.</p><a class="btn ghost" href="/plan">Volver a planes</a></div>') % (
         e('%s llega muy pronto' % name) if name else 'Los pagos llegan muy pronto')
@@ -1319,7 +1371,7 @@ def payments_soon(ctx, key):
 
 
 def plan_checkout(ctx, key, error=''):
-    p = next((x for x in PLANS if x[0] == key), None)
+    p = next((x for x in plan_list() if x[0] == key), None)
     if billing.enabled():
         return _plan_checkout_paid(ctx, key, p, error)
     body = ('<div class="auth"><div class="notice warn"><b>MODO PRUEBA</b>: no se cobra nada. En producción aquí va el pago con tarjeta '

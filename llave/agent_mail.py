@@ -101,8 +101,7 @@ def _bolsa_note(con, lead, role):
     """'' unless the lead came through a Bolsa share. Splits are the recipient's share first."""
     if not lead['owner_agency_id'] or lead['owner_agency_id'] == lead['agency_id'] or not lead['listing_id']:
         return ''
-    sh = con.execute('SELECT split_pct FROM shares WHERE listing_id=? AND sharing_agency_id=?', (lead['listing_id'], lead['agency_id'])).fetchone()
-    mine = sh['split_pct'] if sh else 50
+    mine = db.share_split(con, lead['listing_id'], lead['agency_id'])
     if role == 'owner':
         return 'Llegó por la Bolsa: otro asesor muestra tu propiedad. Reparto %d/%d.' % (100 - mine, mine)
     return 'Es una propiedad de la Bolsa de otra inmobiliaria. Reparto %d/%d.' % (mine, 100 - mine)

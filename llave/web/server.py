@@ -400,7 +400,7 @@ class Handler(BaseHTTPRequestHandler):
             if f.get('website'):  # honeypot: bots fill every field; pretend success, store nothing
                 return self.redirect('/gracias')
             lid = int(f.get('listing') or 0) or None
-            if lid and lid not in db.public_listing_ids(con, a['id']):
+            if lid and lid not in db.public_listing_ids(con, a['id'], include_pool=True):  # include_pool: a lead on a "Más propiedades de la Bolsa" listing is a Bolsa lead
                 lid = None
             try:
                 r = create_lead(con, a['id'], lid, f.get('name', ''), f.get('phone', ''), f.get('email', ''),
@@ -479,7 +479,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.media(rel)
         m = re.match(r'^/propiedad/([a-z0-9-]+)(/ficha)?/?$', path)
         if m:
-            for lid in db.public_listing_ids(con, a['id']):
+            for lid in db.public_listing_ids(con, a['id'], include_pool=True):  # own, then Bolsa shares, then the site section (db.pool_listing_ids)
                 c = db.canonical(con, lid)
                 if c['slug'] == m.group(1):
                     if not m.group(2) and method == 'GET' and not stats.is_bot(self.headers.get('User-Agent')):
@@ -1047,7 +1047,7 @@ class Handler(BaseHTTPRequestHandler):
             con.commit()
             return self.redirect('/portales')
         if path == '/bolsa' or path.startswith('/bolsa/'):
-            if not db.plan_has(a, 'tools'):
+            if not db.plan_has(a, 'bolsa'):
                 return self.send(panel.upsell(ctx, 'tools', 'Bolsa 50/50', 'bolsa'))
         if path == '/bolsa':
             return self.send(panel.bolsa(con, ctx, query))
@@ -1391,7 +1391,7 @@ def save_listing(con, a, uid, f, existing=None):
         street=(f.get('street') or '').strip(), ext_number=(f.get('ext_number') or '').strip(),
         colonia=f['colonia'].strip(), municipio=f['municipio'].strip(), estado=f['estado'].strip(),
         cp=(f.get('cp') or '').strip(), show_exact_location=int(f.get('show_exact_location') == '1'),
-        share_in_bolsa=int(f.get('share_in_bolsa') == '1' and db.plan_has(a, 'tools')), share_split_pct=split if split is not None else 50,
+        share_in_bolsa=int(f.get('share_in_bolsa') == '1' and db.plan_has(a, 'bolsa')), share_split_pct=split if split is not None else 50,
         commission_pct=to_num(f.get('commission_pct')), rentapoliza_offer=int(f.get('rentapoliza_offer') == '1' and op == 'renta'),
         internal_note=(f.get('internal_note') or '').strip()[:2000])
     raw_maps = (f.get('maps') or '').strip()
@@ -1470,6 +1470,8 @@ def save_site(con, a, f, files):
         logo = media.save_brand_image(files['logo'][0], 'logo')
     if f.get('lia_seen') == '1' and db.plan_has(a, lia.FEATURE) and lia.flag_on():  # the form carried Lía's switch (plan allows it)
         con.execute('UPDATE agencies SET lia_enabled=? WHERE id=?', (1 if f.get('lia_enabled') == '1' else 0, a['id']))
+    if f.get('bolsa_seen') == '1' and db.plans_v2() and db.plan_has(a, 'bolsa'):  # the form carried the Bolsa-section switch (only offered on the new plans)
+        con.execute('UPDATE agencies SET bolsa_section=? WHERE id=?', (1 if f.get('bolsa_section') == '1' else 0, a['id']))
     con.execute('UPDATE agencies SET first_reply=?, first_reply_noname=? WHERE id=?', (fr or None, frn or None, a['id']))
     con.execute('UPDATE agencies SET name=?, tagline=?, about=?, whatsapp=?, email=?, city=?, design=?, accent=?, logo_path=? WHERE id=?',
                 (name[:80], (f.get('tagline') or '').strip()[:90], (f.get('about') or '').strip()[:2000], wa,

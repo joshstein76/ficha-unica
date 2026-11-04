@@ -95,9 +95,7 @@ def queue_for_lead(con, lead_id):
         canon = db.canonical(con, lead['listing_id'])
         if lead['owner_agency_id'] and lead['owner_agency_id'] != lead['agency_id']:
             owner = con.execute('SELECT * FROM agencies WHERE id=?', (lead['owner_agency_id'],)).fetchone()
-            sh = con.execute('SELECT split_pct FROM shares WHERE listing_id=? AND sharing_agency_id=?',
-                             (lead['listing_id'], lead['agency_id'])).fetchone()
-            split = sh['split_pct'] if sh else canon['share_split_pct']
+            split = db.share_split(con, lead['listing_id'], lead['agency_id'])
     ops = plan_for_lead(lead, canon, ag, owner, split)
     for op in ops:
         op['mode'] = 'dry_run'

@@ -36,17 +36,23 @@ def origin(host_prefix=''):
     port = '' if pp in (None, 80, 443) else ':%d' % pp
     return '%s://%s%s' % (SCHEME, host, port)
 
-PLAN_LIMITS = {'gratis': 1, 'pro': 5, 'ia': 25}  # Josh 10-19: Gratis 1 · Pro MXN 499 = 5 · Pro + IA MXN 999 = 25
+PLAN_LIMITS = {'gratis': 1, 'pro': 5, 'ia': 25}  # Josh 10-19: Gratis 1 · Pro MXN 499 = 5 · Pro + IA MXN 999 = 25. This is what runs while LLAVE_PLANS_V2 is off.
+# New plan limits behind ONE switch (LLAVE_PLANS_V2=1, docs/DECISIONS.md #74). Never read these directly: use plan_limits() / listing_limit().
+UNLIMITED = 1000000  # "sin límite" is a very large number, so every comparison, slice and subtraction keeps working; only displays ask is_unlimited()
+PLAN_LIMITS_V2 = {'gratis': 3, 'pro': 25, 'ia': UNLIMITED}
 LEGACY_PLANS = {'agencia': 'ia', 'pro_crm': 'ia'}  # retired 10-19 (Agencia dropped; Pro + CRM became Pro + IA)
 # What each plan unlocks (Claude's split of Josh's 10-19 plans, logged in docs/DECISIONS.md).
 PLAN_FEATURES = {
     'domain': ('pro', 'ia'),  # own domain
-    'tools': ('pro', 'ia'),   # Instagram images, printable sheet, Excel/CSV import, Bolsa 50/50, full stats
+    'tools': ('pro', 'ia'),   # Instagram images, printable sheet, Excel/CSV import, full stats
+    'bolsa': ('pro', 'ia'),   # the Bolsa: 50/50 sharing between agents (page, sharing, the listing checkbox). Was part of 'tools' until the V2 split
     'ai': ('ia',),            # AI writer, photo review + order, suggested price, weekly social kit
     'team': (),               # team invites: off until teams come back (Josh 10-19: drop Agencia)
     'lia': ('ia',),           # Lía, the AI chat on the agent's own site (llave/lia.py); also needs LLAVE_LIA_LIVE=1 + the agency's switch
 }
+PLAN_FEATURES_V2 = {'bolsa': ('gratis', 'pro', 'ia')}  # features that change when LLAVE_PLANS_V2=1: the Bolsa opens to every plan
 PUBLIC_STATUSES = ('activa', 'apartada')  # shown on sites + fed to portals
+POOL_MAX = 12  # "Más propiedades de la Bolsa" on an agent site shows at most this many listings
 REFERRAL_BONUS_LISTINGS = 1  # extra listing per invited colleague who publishes (Claude's call; was 5 until the 10-19 plans, when 5 = the whole Pro plan)
 
 DEFAULT_DESIGN = 'loteria'      # site design for NEW agencies (Josh 2026-11-03); existing rows keep theirs. Same value as styles.DEFAULT_DESIGN_FALLBACK
@@ -86,6 +92,8 @@ def init(con):
             con.execute('ALTER TABLE agencies ADD COLUMN %s TEXT' % col)
     if 'lia_enabled' not in cols:  # Lía's per-agency switch, OFF by default (llave/lia.py)
         con.execute('ALTER TABLE agencies ADD COLUMN lia_enabled INTEGER NOT NULL DEFAULT 0')
+    if 'bolsa_section' not in cols:  # agent site section "Más propiedades de la Bolsa": the agency's own switch, OFF by default (only used while LLAVE_PLANS_V2=1)
+        con.execute('ALTER TABLE agencies ADD COLUMN bolsa_section INTEGER NOT NULL DEFAULT 0')
     if 'plan_until' not in cols:  # pilot: plan given free until this date (tools/set_plan.py)
         con.execute('ALTER TABLE agencies ADD COLUMN plan_until TEXT')
     for col, ddl in (('domain_claimed_at', 'TEXT'),                    # own domain (llave/domains.py): when it was saved (claim lapses if never verified)
@@ -202,9 +210,12 @@ def canonical(con, listing_id):
     }
 
 
-def public_listing_ids(con, agency_id, include_shared=True):
+def public_listing_ids(con, agency_id, include_shared=True, include_pool=False):
     """Listings an agency site shows: its own public ones (newest first, only as many as the plan allows) + active Bolsa shares.
-    Over the limit (e.g. Pro -> Gratis after the pilot) the rest stay saved, just not public; they come back on upgrade."""
+    Over the limit (e.g. Pro -> Gratis after the pilot) the rest stay saved, just not public; they come back on upgrade.
+    include_pool=True also adds the "Más propiedades de la Bolsa" listings (pool_listing_ids). Only the pages that SERVE a visitor
+    (listing page, contact form, Lía) ask for it; the sitemap, llms.txt, feeds, cards and portals never do, so those listings stay
+    on their owner's page (docs/DECISIONS.md #3). With the switch off it adds nothing."""
     q = "SELECT id FROM listings WHERE agency_id=? AND status IN ('activa','apartada') ORDER BY updated_at DESC, id DESC"
     ids = [r['id'] for r in con.execute(q, (agency_id,))]
     a = con.execute('SELECT * FROM agencies WHERE id=?', (agency_id,)).fetchone()
@@ -221,7 +232,57 @@ def public_listing_ids(con, agency_id, include_shared=True):
                 owner_shown[r['agency_id']] = set(public_listing_ids(con, r['agency_id'], include_shared=False))
             if r['id'] in owner_shown[r['agency_id']]:
                 ids.append(r['id'])
+        if include_pool:
+            ids = ids + pool_listing_ids(con, agency_id, base=ids)
     return ids
+
+
+def pool_enabled(agency):
+    """The site section is on: LLAVE_PLANS_V2 + the agency's own switch + a plan that includes the Bolsa. Any one off = nothing is shown or served."""
+    a = dict(agency)
+    return plans_v2() and bool(a.get('bolsa_section')) and plan_has(a, 'bolsa')
+
+
+def pool_listing_ids(con, agency_id, limit=POOL_MAX, base=None):
+    """"Más propiedades de la Bolsa": listings of OTHER agencies that their owner opened to the Bolsa and that the owner's own
+    plan still shows publicly, newest first, at most `limit`. [] unless pool_enabled. It reuses the Bolsa share view of a listing:
+    the page is served on this site with this agency's contact, canonical = the owner's page, left out of the sitemap, and a lead
+    follows the existing Bolsa path. Left out: what this agency already shows (own or an active share) or removed on purpose (a retired
+    share), and any listing whose slug a page of this site already uses (so /propiedad/<slug> can only mean one listing)."""
+    a = con.execute('SELECT * FROM agencies WHERE id=?', (agency_id,)).fetchone()
+    if not a or not pool_enabled(a):
+        return []
+    base = public_listing_ids(con, agency_id) if base is None else base
+    shown = set(base)
+    slugs = {r['slug'] for r in con.execute(
+        'SELECT id, slug FROM listings WHERE agency_id=? OR id IN (SELECT listing_id FROM shares WHERE sharing_agency_id=?)',
+        (agency_id, agency_id)) if r['id'] in shown}
+    mine = {r['listing_id'] for r in con.execute('SELECT listing_id FROM shares WHERE sharing_agency_id=?', (agency_id,))}  # active or retired
+    owner_shown = {}
+    out = []
+    for r in con.execute("SELECT id, agency_id, slug FROM listings WHERE share_in_bolsa=1 AND status IN ('activa','apartada') AND agency_id!=? "
+                         "ORDER BY updated_at DESC, id DESC LIMIT 400", (agency_id,)):
+        if r['id'] in mine or r['slug'] in slugs:
+            continue
+        if r['agency_id'] not in owner_shown:
+            owner_shown[r['agency_id']] = set(public_listing_ids(con, r['agency_id'], include_shared=False))
+        if r['id'] not in owner_shown[r['agency_id']]:
+            continue
+        out.append(r['id'])
+        slugs.add(r['slug'])
+        if len(out) >= limit:
+            break
+    return out
+
+
+def share_split(con, listing_id, sharing_agency_id):
+    """The sharing agency's percentage of the commission on a Bolsa listing: its share row, else (a listing shown through the site
+    section has no row) what the owner set for the listing (the owner keeps share_split_pct, the sharer gets the rest). Panel and alerts only."""
+    sh = con.execute('SELECT split_pct FROM shares WHERE listing_id=? AND sharing_agency_id=?', (listing_id, sharing_agency_id)).fetchone()
+    if sh:
+        return sh['split_pct']
+    l = con.execute('SELECT share_split_pct FROM listings WHERE id=?', (listing_id,)).fetchone()
+    return 100 - int((l['share_split_pct'] if l else None) or 50)  # same arithmetic as the "Mostrar en mi sitio" button that creates the row
 
 
 CLOSED_STATUSES = ('vendida', 'rentada')  # these do not use a plan slot
@@ -248,8 +309,25 @@ def plan_of(agency, plan=None):
     return LEGACY_PLANS.get(p, p)
 
 
+def plans_v2():
+    """The new plans (docs/DECISIONS.md #74) are live: LLAVE_PLANS_V2=1. Read on every call; off (or anything else) = today's plans, unchanged."""
+    return os.environ.get('LLAVE_PLANS_V2') == '1'
+
+
+def plan_limits():
+    """{'gratis': n, 'pro': n, 'ia': n} for the state of the switch. A value >= UNLIMITED means no limit."""
+    return PLAN_LIMITS_V2 if plans_v2() else PLAN_LIMITS
+
+
+def is_unlimited(n):
+    return n is not None and n >= UNLIMITED
+
+
 def plan_has(agency, feature):
-    return plan_of(agency) in PLAN_FEATURES.get(feature, ())
+    plans = PLAN_FEATURES_V2.get(feature) if plans_v2() else None
+    if plans is None:
+        plans = PLAN_FEATURES.get(feature, ())
+    return plan_of(agency) in plans
 
 
 def plan_days_left(agency, today=None):
@@ -262,9 +340,12 @@ def plan_days_left(agency, today=None):
 
 
 def listing_limit(con, agency, plan=None):
-    """Plan limit + referral bonus."""
+    """Plan limit + referral bonus. UNLIMITED (no bonus added) on a plan without a limit."""
     a = dict(agency)
-    base = PLAN_LIMITS.get(plan_of(a, plan), PLAN_LIMITS['gratis'])
+    limits = plan_limits()
+    base = limits.get(plan_of(a, plan), limits['gratis'])
+    if is_unlimited(base):
+        return UNLIMITED
     extra = 0
     try:
         from . import eco

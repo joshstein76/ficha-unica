@@ -315,7 +315,7 @@ def read_rows(csv_text):
 
 def _plan_limit(con, agency_id):
     ag = con.execute('SELECT id, plan FROM agencies WHERE id=?', (agency_id,)).fetchone()
-    limit = db.listing_limit(con, ag) if ag else db.PLAN_LIMITS['gratis']
+    limit = db.listing_limit(con, ag) if ag else db.plan_limits()['gratis']
     used = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status NOT IN ('vendida','rentada')",
                        (agency_id,)).fetchone()[0]
     return limit, used

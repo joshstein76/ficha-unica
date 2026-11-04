@@ -439,7 +439,7 @@ def calls_today(con, agency_id, now=None):
 
 def _canon_for(con, agency, listing_id):
     """The listing she is talking about, only if the agency's site still shows it publicly."""
-    if listing_id and listing_id in db.public_listing_ids(con, agency['id']):
+    if listing_id and listing_id in db.public_listing_ids(con, agency['id'], include_pool=True):  # a listing of the site section counts too
         return db.canonical(con, listing_id)
     return None
 

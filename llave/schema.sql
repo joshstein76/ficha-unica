@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS agencies (
   first_reply_noname TEXT,
   is_demo INTEGER NOT NULL DEFAULT 0,
   lia_enabled INTEGER NOT NULL DEFAULT 0, -- the agent's own switch for Lía, the AI chat on the site (llave/lia.py); OFF by default
+  bolsa_section INTEGER NOT NULL DEFAULT 0, -- the agent's own switch for "Más propiedades de la Bolsa" on the site (db.pool_listing_ids); OFF by default, only offered while LLAVE_PLANS_V2=1
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
