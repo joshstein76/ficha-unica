@@ -4,6 +4,7 @@ import datetime
 import io
 import re
 import unittest
+from unittest import mock
 
 from PIL import Image
 
@@ -246,6 +247,20 @@ class FirstAgent(unittest.TestCase):
         self.assertIn('<a href="tel:+525500000002">+52 55 0000 0002</a>', page)
         s, page, _ = self.web.req('/', cookie=u['cookie'])
         self.assertIn('<a href="tel:+525500000002">+52 55 0000 0002</a>', page)
+
+    # ---- dates ----
+    def test_price_date_is_the_mexico_city_day_not_the_server_clock_day(self):
+        self.assertEqual(db.today_cdmx(), (datetime.datetime.utcnow() - datetime.timedelta(hours=6)).date())
+        u = self.agent(agency='Casa Noche')
+        with mock.patch.object(db, 'today_cdmx', return_value=datetime.date(2026, 11, 3)):
+            lid = self.publish(u)
+            self.assertEqual(self.web.one('SELECT price_date FROM listings WHERE id=?', lid)['price_date'], '2026-11-03')
+            s, page, _ = self.web.req('/propiedad/%s' % self.web.one('SELECT slug FROM listings WHERE id=?', lid)['slug'], host=self.site_host(u))
+            self.assertIn('Precio confirmado el 3 nov 2026', page)
+            form = {'csrf': u['csrf'], 'title': 'Departamento en venta en Roma Norte', 'operation': 'venta', 'property_type': 'departamento',
+                    'status': 'activa', 'price': '4000000', 'currency': 'MXN', 'colonia': 'Roma Norte', 'municipio': 'Cuauhtémoc', 'estado': 'Ciudad de México'}
+            self.assertEqual(self.web.req('/propiedades/%d' % lid, form, u['cookie'])[0], 200)
+            self.assertEqual(self.web.one('SELECT price_date FROM listings WHERE id=?', lid)['price_date'], '2026-11-03')
 
 
 if __name__ == '__main__':

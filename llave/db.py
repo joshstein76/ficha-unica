@@ -330,6 +330,12 @@ def plan_has(agency, feature):
     return plan_of(agency) in plans
 
 
+def today_cdmx():
+    """Today's date in Mexico City (UTC-6, no daylight saving since 2022). The server clock is UTC: after 6 pm in Mexico, `date('now')`
+    is already tomorrow, and a public page said 'Precio confirmado el' a day that had not happened yet."""
+    return (datetime.datetime.utcnow() - datetime.timedelta(hours=6)).date()
+
+
 def plan_days_left(agency, today=None):
     """Days until a free pilot plan ends (None = no end date). 0 = ends today, negative = already ended."""
     until = dict(agency).get('plan_until')

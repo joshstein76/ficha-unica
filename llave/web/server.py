@@ -1369,8 +1369,8 @@ def create_draft(con, a, uid, op, ptype):
         ref = '%s-%04d' % (prefix, n)
     slug = 'borrador-%s' % ref.lower()
     lid = con.execute('INSERT INTO listings(agency_id, agent_id, ref, slug, status, operation, property_type, title, price_date) '
-                      "VALUES (?,?,?,?, 'borrador', ?,?,?, date('now'))",
-                      (a['id'], uid, ref, slug, op, ptype, panel.DRAFT_TITLE)).lastrowid
+                      "VALUES (?,?,?,?, 'borrador', ?,?,?, ?)",
+                      (a['id'], uid, ref, slug, op, ptype, panel.DRAFT_TITLE, db.today_cdmx().isoformat())).lastrowid
     db.audit(con, 'user:%d' % uid, 'wizard_draft', 'listing:%d' % lid)
     return lid
 
@@ -1382,7 +1382,7 @@ def wizard_save_2(con, l, f):
     vals = (to_price_cents(f.get('price')), 'USD' if f.get('currency') == 'USD' else 'MXN', f['colonia'].strip(), f['municipio'].strip(),
             f['estado'].strip(), to_num(f.get('m2_built')), to_num(f.get('bedrooms'), int), to_num(f.get('bathrooms')))
     con.execute("UPDATE listings SET price_cents=?, currency=?, colonia=?, municipio=?, estado=?, m2_built=?, bedrooms=?, bathrooms=?, "
-                "price_date=date('now'), updated_at=datetime('now') WHERE id=?", vals + (l['id'],))
+                "price_date=?, updated_at=datetime('now') WHERE id=?", vals + (db.today_cdmx().isoformat(), l['id']))
     l2 = con.execute('SELECT * FROM listings WHERE id=?', (l['id'],)).fetchone()
     base, k = db.slugify(panel.suggested_title(l2)), 2
     slug = base
@@ -1412,7 +1412,7 @@ def save_listing(con, a, uid, f, existing=None):
     if split is not None and not 0 <= split <= 100:
         raise ValueError('El porcentaje compartido va de 0 a 100.')
     am = json.dumps([x.strip() for x in (f.get('amenities') or '').split(',') if x.strip()][:40], ensure_ascii=False)
-    price_date = (f.get('price_date') or '').strip() or datetime.date.today().isoformat()
+    price_date = (f.get('price_date') or '').strip() or db.today_cdmx().isoformat()
     vals = dict(
         title=title[:100], description=(f.get('description') or '').strip()[:8000], operation=op, property_type=ptype,
         status=status, price_cents=to_price_cents(f.get('price')), currency='USD' if f.get('currency') == 'USD' else 'MXN',

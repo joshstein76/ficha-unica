@@ -10,7 +10,7 @@ MAX_LISTED = 5
 
 def _today(today):
     if today is None:
-        return datetime.date.today()
+        return db.today_cdmx()
     if isinstance(today, datetime.datetime):
         return today.date()
     return today
