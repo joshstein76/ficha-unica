@@ -1,5 +1,6 @@
 """A first real agent walks Ficha Única on a phone: sign up, publish a first property, look at the site, answer the first client.
 Each test is one thing that cost trust on that walk and is now fixed (docs/DECISIONS.md, last numbered item)."""
+import datetime
 import io
 import re
 import unittest
@@ -210,6 +211,29 @@ class FirstAgent(unittest.TestCase):
         self.assertIn('name="email" type="email" value="%s"' % u['email'], page)
         s, page, _ = self.web.req('/entrar', {'email': 'x"><b>@ejemplo.test', 'password': 'otra-clave-123'})
         self.assertNotIn('<b>@ejemplo.test', page)
+
+    # ---- a free pilot plan ----
+    def test_plan_page_says_a_pilot_plan_is_free_and_when_it_ends(self):
+        u = self.agent(plan='pro')
+        con = db.connect()
+        today = datetime.date.today()
+        con.execute('UPDATE agencies SET plan_until=? WHERE id=?', ((today + datetime.timedelta(days=58)).isoformat(), u['aid']))
+        con.commit()
+        s, page, _ = self.web.req('/plan', cookie=u['cookie'])
+        self.assertRegex(page, r'<p class="small">Tu plan Pro es un piloto gratis hasta el \d{1,2} \w{3} \d{4}\.</p>')
+        con.execute('UPDATE agencies SET plan_until=? WHERE id=?', ((today - datetime.timedelta(days=3)).isoformat(), u['aid']))
+        con.commit()
+        s, page, _ = self.web.req('/plan', cookie=u['cookie'])
+        self.assertRegex(page, r'<p class="small">Tu piloto gratis del plan Pro terminó el \d{1,2} \w{3} \d{4}\.</p>')
+        con.execute("UPDATE agencies SET plan_until=NULL WHERE id=?", (u['aid'],))
+        con.commit()
+        self.assertNotIn('piloto gratis', self.web.req('/plan', cookie=u['cookie'])[1])
+        con.execute("UPDATE agencies SET plan_until=?, stripe_subscription_id='sub_test' WHERE id=?", ((today + datetime.timedelta(days=5)).isoformat(), u['aid']))
+        con.commit()
+        self.assertNotIn('piloto gratis', self.web.req('/plan', cookie=u['cookie'])[1])  # a paying agent is never told it is a free pilot
+        con.close()
+        gratis = self.agent()
+        self.assertNotIn('piloto gratis', self.web.req('/plan', cookie=gratis['cookie'])[1])
 
 
 if __name__ == '__main__':

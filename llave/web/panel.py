@@ -1455,9 +1455,21 @@ def plans(con, ctx, ok='', error=''):
         if con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status IN ('activa','apartada')", (a['id'],)).fetchone()[0] > limit else ''
     usage = ('Usas %d %s. Tu plan no tiene límite.' % (n, 'propiedad' if n == 1 else 'propiedades')) if db.is_unlimited(limit) \
         else 'Usas %d de %d %s.' % (n, limit, 'propiedad' if limit == 1 else 'propiedades')
-    body = ('%s%s<h1>Tu plan</h1><p class="muted">%s</p>%s<div class="grid2 wide plans">%s</div>%s'
-            '<p class="small muted">%s</p>') % (notice(ok), notice(error, 'err'), usage, over, cards, manage, foot)
+    body = ('%s%s<h1>Tu plan</h1><p class="muted">%s</p>%s%s<div class="grid2 wide plans">%s</div>%s'
+            '<p class="small muted">%s</p>') % (notice(ok), notice(error, 'err'), usage, pilot_line(a), over, cards, manage, foot)
     return layout('Tu plan', body, ctx, 'sitio')
+
+
+def pilot_line(a):
+    """A plan given free until a date (tools/set_plan.py --until) says so on the plan page, from day one: the reminder banner only
+    shows in the last week, and a 'Pro' card with a price on it reads as if they were already paying."""
+    if a['plan'] == 'gratis' or a['stripe_subscription_id'] or db.plan_days_left(a) is None:
+        return ''
+    name = next((nm for k, nm, _, _ in plan_list() if k == a['plan']), a['plan'])
+    until = nice_date(a['plan_until'])
+    if db.plan_days_left(a) < 0:
+        return '<p class="small">Tu piloto gratis del plan %s terminó el %s.</p>' % (e(name), e(until))
+    return '<p class="small">Tu plan %s es un piloto gratis hasta el %s.</p>' % (e(name), e(until))
 
 
 UPSELL = {
