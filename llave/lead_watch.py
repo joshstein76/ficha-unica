@@ -36,17 +36,38 @@ def _own_lead(con, lead_id, agency_id):
                        (lead_id, agency_id)).fetchone()
 
 
-def mark_responded(con, lead_id, agency_id, now=None):
+def mark_responded(con, lead_id, agency_id, now=None, via=''):
+    """First reply: stamps first_response_at once and moves 'nuevo' to 'contactado'. Safe to call again: a repeat changes nothing
+    and writes no second audit row. `via` ('correo') only says in the audit row where the tap came from."""
     ensure_columns(con)
     l = _own_lead(con, lead_id, agency_id)
     if not l:
         return False
+    if l['first_response_at'] and l['status'] != 'nuevo':
+        return True
     ts = _now(now).strftime(FMT)
     con.execute('UPDATE leads SET first_response_at=COALESCE(first_response_at, ?), '
                 "status=CASE WHEN status='nuevo' THEN 'contactado' ELSE status END WHERE id=?", (ts, lead_id))
-    db.audit(con, 'agency:%d' % agency_id, 'lead_responded', 'lead:%d' % lead_id)
+    db.audit(con, 'agency:%d' % agency_id, 'lead_responded', 'lead:%d%s' % (lead_id, ' via:' + via if via else ''))
     con.commit()
     return True
+
+
+def whatsapp_reply(con, lead_id, agency, agent_name='', now=None, via='', owner_ok=False):
+    """The one tap on a lead's "Responder por WhatsApp": records the first reply, then returns the wa.me link with the agency's approved
+    wording signed by `agent_name`. Used by the panel (/clientes/<id>/whatsapp) and by the signed email link (/w/<token>), so both do
+    exactly the same thing. -> the link, or None when the lead is not this agency's, or has no phone.
+    The lead's own agency records the reply. With owner_ok, the agency that owns the property of a Bolsa lead gets the link too but
+    records nothing: the row, its status and its 5-minute reminder belong to the receiving agency."""
+    ld = con.execute('SELECT * FROM leads WHERE id=?', (lead_id,)).fetchone()
+    if not ld or not ld['phone']:
+        return None
+    if ld['agency_id'] == agency['id']:
+        mark_responded(con, lead_id, agency['id'], now, via)
+    elif not (owner_ok and ld['owner_agency_id'] == agency['id']):
+        return None
+    lst = con.execute('SELECT title FROM listings WHERE id=?', (ld['listing_id'],)).fetchone() if ld['listing_id'] else None
+    return whatsapp.wa_link(ld['phone'], replies.render(agency, ld['name'], lst['title'] if lst else None, agent_name))
 
 
 def set_status(con, lead_id, agency_id, status, now=None):

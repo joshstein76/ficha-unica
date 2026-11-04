@@ -27,7 +27,7 @@ Owner: Ciao Bella Marketing · Code: this repo · Deploy kit: `deploy/` (dry-run
 ## Deploy (each time)
 1. `deploy/deploy.sh` (dry run). Read what it would do.
 2. `deploy/deploy.sh --go`: tests, then a server backup, upload of the release, symlink switch, restart, and a health check, with an automatic rollback if `/healthz` fails.
-3. Smoke test: sign up a test agency, run the 3-step wizard with one listing, check the public page, feed, card and ficha, send a test lead from our own phone, and confirm it shows in Clientes **and that the alert email reaches the agent's inbox** (check the outbox row `email.lead_nuevo` says `sent`, and that no email went to the test lead). Then "¿Olvidaste tu contraseña?" on `/entrar`: the link arrives, works once, and the old session is closed.
+3. Smoke test: sign up a test agency, run the 3-step wizard with one listing, check the public page, feed, card and ficha, send a test lead from our own phone, and confirm it shows in Clientes **and that the alert email reaches the agent's inbox** (check the outbox row `email.lead_nuevo` says `sent`, and that no email went to the test lead). Then tap the email's **Responder por WhatsApp** button on a phone that is logged out (the one-tap page opens, the big button opens WhatsApp) and confirm the lead is now *Contactado* in Clientes and no 5-minute reminder is sent for it. Then "¿Olvidaste tu contraseña?" on `/entrar`: the link arrives, works once, and the old session is closed.
 
 ## The app refuses to start in production if
 - `LLAVE_SECRET` is missing or the dev default (`check_production_config`).

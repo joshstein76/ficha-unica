@@ -24,7 +24,7 @@ Demo logins are in `seed/DEMO-CREDENTIALS.local.md` (gitignored). `*.localhost` 
 | Bolsa (agent-to-agent) | `web/server.py` `/bolsa` | share a listing with the network, set your split (default 50/50); a sharer's page canonicals to the owner; Bolsa leads alert both agencies |
 | RentaPóliza hook | `leads.rentapoliza_offer` | rentals can show the póliza line (no link, no price) |
 | Billing (Stripe) | `llave/billing.py`, `docs/STRIPE-SETUP.md` | Checkout + Billing Portal + signed webhook for Pro 499 / Pro + IA 999. OFF until `config/stripe.env` is filled (then the free test-mode plan switch is replaced); live key needs `LLAVE_STRIPE_LIVE=1`. While the key is a TEST key in production, paid plans are closed except for `LLAVE_STRIPE_TEST_EMAILS` |
-| Email to agents | `llave/mailer.py`, `llave/agent_mail.py`, `llave/password_reset.py` | `LLAVE_SMTP_*`; without it everything is a dry-run outbox row. New-lead alert, 5-minute and daily emails, buyer-alert match and password reset. Agents only, never a client |
+| Email to agents | `llave/mailer.py`, `llave/agent_mail.py`, `llave/password_reset.py` | `LLAVE_SMTP_*`; without it everything is a dry-run outbox row. New-lead alert, 5-minute and daily emails, buyer-alert match and password reset. Agents only, never a client. The WhatsApp button in the lead emails is a signed one-tap page (`llave/reply_link.py`, `/w/<token>`) that marks the lead contactado, so a lead answered from the email gets no reminder |
 | VIVE GHL check | `tools/ghl_dryrun_vive.py` | read-only GETs only; report in `docs/` |
 
 ## Decisions log
