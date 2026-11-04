@@ -641,11 +641,11 @@ class Handler(BaseHTTPRequestHandler):
                 f, _ = self.form()
                 ip = self.client_ip()
                 if not rate_ok(con, 'login_fail', ip, LOGIN_FAILS_15MIN, 15):
-                    return self.send(panel.login('Demasiados intentos. Espera 15 minutos e intenta de nuevo.'), 429)
+                    return self.send(panel.login('Demasiados intentos. Espera 15 minutos e intenta de nuevo.', f.get('email') or ''), 429)
                 u = con.execute('SELECT * FROM users WHERE email=?', ((f.get('email') or '').strip().lower(),)).fetchone()
                 if not u or not auth.verify_password(f.get('password', ''), u['password_hash']):
                     rate_hit(con, 'login_fail', ip)
-                    return self.send(panel.login('Correo o contraseña incorrectos.'), 401)
+                    return self.send(panel.login('Correo o contraseña incorrectos.', f.get('email') or ''), 401)
                 return self.start_session(con, u['id'])
             return self.send(panel.login())
         if path == '/olvide':

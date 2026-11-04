@@ -110,14 +110,14 @@ def signup(error='', values=None, ref=''):
     return layout('Crear cuenta', body)
 
 
-def login(error=''):
+def login(error='', email=''):
     forgot_link = '<p class="small muted"><a href="/olvide">¿Olvidaste tu contraseña?</a></p>' if mailer.enabled() else ''  # only when we can email the link
     body = ('<div class="auth pub"><div class="intro"><h1>Entrar</h1><p class="muted">Tu sitio, tus propiedades y tus clientes de WhatsApp.</p></div>%s'
             '<form class="stack card" method="post" action="/entrar">'
-            '<label>Correo<input name="email" type="email" autocomplete="email" required></label>'
+            '<label>Correo<input name="email" type="email" value="%s" autocomplete="email" required></label>'
             '<label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>'
             '<button class="btn">Entrar</button>%s<p class="small muted">¿Nuevo? <a href="/registro">Crea tu sitio gratis</a></p>'
-            '</form></div>') % (notice(error, 'err'), forgot_link)
+            '</form></div>') % (notice(error, 'err'), e(email), forgot_link)
     return layout('Entrar', body)
 
 

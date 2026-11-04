@@ -202,6 +202,15 @@ class FirstAgent(unittest.TestCase):
         for path in ('/terminos', '/privacidad'):
             self.assertEqual(self.web.req(path)[0], 200, path)
 
+    def test_wrong_password_keeps_the_email_in_the_field(self):
+        u = self.agent()
+        s, page, _ = self.web.req('/entrar', {'email': u['email'], 'password': 'otra-clave-123'})
+        self.assertEqual(s, 401)
+        self.assertIn('Correo o contraseña incorrectos.', page)
+        self.assertIn('name="email" type="email" value="%s"' % u['email'], page)
+        s, page, _ = self.web.req('/entrar', {'email': 'x"><b>@ejemplo.test', 'password': 'otra-clave-123'})
+        self.assertNotIn('<b>@ejemplo.test', page)
+
 
 if __name__ == '__main__':
     unittest.main()
