@@ -1,6 +1,8 @@
 """Academia: short text lessons in Mexican Spanish ("tú"). Videos come later and need Josh's OK on script and cut.
 Each lesson: (slug, title, summary, minutes, [(step title, step text)], closing tip).
 Only describe things the app already does. No promises of leads, rankings or income."""
+from . import db
+
 LESSONS = [
     ('primera-propiedad', 'Tu primera propiedad en 10 minutos', 'Del celular a tu sitio y a Google.', 10, [
         ('Ten a la mano', 'Al menos cinco fotos, el precio, la colonia y las medidas.'),
@@ -48,8 +50,15 @@ LESSONS = [
 BY_SLUG = {l[0]: l for l in LESSONS}
 
 
+BOLSA_PLAN_V1 = 'Es una herramienta del plan Pro.'
+BOLSA_PLAN_V2 = 'Viene incluida en todos los planes.'  # LLAVE_PLANS_V2=1: the Bolsa is open to Gratis too
+
+
 def lesson(slug):
-    return BY_SLUG.get(slug)
+    l = BY_SLUG.get(slug)
+    if l and db.plans_v2() and any(BOLSA_PLAN_V1 in x for _t, x in l[4]):
+        return l[:4] + ([(t, x.replace(BOLSA_PLAN_V1, BOLSA_PLAN_V2)) for t, x in l[4]],) + l[5:]
+    return l
 
 
 def neighbors(slug):

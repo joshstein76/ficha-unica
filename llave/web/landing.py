@@ -1,12 +1,12 @@
 """Public landing (app.<base>/) and public pricing (/planes, /precios when logged out), in the Ficha Única "Lotería" look
 (approved by Josh 2026-11-03: papel + tinta outlines, hard shadows, colour walls, Bricolage / Shrikhand / Figtree, light only).
 Server-rendered, inline CSS, one tiny inline script (live name preview + plan switch), no third-party images. Mexican Spanish, tú, mobile-first.
-Never names competitors, never promises a portal that is not live. Prices come from panel.PLANS so the landing, the pricing page and the panel never disagree."""
+Never names competitors, never promises a portal that is not live. Prices and features come from panel.plan_list() so the landing, the pricing page and the panel never disagree."""
 import datetime
 import json
 
 from .. import db
-from .common import e
+from .common import e, props
 from .styles import BRAND_BASE, BRAND_COLOR, BRAND_TOKENS, FONTS, PRECONNECT, logo, mark_svg
 
 CSS = BRAND_TOKENS + BRAND_BASE + r"""
@@ -280,22 +280,31 @@ def _script(*parts):
            "if(!rm)document.body.classList.add('anim');%s})();</script>" % ''.join(parts)
 
 
-FAQ = [
-    ('¿De verdad es gratis?',
-     'Sí. El plan Gratis incluye tu sitio en una dirección de Ficha Única y 1 propiedad. No pedimos tarjeta para empezar. '
-     'Si luego quieres tu propio dominio o más propiedades, hay planes de pago.'),
-    ('¿Cómo me llegan los clientes?',
-     'Cada persona que te escribe desde tu sitio te llega por WhatsApp, con su nombre y la propiedad que le interesó. Tú contestas como siempre.'),
-    ('¿Puedo usar mi propio dominio?',
-     'Sí, con el plan Pro. El dominio lo compras tú con el proveedor que quieras y lo conectas desde tu panel. '
-     'Mientras, tu sitio funciona en tu dirección gratis de Ficha Única.'),
-    ('¿Mis propiedades salen en los portales?',
-     'Salen en tu sitio y en Google. Los portales los conectamos conforme cada uno nos da su acceso; en tu panel ves cuáles están activos y cuáles no. '
-     'Nunca te prometemos un portal que todavía no funciona.'),
-    ('¿Necesito saber de computadoras?',
-     'No. Se hace desde el celular: subes las fotos, escribes los datos una sola vez y listo. '
-     'Con el plan Pro, si ya tienes tus propiedades en una hoja de Excel o CSV, también las puedes importar.'),
-]
+def _faq(gratis_limit):
+    return [
+        ('¿De verdad es gratis?',
+         'Sí. El plan Gratis incluye tu sitio en una dirección de Ficha Única y %s. No pedimos tarjeta para empezar. '
+         'Si luego quieres tu propio dominio o más propiedades, hay planes de pago.' % props(gratis_limit)),
+        ('¿Cómo me llegan los clientes?',
+         'Cada persona que te escribe desde tu sitio te llega por WhatsApp, con su nombre y la propiedad que le interesó. Tú contestas como siempre.'),
+        ('¿Puedo usar mi propio dominio?',
+         'Sí, con el plan Pro. El dominio lo compras tú con el proveedor que quieras y lo conectas desde tu panel. '
+         'Mientras, tu sitio funciona en tu dirección gratis de Ficha Única.'),
+        ('¿Mis propiedades salen en los portales?',
+         'Salen en tu sitio y en Google. Los portales los conectamos conforme cada uno nos da su acceso; en tu panel ves cuáles están activos y cuáles no. '
+         'Nunca te prometemos un portal que todavía no funciona.'),
+        ('¿Necesito saber de computadoras?',
+         'No. Se hace desde el celular: subes las fotos, escribes los datos una sola vez y listo. '
+         'Con el plan Pro, si ya tienes tus propiedades en una hoja de Excel o CSV, también las puedes importar.'),
+    ]
+
+
+FAQ = _faq(db.PLAN_LIMITS['gratis'])  # today's answers; faq_items() follows LLAVE_PLANS_V2
+
+
+def faq_items():
+    return _faq(db.plan_limits()['gratis'])
+
 
 _CHECK = '<svg><use href="#i-ok"/></svg>'
 
@@ -429,11 +438,11 @@ def _fill(html, **kw):
 
 def _plans():
     from . import panel  # lazy: panel imports this module
-    return panel.PLANS, panel.COMING_SOON
+    return panel.plan_list(), panel.COMING_SOON
 
 
 def _plan_cards(reg):
-    """The three plan cards, straight from panel.PLANS (one source for prices and features)."""
+    """The three plan cards, straight from panel.plan_list() (one source for prices and features)."""
     plans, soon = _plans()
     badges = {'gratis': '<span class="badge">Para todos</span>', 'ia': '<span class="badge soft">Con IA</span>'}
     out = []
@@ -501,7 +510,7 @@ def landing(ref=''):
     desc = 'Tu sitio inmobiliario gratis y tus clientes directo a tu WhatsApp. Sube cada propiedad una vez: sale en tu sitio y en Google, lista para la IA. Hecho en México.'
     ld = json.dumps({'@context': 'https://schema.org', '@graph': [
         {'@type': 'Organization', 'name': db.BRAND, 'parentOrganization': {'@type': 'Organization', 'name': db.OWNER}},
-        {'@type': 'FAQPage', 'mainEntity': [{'@type': 'Question', 'name': q, 'acceptedAnswer': {'@type': 'Answer', 'text': a}} for q, a in FAQ]}]},
+        {'@type': 'FAQPage', 'mainEntity': [{'@type': 'Question', 'name': q, 'acceptedAnswer': {'@type': 'Answer', 'text': a}} for q, a in faq_items()]}]},
         ensure_ascii=False).replace('</', '<\\/')
     plans = ('<section id="planes" aria-labelledby="h-plans"><div class="w"><div class="sec-h"><span class="eyebrow">Planes</span>'
              '<h2 id="h-plans">Empieza gratis. Crece cuando quieras.</h2><p class="lead">Precios en pesos mexicanos, con IVA incluido. Sin plazo forzoso.</p></div>'
@@ -509,7 +518,7 @@ def landing(ref=''):
              '<p class="fine2">Empiezas gratis y subes de plan desde tu panel cuando quieras. El dominio propio se compra aparte con tu proveedor. '
              '<a href="/planes">Ver los planes en su propia página</a>.</p></div></section>') % (_plan_switch(), _plan_cards(reg))
     faq = _fill(_FAQ_SEC, faq=''.join(
-        '<details><summary>%s<i><svg><use href="#i-plus"/></svg></i></summary><p>%s</p></details>' % (e(q), e(a)) for q, a in FAQ))
+        '<details><summary>%s<i><svg><use href="#i-plus"/></svg></i></summary><p>%s</p></details>' % (e(q), e(a)) for q, a in faq_items()))
     main = '<main id="main">%s%s%s%s%s%s</main>' % (_HERO, _PILLARS, _STEPS, plans, faq, _FINAL)
     main = _fill(main, base=e(db.BASE_DOMAIN), reg=e(reg), pillmark=mark_svg('fu-pill'))
     return (_head('Ficha Única · Tu sitio inmobiliario gratis', desc, '<script type="application/ld+json">%s</script>' % ld)
@@ -526,5 +535,5 @@ def public_plans(ref=''):
             '<p class="fine2">El dominio propio se compra aparte con tu proveedor y lo conectas desde tu panel.</p>'
             '<div class="cta-row"><a class="btn" href="%s">Crear mi sitio gratis</a><a class="btn alt" href="/">Volver al inicio</a></div>'
             '</div></section></main>') % (_plan_switch(), _plan_cards(reg), e(reg))
-    return (_head('Planes · Ficha Única', 'Gratis con 1 propiedad, Pro $499 MXN y Pro + IA $999 MXN al mes. Sin plazo forzoso.')
+    return (_head('Planes · Ficha Única', 'Gratis con %s, Pro $499 MXN y Pro + IA $999 MXN al mes. Sin plazo forzoso.' % props(db.plan_limits()['gratis']))
             + _top(reg) + main + _foot(reg, local) + _script(_JS_PLANS) + '</body></html>')

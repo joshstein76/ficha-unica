@@ -1,5 +1,5 @@
 """The free agent website (one per agency, on <slug>.<base> or a verified custom domain).
-Every listing page ships RealEstateListing JSON-LD, one canonical (Bolsa shares point to the owner's page),
+Every listing page ships RealEstateListing JSON-LD, one canonical (Bolsa shares and the "Más propiedades de la Bolsa" section point to the owner's page),
 a WhatsApp button and a lead form. Also sitemap.xml, robots.txt and llms.txt for AI search."""
 import json
 
@@ -78,6 +78,18 @@ def _card(c):
         e(facts_line(c)), e(where))
 
 
+def pool_section(con, agency):
+    """'Más propiedades de la Bolsa': listings other agents opened to the Bolsa, under the agency's own (db.pool_listing_ids; '' unless
+    LLAVE_PLANS_V2 + the agency's switch + a plan with the Bolsa). Cards carry no owner, contact or commission: each one links to
+    /propiedad/<slug> on THIS site, the existing Bolsa share view (this agency's contact, canonical = the owner's page)."""
+    cards = [db.canonical(con, i) for i in db.pool_listing_ids(con, agency['id'])]
+    if not cards:
+        return ''
+    return ('<section class="sec" id="bolsa"><h2>Más propiedades de la Bolsa</h2>'
+            '<p class="muted">De otros asesores de la red de Ficha Única. Escríbenos y te atendemos nosotros.</p>'
+            '<div class="cards">%s</div></section>') % ''.join(_card(c) for c in cards)
+
+
 def home(con, agency):
     ids = db.public_listing_ids(con, agency['id'])
     cards = [db.canonical(con, i) for i in ids]
@@ -86,7 +98,7 @@ def home(con, agency):
            'url': db.site_url(agency), 'telephone': agency['whatsapp'],
            'areaServed': agency['city'] or 'México', 'description': agency['about'] or ''}
     body = ('<main id="main"><section class="hero">%s<div class="cap"><div class="in"><h1>%s</h1><p>%s</p></div></div></section>'
-            '<div class="in"><section class="sec"><h2>Propiedades</h2>%s</section>'
+            '<div class="in"><section class="sec"><h2>Propiedades</h2>%s</section>%s'
             '<section class="sec" id="alerta"><h2>¿Buscas algo en especial?</h2><form class="box alertf" method="post" action="/alerta" style="position:static">'
             '<input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">'
             '<label class="vh" for="al-n">Tu nombre</label><input id="al-n" name="name" placeholder="Tu nombre" autocomplete="name">'
@@ -101,7 +113,7 @@ def home(con, agency):
         e(agency['name']), e(agency['tagline'] or ''),
         ('<div class="cards">%s</div>' % ''.join(_card(c) for c in cards)) if cards
         else '<p class="muted">Pronto publicaremos propiedades aquí.</p>',
-        e(agency['about'] or ''), team_html(con, agency))
+        pool_section(con, agency), e(agency['about'] or ''), team_html(con, agency))
     ld = '<script type="application/ld+json">%s</script>' % json.dumps(org, ensure_ascii=False)
     return lia_ui.attach(con, agency, _page(agency, '%s · Bienes raíces' % agency['name'], body, ld, db.site_url(agency) + '/',
                                             agency['about'] or agency['tagline'] or agency['name']))
@@ -134,6 +146,9 @@ def listing(con, agency, c, shared_split=None, error=''):
     """c = canonical listing. When it belongs to another agency (Bolsa), contact = this agency,
     canonical = the owner's page."""
     own = c['agency']['id'] == agency['id']
+    # The FAQ ("¿Cómo agendo una visita?") names who to write to. On a Bolsa listing that is THIS agency, never the owner. Only while
+    # LLAVE_PLANS_V2 is on: today's share pages are left exactly as they are (docs/DECISIONS.md #74).
+    faq_c = c if own or not db.plans_v2() else dict(c, agency=dict(c['agency'], name=agency['name'], whatsapp=agency['whatsapp']))
     page_url = '%s/propiedad/%s' % (db.site_url(agency), c['slug'])
     canon = page_url if own else c['url']
     photos = c['photos']
@@ -202,7 +217,7 @@ def listing(con, agency, c, shared_split=None, error=''):
         ('<p class="muted small">Precio confirmado el %s. Sujeto a cambio y disponibilidad.</p>' % nice_date(c['price_date']))
         if c['price_date'] and c['price'] is not None else '',
         e(c['description']), ('<div><h2>Amenidades</h2><ul class="am">%s</ul></div>' % am) if am else '',
-        (('<p class="notice">%s</p>' % e(rp)) if rp else '') + map_html + faq_html(c),
+        (('<p class="notice">%s</p>' % e(rp)) if rp else '') + map_html + faq_html(faq_c),
         avatar, e(contact_name), profile_link,
         ('<a class="wa" href="%s" rel="nofollow" aria-label="Escribir por WhatsApp a %s sobre esta propiedad">%s Escribir por WhatsApp</a>' % (e(wa), e(contact_name), WA_ICON)) if wa else '',
         c['id'], inv, inv, inv, inv, e(c['ref']), ('<p class="muted small" id="err" role="alert">%s</p>' % e(error)) if error else '',
@@ -214,7 +229,7 @@ def listing(con, agency, c, shared_split=None, error=''):
         ('og:image', photos[0]['url'] if photos else ''), ('og:description', c['description'][:200])))
     from ..ai import geo_seo
     ld = '<script type="application/ld+json">%s</script>' % json.dumps(listing_jsonld(c, canon), ensure_ascii=False)
-    faqs = geo_seo.listing_faq(c)
+    faqs = geo_seo.listing_faq(faq_c)
     if faqs:
         ld += '<script type="application/ld+json">%s</script>' % json.dumps(geo_seo.faq_jsonld(faqs), ensure_ascii=False)
     title = '%s · %s' % (c['title'], money(c['price'], c['currency']))

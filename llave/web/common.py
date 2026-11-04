@@ -5,6 +5,8 @@ import hmac
 import html
 import os
 
+from .. import db
+
 SECRET = os.environ.get('LLAVE_SECRET', 'llave-local-dev-secret')  # prod: from config, never committed
 
 MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
@@ -23,6 +25,13 @@ DESIGN_KEYS = tuple(k for k, _, _ in DESIGNS)
 
 def e(s):
     return html.escape('' if s is None else str(s), quote=True)
+
+
+def props(n):
+    """'1 propiedad' / '25 propiedades'; a plan without a limit reads 'propiedades sin límite'."""
+    if db.is_unlimited(n):
+        return 'propiedades sin límite'
+    return '1 propiedad' if n == 1 else '%d propiedades' % n
 
 
 def money(price, currency):
