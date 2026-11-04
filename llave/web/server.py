@@ -22,7 +22,7 @@ from .. import auth, billing, calculadoras, cards, db, domains, formatos, ghl, g
 from ..feeds import build_feed, mercadolibre, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
-from .common import csrf_ok, to_cents, to_price_cents, to_num, DESIGN_KEYS
+from .common import csrf_ok, photos_ready, to_cents, to_price_cents, to_num, DESIGN_KEYS
 from .styles import BRAND_COLOR
 
 MAX_UPLOAD = 40 * 1024 * 1024
@@ -917,7 +917,7 @@ class Handler(BaseHTTPRequestHandler):
                 touch(con, l['id'])
                 db.audit(con, actor, 'photos_upload', 'listing:%d ok=%d bad=%d' % (l['id'], ok, len(bad)))
                 con.commit()
-                msg = '%d fotos listas.' % ok + ((' %d no se pudieron usar: %s' % (len(bad), bad[0])) if bad else '')
+                msg = photos_ready(ok) + ((' %d no se pudieron usar: %s' % (len(bad), bad[0])) if bad else '')
                 return self.send(panel.listing_form(con, ctx, l, ok=msg))
             mm = re.match(r'^/cierre-(post|historia)\.jpg$', sub)
             if mm and method == 'GET':  # the ¡Vendida! / ¡Rentada! card: only for sold or rented listings, only for the agency's own

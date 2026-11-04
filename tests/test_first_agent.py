@@ -287,6 +287,18 @@ class FirstAgent(unittest.TestCase):
         self.assertEqual(s, 200)
         self.assertNotIn('<b>x</b>', page)
 
+    def test_one_photo_reads_one_foto_lista(self):
+        u = self.agent()
+        s, _, h = self.draft(u, n_photos=1)
+        page = self.web.req(h['Location'], cookie=u['cookie'])[1]
+        self.assertIn('<p class="muted">1 foto lista.</p>', page)
+        self.assertNotIn('1 fotos', page)
+        lid = int(re.search(r'/nueva/(\d+)/2', h['Location']).group(1))
+        body, ct = multipart({'csrf': u['csrf']}, [('fotos', ('a.jpg', jpeg(900, 700)))])
+        s, page, _ = self.web.req('/propiedades/%d/fotos' % lid, body, u['cookie'], {'Content-Type': ct})
+        self.assertEqual(s, 200)
+        self.assertIn('1 foto lista.', page)
+
 
 if __name__ == '__main__':
     unittest.main()

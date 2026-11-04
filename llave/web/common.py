@@ -34,6 +34,11 @@ def props(n):
     return '1 propiedad' if n == 1 else '%d propiedades' % n
 
 
+def photos_ready(n):
+    """'1 foto lista.' / '3 fotos listas.' ('1 fotos listas' read like a bug on the very first listing)."""
+    return '%d foto lista.' % n if n == 1 else '%d fotos listas.' % n
+
+
 def money(price, currency):
     if price is None:
         return 'Precio a consultar'

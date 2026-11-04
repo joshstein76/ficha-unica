@@ -5,7 +5,7 @@ import os
 
 from .. import academia, agent_mail, billing, cards, kit_home, calculadoras, db, domains, formatos, mailer, lia, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
-from .common import (e, money, nice_date, facts_line, label, props, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS, DESIGN_KEYS)
+from .common import (e, money, photos_ready, nice_date, facts_line, label, props, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS, DESIGN_KEYS)
 from .styles import BRAND_COLOR, FONTS, KIT_SHELL, PANEL, PRECONNECT, logo
 
 ICONS = {
@@ -1253,7 +1253,7 @@ def wizard_2(con, ctx, l, error='', posted=None, skipped=0):
     p = posted or {}
     v.update({k: p[k] for k in ('colonia', 'municipio', 'estado', 'currency') if k in p})
     num = lambda k: e(p[k]) if k in p else ('' if v.get(k) is None else ('%g' % v[k]))
-    body = ('%s<h1>Dónde y cuánto</h1><p class="muted">%d fotos listas.</p>%s'
+    body = ('%s<h1>Dónde y cuánto</h1><p class="muted">%s</p>%s'
             '<form class="stack card" method="post" action="/nueva/%d/2">%s'
             '<div class="grid2"><label>Precio<input name="price" inputmode="numeric" value="%s" placeholder="4500000" autofocus></label>'
             '<label>Moneda<select name="currency">%s</select></label>'
@@ -1264,7 +1264,7 @@ def wizard_2(con, ctx, l, error='', posted=None, skipped=0):
             '<label>Recámaras<input name="bedrooms" inputmode="numeric" value="%s"></label>'
             '<label>Baños<input name="bathrooms" inputmode="decimal" value="%s"></label></div>'
             '<button class="btn">Siguiente</button></form>') % (
-        _steps(2), n, notice(error, 'err') + (notice('%d foto%s no se pudo usar: cada una debe ser JPG, PNG o WebP y medir al menos 600 px por lado. '
+        _steps(2), photos_ready(n), notice(error, 'err') + (notice('%d foto%s no se pudo usar: cada una debe ser JPG, PNG o WebP y medir al menos 600 px por lado. '
                                                      'Puedes subir más después, en Propiedades.' % (skipped, '' if skipped == 1 else 's'), 'warn')
                                               if skipped else ''), l['id'], csrf_field(ctx),
         e(p['price']) if 'price' in p else ('' if v.get('price_cents') is None else '%d' % (v['price_cents'] // 100)),
