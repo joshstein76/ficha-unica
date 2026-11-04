@@ -148,7 +148,7 @@ def listing(con, agency, c, shared_split=None, error=''):
     own = c['agency']['id'] == agency['id']
     # The FAQ ("¿Cómo agendo una visita?") names who to write to. On a Bolsa listing that is THIS agency, never the owner. Only while
     # LLAVE_PLANS_V2 is on: today's share pages are left exactly as they are (docs/DECISIONS.md #74).
-    faq_c = c if own or not db.plans_v2() else dict(c, agency=dict(c['agency'], name=agency['name'], whatsapp=agency['whatsapp']))
+    faq_c = c if own else dict(c, agency=dict(c['agency'], name=agency['name'], whatsapp=agency['whatsapp']))  # a shared listing's FAQ gives the sharer's contact, never the owner's
     page_url = '%s/propiedad/%s' % (db.site_url(agency), c['slug'])
     canon = page_url if own else c['url']
     photos = c['photos']
