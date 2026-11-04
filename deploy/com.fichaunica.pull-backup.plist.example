@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Ficha Única: baja la copia de seguridad más nueva a tu Mac todos los días a las 5:00 a.m. (hora de tu Mac).
+  Es un EJEMPLO: no se instala solo. Cambia las rutas CHANGE_ME y sigue los pasos.
+
+  Antes de empezar
+    1. El alias fichaunica-vps debe entrar por ssh sin pedir contraseña (llave sin frase, o la frase en el llavero de macOS).
+       Prueba en Terminal:  ssh -o BatchMode=yes fichaunica-vps true
+    2. El usuario deploy debe poder correr sudo sin contraseña. Prueba:  ssh fichaunica-vps sudo -n true
+    3. Prueba el script a mano una vez:  deploy/pull-backup.sh /Users/CHANGE_ME/FichaUnica-respaldos
+       y revisa la línea nueva en /Users/CHANGE_ME/FichaUnica-respaldos/pull-backup.log
+
+  Instalar (en Terminal, en tu Mac)
+    cp deploy/com.fichaunica.pull-backup.plist.example ~/Library/LaunchAgents/com.fichaunica.pull-backup.plist
+    nano ~/Library/LaunchAgents/com.fichaunica.pull-backup.plist          (cambia las rutas CHANGE_ME)
+    plutil -lint ~/Library/LaunchAgents/com.fichaunica.pull-backup.plist   (debe decir OK)
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.fichaunica.pull-backup.plist
+
+  Correrlo ahora mismo para probar
+    launchctl kickstart -k gui/$(id -u)/com.fichaunica.pull-backup
+    tail -n 3 /Users/CHANGE_ME/FichaUnica-respaldos/pull-backup.log
+
+  Quitarlo
+    launchctl bootout gui/$(id -u)/com.fichaunica.pull-backup
+    rm ~/Library/LaunchAgents/com.fichaunica.pull-backup.plist
+
+  Si tu Mac está dormida a las 5:00, launchd corre el trabajo al despertar. Si estuvo apagada varios días, baja solo la copia
+  más nueva (no las que faltan): el servidor guarda las suyas.
+  Si el log dice Operation not permitted, macOS no deja que un trabajo en segundo plano escriba en Escritorio, Documentos o iCloud
+  Drive: usa otra carpeta destino (por ejemplo dentro de tu carpeta de usuario, fuera de esas tres) o dale Acceso total al disco a /bin/bash.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.fichaunica.pull-backup</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <!-- 1 de 3: ruta completa a deploy/pull-backup.sh en tu copia del repo -->
+    <string>/Users/CHANGE_ME/path/to/repo/deploy/pull-backup.sh</string>
+    <!-- 2 de 3: carpeta destino de las copias (se crea si no existe) -->
+    <string>/Users/CHANGE_ME/FichaUnica-respaldos</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>5</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <!-- 3 de 3: lo que el script imprime (el log de verdad, una línea por corrida, queda en la carpeta destino) -->
+  <key>StandardOutPath</key>
+  <string>/Users/CHANGE_ME/Library/Logs/fichaunica-pull-backup.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/CHANGE_ME/Library/Logs/fichaunica-pull-backup.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>
