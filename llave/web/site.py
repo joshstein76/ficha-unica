@@ -55,16 +55,22 @@ def _page(agency, title, body, head_extra='', canonical=None, description=''):
             '<header class="sh"><div class="in"><a class="brand" href="/">%s</a>%s</div></header>'
             '%s'
             '<footer class="sf"><div class="in"><span>© %s · %s</span><span><a href="/aviso-de-privacidad">Aviso de privacidad</a></span>'
-            '<span class="muted">%sSitio creado con <a href="%s" rel="nofollow">Ficha Única</a></span></div></footer></body></html>') % (
+            '<span class="muted">%sSitio creado con <a href="%s" rel="nofollow">Ficha Única</a> · <a href="%s" rel="nofollow">Crea el tuyo gratis</a></span></div></footer></body></html>') % (
         '<meta name="color-scheme" content="light">' if loteria else '', e(title), e(description[:160]),
         ('<link rel="canonical" href="%s">' % e(canonical)) if canonical else '',
         PRECONNECT, site_fonts_url(a['design']), site_css(a['design'], a['accent']), head_extra, brand,
         ('<a class="wa" href="%s" rel="nofollow" aria-label="WhatsApp de %s">%s WhatsApp</a>' % (e(wa), e(a['name']), WA_ICON)) if wa else '',
-        body, e(a['name']), e(a['city'] or 'México'), COIN_SVG if loteria else '', e(brand_url('sitio-' + a['slug'])))
+        body, e(a['name']), e(a['city'] or 'México'), COIN_SVG if loteria else '', e(brand_url('sitio-' + a['slug'])), e(signup_url(a['slug'])))
 
 
 def brand_url(source):
     return '%s/?source=%s' % (db.origin(), source)
+
+
+def signup_url(slug):
+    """Footer 'Crea el tuyo gratis': the app's sign-up with this agency as referrer (the same ?ref= the panel's invite link uses;
+    server.signup stores it in agencies.referred_by)."""
+    return '%s/registro?ref=%s' % (db.origin('app'), slug)
 
 
 def _card(c):
