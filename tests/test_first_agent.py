@@ -341,6 +341,14 @@ class FirstAgent(unittest.TestCase):
         page = self.web.req('/propiedad/' + slug, host=self.site_host(u))[1]
         self.assertIn('3 fotos · desliza →', page)
 
+    def test_mi_sitio_has_no_tab_that_only_says_coming_soon(self):
+        u = self.agent()
+        page = self.web.req('/sitio', cookie=u['cookie'])[1]
+        self.assertIn('href="/perfil">Mi perfil</a>', page)
+        self.assertIn('href="/plan">Tu plan</a>', page)
+        self.assertNotIn('href="/equipo"', page)
+        self.assertEqual(self.web.req('/equipo', cookie=u['cookie'])[0], 200)   # the page itself is untouched
+
 
 if __name__ == '__main__':
     unittest.main()

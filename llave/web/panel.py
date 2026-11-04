@@ -924,7 +924,7 @@ def site_settings(con, ctx, ok='', error='', warn=''):
                       % (k, ' checked' if cur_design == k else '', n, d) for k, n, d in DESIGNS)
     domain = domain_card(ctx)
     body = ('%s%s%s<div class="row" style="justify-content:space-between"><h1>Mi sitio</h1>'
-            '<span class="row"><a class="btn ghost small" href="/perfil">Mi perfil</a><a class="btn ghost small" href="/equipo">Equipo</a>'
+            '<span class="row"><a class="btn ghost small" href="/perfil">Mi perfil</a>%s'
             '<a class="btn ghost small" href="/plan">Tu plan</a>'
             '<a class="btn ghost small" href="%s" target="_blank" rel="noopener">Ver sitio ↗</a></span></div>'
             '<form class="stack" method="post" action="/sitio" enctype="multipart/form-data">%s'
@@ -943,7 +943,9 @@ def site_settings(con, ctx, ok='', error='', warn=''):
             '<label>Cuando no sabemos su nombre<textarea name="first_reply_noname" rows="3" placeholder="%s">%s</textarea></label>'
             '<p class="small"><b>Así se verá:</b> %s</p></section>'
             '<button class="btn">Guardar cambios</button></form>%s') % (
-        notice(ok), notice(warn, 'warn'), notice(error, 'err'), e(db.site_url(a)), csrf_field(ctx), designs, e(a['accent']), e(a['name']),
+        notice(ok), notice(warn, 'warn'), notice(error, 'err'),
+        '<a class="btn ghost small" href="/equipo">Equipo</a>' if db.plan_has(a, 'team') else '',  # no plan has teams yet: a tab that says 'llegan pronto' reads unfinished
+        e(db.site_url(a)), csrf_field(ctx), designs, e(a['accent']), e(a['name']),
         e(a['tagline']), e(a['about']), e(a['whatsapp']), e(a['email']), e(a['city']),
         e(replies.DEFAULT_FIRST_REPLY), e(a['first_reply']), e(replies.DEFAULT_FIRST_REPLY_NONAME), e(a['first_reply_noname']),
         e(replies.render(a, 'Ana Pérez', 'Departamento con terraza en la Roma Norte', ctx['user']['name'])), domain)
