@@ -38,6 +38,7 @@ Owner: Ciao Bella Marketing · Code: this repo · Deploy kit: `deploy/` (dry-run
 - `/healthz` (DB ok, free disk, hours since the last backup). Point an uptime monitor at `https://app.fichaunica.mx/healthz`.
 - Errors: rotating `errors.log`, plus at most one alert per error type every 15 min, with secrets/phones/emails redacted.
 - Admin view `/admin` (role admin: `python3 tools/make_admin.py <email>`): clients waiting >5 min across all agencies.
+- Funnel: `python3 tools/funnel.py` on the server (read-only, counts only) shows how many agencies reached each step. A daily `--json` log line is in `deploy/crontab.example`, commented out.
 
 ## Restore (drill once before the pilot)
 `python3 tools/backup.py --verify-latest`, then stop the service, gunzip the chosen `llave-*.db.gz` over `$LLAVE_DB`, untar the media archives in order, and start the service. Full steps: `llave.backup.restore_instructions()`.
