@@ -935,7 +935,7 @@ def site_settings(con, ctx, ok='', error='', warn=''):
             '<label>Sobre nosotros<textarea name="about">%s</textarea></label>'
             '<label>WhatsApp<input name="whatsapp" value="%s" inputmode="tel" autocomplete="tel" required></label>'
             '<label>Correo de contacto<input name="email" type="email" value="%s"></label>'
-            '<label>Ciudad<input name="city" value="%s"></label>'
+            '<label>Ciudad<input name="city" value="%s" placeholder="Ej. Guadalajara"></label>'
             '<label>Logo (PNG o JPG)<input type="file" name="logo" accept="image/png,image/jpeg,image/webp"></label></section>'
             '<section class="card"><h2>Primer mensaje a tus clientes</h2><p class="small muted">Es lo primero que recibe por WhatsApp '
             'quien te escribe. Puedes usar {nombre}, {propiedad}, {asesor} e {inmobiliaria}. Déjalo vacío para usar el mensaje recomendado.</p>'

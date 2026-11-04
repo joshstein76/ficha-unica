@@ -314,6 +314,21 @@ class FirstAgent(unittest.TestCase):
         self.assertIn('5 publicaciones listas para Instagram y Facebook.', page)
         self.assertNotIn('Viene en el plan', page)
 
+    def test_new_agent_site_does_not_claim_a_city_the_agent_never_chose(self):
+        u = self.agent(agency='Casa Tapatía', email='tapatia@ejemplo.test')
+        self.assertEqual(self.web.one('SELECT city FROM agencies WHERE id=?', u['aid'])['city'], '')
+        self.publish(u)
+        page = self.web.req('/', host=self.site_host(u))[1]
+        self.assertIn('© Casa Tapatía · México', page)
+        self.assertNotIn('Ciudad de México</', page.split('<footer')[1])
+        self.assertIn('"areaServed": "México"', page)
+        self.assertIn('placeholder="Ej. Guadalajara"', self.web.req('/sitio', cookie=u['cookie'])[1])
+        con = db.connect()
+        con.execute("UPDATE agencies SET city='Guadalajara' WHERE id=?", (u['aid'],))
+        con.commit()
+        con.close()
+        self.assertIn('© Casa Tapatía · Guadalajara', self.web.req('/', host=self.site_host(u))[1])
+
 
 if __name__ == '__main__':
     unittest.main()
