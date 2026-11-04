@@ -404,17 +404,39 @@ def share_box(con, ctx, v):
     return ''
 
 
-def listing_form(con, ctx, l=None, error='', ok='', suggestion=None):
+_POSTED_TEXT = ('title', 'description', 'operation', 'property_type', 'status', 'currency', 'price_date', 'm2_built', 'm2_land',
+                'bedrooms', 'bathrooms', 'parking', 'street', 'ext_number', 'colonia', 'municipio', 'estado', 'cp',
+                'share_split_pct', 'commission_pct', 'internal_note')
+
+
+def _posted_over(v, f):
+    """The full form shown again after an error with what the agent typed (nothing is lost on a phone). Display only, never saved."""
+    v = dict(v)
+    for k in _POSTED_TEXT:
+        if k in f:
+            v[k] = f[k]
+    v['_price'], v['_maint'], v['_maps'] = f.get('price', ''), f.get('maintenance', ''), f.get('maps', '')
+    v['amenities'] = json.dumps([x.strip() for x in (f.get('amenities') or '').split(',') if x.strip()], ensure_ascii=False)
+    for k in ('furnished', 'pets', 'show_exact_location', 'share_in_bolsa', 'rentapoliza_offer'):
+        v[k] = 1 if f.get(k) else 0
+    return v
+
+
+def listing_form(con, ctx, l=None, error='', ok='', suggestion=None, posted=None):
     v = dict(l) if l else {}
     if suggestion:
         v['title'], v['description'] = suggestion['title'], suggestion['description']
+    if posted:
+        v = _posted_over(v, posted)
     lid = v.get('id')
-    price = '' if v.get('price_cents') is None else '%d' % (v['price_cents'] // 100)
-    maint = '' if v.get('maintenance_cents') is None else '%d' % (v['maintenance_cents'] // 100)
+    price = v['_price'] if '_price' in v else ('' if v.get('price_cents') is None else '%d' % (v['price_cents'] // 100))
+    maint = v['_maint'] if '_maint' in v else ('' if v.get('maintenance_cents') is None else '%d' % (v['maintenance_cents'] // 100))
     am = ', '.join(json.loads(v.get('amenities') or '[]'))
 
     def num(k):
         x = v.get(k)
+        if isinstance(x, str):
+            return e(x)
         return '' if x is None else ('%g' % x)
     photos_html = ''
     problems = []
@@ -488,7 +510,7 @@ def listing_form(con, ctx, l=None, error='', ok='', suggestion=None):
         ' checked' if v.get('furnished') else '', ' checked' if v.get('pets') else '',
         e(v.get('street')), e(v.get('ext_number')), e(v.get('colonia')), e(v.get('municipio')),
         e(v.get('estado') or ('Ciudad de México' if not lid else '')), e(v.get('cp')),
-        ('%s, %s' % (v['lat'], v['lng'])) if v.get('lat') is not None else '',
+        e(v['_maps']) if '_maps' in v else (('%s, %s' % (v['lat'], v['lng'])) if v.get('lat') is not None else ''),
         ' checked' if v.get('show_exact_location') else '',
         ' checked' if v.get('share_in_bolsa') else '',
         '' if db.plan_has(ctx['agency'], 'bolsa') else ' <a class="small" href="/plan">(plan Pro)</a>',
@@ -1209,10 +1231,13 @@ def wizard_1(ctx, welcome=False, error=''):
     return layout('Nueva propiedad', body, ctx, 'propiedades')
 
 
-def wizard_2(con, ctx, l, error=''):
+def wizard_2(con, ctx, l, error='', posted=None):
+    """`posted` = what the agent typed when the last try failed: shown again, so one wrong number never wipes the rest."""
     n = con.execute('SELECT COUNT(*) FROM photos WHERE listing_id=?', (l['id'],)).fetchone()[0]
     v = dict(l)
-    num = lambda k: '' if v.get(k) is None else ('%g' % v[k])
+    p = posted or {}
+    v.update({k: p[k] for k in ('colonia', 'municipio', 'estado', 'currency') if k in p})
+    num = lambda k: e(p[k]) if k in p else ('' if v.get(k) is None else ('%g' % v[k]))
     body = ('%s<h1>Dónde y cuánto</h1><p class="muted">%d fotos listas.</p>%s'
             '<form class="stack card" method="post" action="/nueva/%d/2">%s'
             '<div class="grid2"><label>Precio<input name="price" inputmode="numeric" value="%s" placeholder="4500000" autofocus></label>'
@@ -1225,7 +1250,7 @@ def wizard_2(con, ctx, l, error=''):
             '<label>Baños<input name="bathrooms" inputmode="decimal" value="%s"></label></div>'
             '<button class="btn">Siguiente</button></form>') % (
         _steps(2), n, notice(error, 'err'), l['id'], csrf_field(ctx),
-        '' if v.get('price_cents') is None else '%d' % (v['price_cents'] // 100),
+        e(p['price']) if 'price' in p else ('' if v.get('price_cents') is None else '%d' % (v['price_cents'] // 100)),
         _opt([('MXN', 'MXN (pesos)'), ('USD', 'USD (dólares)')], v.get('currency') or 'MXN'),
         e(v.get('colonia')), e(v.get('municipio')), e(v.get('estado') or 'Ciudad de México'),
         num('m2_built'), num('bedrooms'), num('bathrooms'))

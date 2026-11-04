@@ -741,7 +741,7 @@ class Handler(BaseHTTPRequestHandler):
                     try:
                         wizard_save_2(con, l, f)
                     except ValueError as ex:
-                        return self.send(panel.wizard_2(con, ctx, l, str(ex)), 400)
+                        return self.send(panel.wizard_2(con, ctx, l, str(ex), f), 400)
                     return self.redirect('/nueva/%d/3' % l['id'])
                 return self.send(panel.wizard_2(con, ctx, l))
             if step == '3':
@@ -895,7 +895,7 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     lid = save_listing(con, a, uid, f)
                 except ValueError as ex:
-                    return self.send(panel.listing_form(con, ctx, None, str(ex)), 400)
+                    return self.send(panel.listing_form(con, ctx, None, str(ex), posted=f), 400)
                 return self.redirect('/propiedades/%d?ok=creada' % lid)
             if over_limit(con, a):
                 return self.send(panel.listings(con, ctx, panel.notice(limit_message(con, a), 'warn')))
@@ -962,7 +962,7 @@ class Handler(BaseHTTPRequestHandler):
                     kept['status'] = l['status']
                     return self.send(panel.listing_form(con, ctx, kept, str(ex)), 400)
                 except ValueError as ex:
-                    return self.send(panel.listing_form(con, ctx, l, str(ex)), 400)
+                    return self.send(panel.listing_form(con, ctx, l, str(ex), posted=f), 400)
                 l = con.execute('SELECT * FROM listings WHERE id=?', (l['id'],)).fetchone()
                 return self.send(panel.listing_form(con, ctx, l, ok='Guardado. Tu sitio y tus feeds ya tienen el cambio.'))
             ok = 'Propiedad creada. Ahora sube las fotos.' if query.get('ok') == 'creada' else ''

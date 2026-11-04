@@ -104,6 +104,47 @@ class FirstAgent(unittest.TestCase):
         s, _, _ = self.web.req('/propiedades/nueva', form, u['cookie'])
         self.assertEqual(s, 303)
 
+    # ---- one wrong number must not wipe the rest ----
+    def test_wizard_step_2_shows_what_was_typed_again_after_a_bad_price(self):
+        u = self.agent()
+        lid = self.draft_id(u)
+        s, page, _ = self.step2(u, lid, price='4.5 millones', colonia='Narvarte <Poniente>', m2_built='85', bedrooms='3', bathrooms='2')
+        self.assertEqual(s, 400)
+        self.assertIn('El precio debe ser un número', page)
+        self.assertIn('value="4.5 millones"', page)
+        self.assertIn('value="Narvarte &lt;Poniente&gt;"', page)
+        self.assertIn('name="municipio" value="Cuauhtémoc"', page)
+        self.assertIn('name="m2_built" inputmode="decimal" value="85"', page)
+        self.assertIn('name="bedrooms" inputmode="numeric" value="3"', page)
+        self.assertIn('name="bathrooms" inputmode="decimal" value="2"', page)
+
+    def test_full_form_shows_what_was_typed_again_after_an_error(self):
+        u = self.agent()
+        form = {'csrf': u['csrf'], 'title': 'Casa en Coyoacán con jardín', 'operation': 'renta', 'property_type': 'casa', 'status': 'activa',
+                'price': 'ocho mil', 'currency': 'USD', 'colonia': 'Del Carmen', 'municipio': 'Coyoacán', 'estado': 'Ciudad de México',
+                'bedrooms': '4', 'amenities': 'Jardín, Alberca', 'pets': '1', 'description': 'Con jardín grande.', 'maps': 'https://maps.example/x'}
+        s, page, _ = self.web.req('/propiedades/nueva', form, u['cookie'])
+        self.assertEqual(s, 400)
+        for frag in ('value="Casa en Coyoacán con jardín"', 'value="ocho mil"', 'value="Del Carmen"', 'name="bedrooms" value="4"',
+                     'value="Jardín, Alberca"', 'Con jardín grande.</textarea>', 'value="https://maps.example/x"'):
+            self.assertIn(frag, page, frag)
+        self.assertRegex(page, r'<option value="renta" selected>')
+        self.assertRegex(page, r'<option value="USD" selected>')
+        self.assertRegex(page, r'name="pets" value="1" checked')
+        self.assertNotRegex(page, r'name="furnished" value="1" checked')
+        self.assertEqual(self.web.one('SELECT COUNT(*) AS n FROM listings WHERE agency_id=?', u['aid'])['n'], 0)
+
+    def test_editing_a_saved_listing_with_a_bad_price_keeps_the_edit(self):
+        u = self.agent()
+        lid = self.publish(u)
+        form = {'csrf': u['csrf'], 'title': 'Título nuevo de la propiedad', 'operation': 'venta', 'property_type': 'departamento',
+                'status': 'activa', 'price': '-1', 'currency': 'MXN', 'colonia': 'Condesa', 'municipio': 'Cuauhtémoc', 'estado': 'Ciudad de México'}
+        s, page, _ = self.web.req('/propiedades/%d' % lid, form, u['cookie'])
+        self.assertEqual(s, 400)
+        self.assertIn('value="Título nuevo de la propiedad"', page)
+        self.assertIn('value="Condesa"', page)
+        self.assertEqual(self.web.one('SELECT colonia FROM listings WHERE id=?', lid)['colonia'], 'Roma Norte')  # nothing was saved
+
 
 if __name__ == '__main__':
     unittest.main()
