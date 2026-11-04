@@ -244,9 +244,9 @@ class FirstAgent(unittest.TestCase):
                                              'message': 'Hola, me interesa.'}, host=self.site_host(u))
         self.assertEqual(s, 303)
         s, page, _ = self.web.req('/clientes', cookie=u['cookie'])
-        self.assertIn('<a href="tel:+525500000002">+52 55 0000 0002</a>', page)
+        self.assertIn('<a href="tel:+525500000002" style="white-space:nowrap">+52 55 0000 0002</a>', page)
         s, page, _ = self.web.req('/', cookie=u['cookie'])
-        self.assertIn('<a href="tel:+525500000002">+52 55 0000 0002</a>', page)
+        self.assertIn('<a href="tel:+525500000002" style="white-space:nowrap">+52 55 0000 0002</a>', page)
 
     # ---- dates ----
     def test_price_date_is_the_mexico_city_day_not_the_server_clock_day(self):
