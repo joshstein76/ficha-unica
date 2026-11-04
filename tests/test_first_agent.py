@@ -359,6 +359,24 @@ class FirstAgent(unittest.TestCase):
         self.assertEqual(str(cm.exception), 'Las fotos pesan demasiado juntas (máximo 40 MB por envío). '
                                             'Elige menos fotos a la vez; el resto las agregas después en Propiedades.')
 
+    def test_lead_date_is_the_mexico_city_day(self):
+        from llave.web.common import nice_local_date
+        self.assertEqual(nice_local_date('2026-11-04 03:30:00'), '3 nov 2026')   # 9:30 pm on the 3rd in Mexico City
+        self.assertEqual(nice_local_date('2026-11-04 06:00:00'), '4 nov 2026')
+        self.assertEqual(nice_local_date('2026-11-01 00:10:00'), '31 oct 2026')   # crosses the month
+        self.assertEqual(nice_local_date('2026-01-01 02:00:00'), '31 dic 2025')   # and the year
+        self.assertEqual(nice_local_date(''), '')
+        self.assertEqual(nice_local_date('no es fecha'), 'no es fecha')
+        u = self.agent(agency='Casa Noche Dos')
+        lid = self.publish(u)
+        self.web.req('/contacto', {'listing': lid, 'name': 'Carlos Cliente', 'phone': '55 0000 0002', 'consent': '1', 'message': 'Hola'},
+                     host=self.site_host(u))
+        con = db.connect()
+        con.execute("UPDATE leads SET created_at='2026-11-04 03:30:00' WHERE agency_id=?", (u['aid'],))
+        con.commit()
+        con.close()
+        self.assertIn('3 nov 2026 · sitio', self.web.req('/clientes', cookie=u['cookie'])[1])
+
 
 if __name__ == '__main__':
     unittest.main()

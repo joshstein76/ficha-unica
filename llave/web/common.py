@@ -56,6 +56,16 @@ def nice_date(iso):
     return '%d %s %d' % (d.day, MONTHS[d.month - 1], d.year)
 
 
+def nice_local_date(utc_stamp):
+    """'2026-11-04 03:30:00' (the database clock is UTC) -> '3 nov 2026', the day it was in Mexico City (UTC-6). An evening lead
+    would otherwise carry tomorrow's date."""
+    try:
+        t = datetime.datetime.strptime(str(utc_stamp)[:19], '%Y-%m-%d %H:%M:%S') - datetime.timedelta(hours=6)
+    except ValueError:
+        return nice_date(utc_stamp)
+    return nice_date(t.date().isoformat())
+
+
 def label(pairs, key):
     return dict((p[0], p[1]) for p in pairs).get(key, key or '')
 
