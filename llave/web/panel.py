@@ -278,6 +278,14 @@ def kit_page(con, ctx, steps, welcome=False):
         csrf_field(ctx), kit_home.KIT_VERSION, kit_home.js(json.loads(brand)), kit_home.js(data))
 
 
+def first_step(n_properties):
+    """A new agent's Inicio opens on zeros and ten tiles; the one thing to do next goes first, as a button."""
+    if n_properties:
+        return ''
+    return ('<section class="card"><h2>Sube tu primera propiedad</h2><p class="muted" style="margin:0">Tu sitio ya existe, pero todavía no tiene '
+            'propiedades. Son 3 pasos y los haces desde tu celular.</p><a class="btn" href="/nueva">Empezar</a></section>')
+
+
 def dashboard(con, ctx, welcome=False):
     a = ctx['agency']
     n_list = con.execute("SELECT COUNT(*) FROM listings WHERE agency_id=? AND status IN ('activa','apartada')", (a['id'],)).fetchone()[0]
@@ -306,7 +314,7 @@ def dashboard(con, ctx, welcome=False):
                                '<a href="/sitio">Arréglalo aquí</a></div>' % e(a['custom_domain'])) if domains.lost_notice(a) else '') + (('<div class="notice err">⏰ %d cliente%s sin respuesta hace más de 5 minutos. <a href="/clientes?estado=nuevo">Respóndeles ya</a></div>'
              % (n_late, '' if n_late == 1 else 's')) if n_late else '') + (('<div class="notice warn">%d precio%s sin confirmar en 30 días. <a href="/precios">Confírmalos con un toque</a></div>'
              % (n_stale, '' if n_stale == 1 else 's')) if n_stale else '') + (('<div class="notice warn">📅 %d cliente%s para dar seguimiento hoy. <a href="/clientes?estado=hoy">Verlos</a></div>'
-             % (n_fu, '' if n_fu == 1 else 's')) if n_fu else '') + ('%s<div><h1>%s, %s</h1><p class="muted">Tu sitio: <a href="%s" target="_blank" rel="noopener">%s</a></p></div>'
+             % (n_fu, '' if n_fu == 1 else 's')) if n_fu else '') + ('%s<div><h1>%s, %s</h1><p class="muted">Tu sitio: <a href="%s" target="_blank" rel="noopener">%s</a></p></div>%s'
             '<div class="stats"><div class="stat"><b>%d</b><small>Propiedades publicadas</small></div>'
             '<a class="stat" href="/plan" style="text-decoration:none;color:inherit"><b>%s</b><small>%s</small></a>'
             '<div class="stat"><b>%d</b><small>Clientes nuevos</small></div>'
@@ -326,7 +334,7 @@ def dashboard(con, ctx, welcome=False):
             '<span class="small muted">Clases cortas para vender y rentar más.</span></a></section>') % (
         notice('¡Listo! Tu sitio ya existe. Ahora sube tu primera propiedad.') if welcome else '',
         greeting(), e(a['name'] if ctx['user']['name'].split(' ')[0].lower() in replies.GENERIC_ACCOUNT else ctx['user']['name'].split(' ')[0]),
-        e(db.site_url(a)), e(db.site_url(a).split('//')[1]),
+        e(db.site_url(a)), e(db.site_url(a).split('//')[1]), first_step(n_all),
         n_list, ('%d' % n_all) if db.is_unlimited(limit) else ('%d/%d' % (n_all, limit)),
         ('Usadas, sin límite, en plan %s · cambiar' if db.is_unlimited(limit) else 'Usadas en plan %s · cambiar') % e(a['plan']), n_new, n_feed,
         home_tiles(), novedades_card(ctx),

@@ -181,6 +181,17 @@ class FirstAgent(unittest.TestCase):
         self.assertIn('.row.step{flex-wrap:nowrap', styles.PANEL)
         self.assertIn('.row.step .pill{flex:none}', styles.PANEL)
 
+    def test_inicio_of_an_agent_with_no_properties_leads_with_the_next_step(self):
+        u = self.agent()
+        s, page, _ = self.web.req('/', cookie=u['cookie'])
+        self.assertEqual(s, 200)
+        self.assertIn('<h2>Sube tu primera propiedad</h2>', page)
+        self.assertLess(page.index('Sube tu primera propiedad'), page.index('class="stats"'))
+        self.assertIn('<a class="btn" href="/nueva">Empezar</a>', page)
+        self.publish(u)
+        s, page, _ = self.web.req('/', cookie=u['cookie'])
+        self.assertNotIn('<h2>Sube tu primera propiedad</h2>', page)
+
 
 if __name__ == '__main__':
     unittest.main()
