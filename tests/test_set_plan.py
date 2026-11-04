@@ -5,6 +5,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from contextlib import redirect_stdout
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -61,6 +62,9 @@ class SetPlan(unittest.TestCase):
         from llave.web import panel
         self.run_tool('piloto-uno', 'pro', '--reason', 'piloto', '--until', '2026-11-30')
         a = self.agency()
+        for patch in (mock.patch.object(panel.billing, 'enabled', lambda: True), mock.patch.object(panel.billing, 'test_lock_active', lambda: False)):
+            patch.start()
+            self.addCleanup(patch.stop)
         self.assertEqual(panel.pilot_notice(a, datetime.date(2026, 11, 22)), '')          # 8 days left
         self.assertIn('en 7 días', panel.pilot_notice(a, datetime.date(2026, 11, 23)))
         self.assertIn('mañana', panel.pilot_notice(a, datetime.date(2026, 11, 29)))

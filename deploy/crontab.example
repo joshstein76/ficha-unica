@@ -9,6 +9,8 @@ SHELL=/bin/bash
 * * * * * set -a; . /srv/fichaunica-data/app.env; set +a; cd /srv/fichaunica/current && python3 tools/ghl_sync_run.py >> /srv/fichaunica-data/logs/ghl_sync.log 2>&1
 # buyer alerts: a saved search matches a public listing -> the AGENT gets an email (and a dry-run row) with a ready WhatsApp to forward; hourly at :20
 20 * * * * set -a; . /srv/fichaunica-data/app.env; set +a; cd /srv/fichaunica/current && python3 tools/buyer_alerts_run.py >> /srv/fichaunica-data/logs/buyer_alerts.log 2>&1
+# a free pilot ended: the agency goes to Gratis, nothing deleted, nothing sent; waits while paid plans are closed. Daily 12:10 UTC (6:10 a.m. CDMX)
+10 12 * * * set -a; . /srv/fichaunica-data/app.env; set +a; cd /srv/fichaunica/current && python3 tools/pilot_end_run.py >> /srv/fichaunica-data/logs/pilot_end.log 2>&1
 # weekly price check: Mondays 15:00 UTC (9 a.m. CDMX)
 0 15 * * 1 set -a; . /srv/fichaunica-data/app.env; set +a; cd /srv/fichaunica/current && python3 tools/price_check_weekly.py >> /srv/fichaunica-data/logs/price_check.log 2>&1
 # own domains (Pro): DNS check every 10 minutes. Verifies pending domains, takes a verified one off after 3 failed checks in a row (30 min), warms the certificate. Sends nothing. Needs LLAVE_PUBLIC_IP in app.env.

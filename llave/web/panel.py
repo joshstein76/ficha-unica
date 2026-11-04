@@ -194,6 +194,8 @@ def pilot_notice(agency, today=None):
     left = db.plan_days_left(agency, today)
     if left is None or left > PILOT_WARN_DAYS:
         return ''
+    if not billing.enabled() or billing.test_lock_active():  # nobody can pay yet: tools/pilot_end_run.py waits too, so don't push them to a closed page
+        return '<div class="notice">Tu piloto gratis sigue: mientras abrimos los pagos, sigues con todo.</div>' if left < 0 else ''
     if left < 0:
         return '<div class="notice warn">Tu piloto terminó. <a href="/plan">Elige tu plan</a> para seguir con todo.</div>'
     when = 'hoy' if left == 0 else ('mañana' if left == 1 else 'en %d días' % left)
