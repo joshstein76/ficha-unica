@@ -262,6 +262,31 @@ class FirstAgent(unittest.TestCase):
             self.assertEqual(self.web.req('/propiedades/%d' % lid, form, u['cookie'])[0], 200)
             self.assertEqual(self.web.one('SELECT price_date FROM listings WHERE id=?', lid)['price_date'], '2026-11-03')
 
+    # ---- photos ----
+    def test_too_small_photo_says_its_size_and_what_to_do(self):
+        u = self.agent()
+        s, page, _ = self.draft(u, files=[('fotos', ('chica.jpg', jpeg(300, 200)))])
+        self.assertEqual(s, 400)
+        self.assertIn('La foto es muy pequeña (300 × 200 px): cada lado debe medir al menos 600 px. Sube la original del celular.', page)
+
+    def test_wizard_says_when_only_some_of_the_photos_were_used(self):
+        u = self.agent()
+        s, _, h = self.draft(u, files=[('fotos', ('ok.jpg', jpeg())), ('fotos', ('chica.jpg', jpeg(300, 200))), ('fotos', ('ok2.jpg', jpeg(1000, 700)))])
+        self.assertEqual(s, 303)
+        self.assertTrue(h['Location'].endswith('/2?mal=1'), h['Location'])
+        s, page, _ = self.web.req(h['Location'], cookie=u['cookie'])
+        self.assertIn('2 fotos listas.', page)
+        self.assertIn('1 foto no se pudo usar: cada una debe ser JPG, PNG o WebP y medir al menos 600 px por lado.', page)
+        # all photos fine: no warning and a clean redirect
+        u2 = self.agent()
+        s, _, h = self.draft(u2, n_photos=2)
+        self.assertTrue(h['Location'].endswith('/2'), h['Location'])
+        self.assertNotIn('no se pudo usar', self.web.req(h['Location'], cookie=u2['cookie'])[1])
+        # a hand-made query cannot inject markup or crash
+        s, page, _ = self.web.req(h['Location'] + '?mal=<b>x</b>', cookie=u2['cookie'])
+        self.assertEqual(s, 200)
+        self.assertNotIn('<b>x</b>', page)
+
 
 if __name__ == '__main__':
     unittest.main()

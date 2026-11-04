@@ -51,7 +51,7 @@ def ingest(con, listing_id, data, alt=None, watermark_text=None):
     img = ImageOps.exif_transpose(img).convert('RGB')
     w, h = img.size
     if min(w, h) < MIN_SIDE:
-        raise ValueError('La foto es muy pequeña: mínimo 600 px')
+        raise ValueError('La foto es muy pequeña (%d × %d px): cada lado debe medir al menos %d px. Sube la original del celular.' % (w, h, MIN_SIDE))
     ratio = w / float(h)
     if ratio > MAX_RATIO or ratio < MIN_RATIO:
         raise ValueError('Parece un banner o logo, no una foto de la propiedad')

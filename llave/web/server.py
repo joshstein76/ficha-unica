@@ -729,7 +729,7 @@ class Handler(BaseHTTPRequestHandler):
                 con.execute('DELETE FROM listings WHERE id=?', (lid,))
                 con.commit()
                 return self.send(panel.wizard_1(ctx, error='Ninguna foto sirvió: %s' % (bad[0] if bad else '')), 400)
-            return self.redirect('/nueva/%d/2' % lid)
+            return self.redirect('/nueva/%d/2%s' % (lid, ('?mal=%d' % len(bad)) if bad else ''))  # some were dropped: say so on the next page
         m = re.match(r'^/nueva/(\d+)/(2|3|lista)$', path)
         if m:
             l = con.execute('SELECT * FROM listings WHERE id=? AND agency_id=?', (int(m.group(1)), a['id'])).fetchone()
@@ -743,7 +743,7 @@ class Handler(BaseHTTPRequestHandler):
                     except ValueError as ex:
                         return self.send(panel.wizard_2(con, ctx, l, str(ex), f), 400)
                     return self.redirect('/nueva/%d/3' % l['id'])
-                return self.send(panel.wizard_2(con, ctx, l))
+                return self.send(panel.wizard_2(con, ctx, l, skipped=int(query.get('mal') or 0) if (query.get('mal') or '').isdigit() else 0))
             if step == '3':
                 if method == 'POST':
                     title = (f.get('title') or '').strip()

@@ -1246,7 +1246,7 @@ def wizard_1(ctx, welcome=False, error=''):
     return layout('Nueva propiedad', body, ctx, 'propiedades')
 
 
-def wizard_2(con, ctx, l, error='', posted=None):
+def wizard_2(con, ctx, l, error='', posted=None, skipped=0):
     """`posted` = what the agent typed when the last try failed: shown again, so one wrong number never wipes the rest."""
     n = con.execute('SELECT COUNT(*) FROM photos WHERE listing_id=?', (l['id'],)).fetchone()[0]
     v = dict(l)
@@ -1264,7 +1264,9 @@ def wizard_2(con, ctx, l, error='', posted=None):
             '<label>Recámaras<input name="bedrooms" inputmode="numeric" value="%s"></label>'
             '<label>Baños<input name="bathrooms" inputmode="decimal" value="%s"></label></div>'
             '<button class="btn">Siguiente</button></form>') % (
-        _steps(2), n, notice(error, 'err'), l['id'], csrf_field(ctx),
+        _steps(2), n, notice(error, 'err') + (notice('%d foto%s no se pudo usar: cada una debe ser JPG, PNG o WebP y medir al menos 600 px por lado. '
+                                                     'Puedes subir más después, en Propiedades.' % (skipped, '' if skipped == 1 else 's'), 'warn')
+                                              if skipped else ''), l['id'], csrf_field(ctx),
         e(p['price']) if 'price' in p else ('' if v.get('price_cents') is None else '%d' % (v['price_cents'] // 100)),
         _opt([('MXN', 'MXN (pesos)'), ('USD', 'USD (dólares)')], v.get('currency') or 'MXN'),
         e(v.get('colonia')), e(v.get('municipio')), e(v.get('estado') or 'Ciudad de México'),
