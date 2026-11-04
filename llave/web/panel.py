@@ -324,11 +324,11 @@ def dashboard(con, ctx, welcome=False):
             '<section class="card"><div class="row" style="justify-content:space-between"><h2>Últimos clientes</h2>'
             '<a href="/clientes">Ver todos</a></div>%s</section>'
             '<a class="card" href="/que-publicar" style="text-decoration:none;color:inherit"><h2>Qué publicar esta semana</h2>'
-            '<span class="small muted">5 publicaciones listas para Instagram y Facebook.</span></a>'
+            '<span class="small muted">%s</span></a>'
             '<a class="card" href="/invitar" style="text-decoration:none;color:inherit"><h2>Invita a un colega%s</h2>'
             '<span class="small muted">%s</span></a>'
             '<section class="grid2"><a class="card" href="/estadisticas" style="text-decoration:none;color:inherit"><h2>Estadísticas</h2>'
-            '<span class="small muted">Visitas, clientes y tu tiempo de respuesta.</span></a>'
+            '<span class="small muted">%s</span></a>'
             '<a class="card" href="/servicios" style="text-decoration:none;color:inherit"><h2>Servicios</h2>'
             '<span class="small muted">Póliza para rentas, clientes de lujo, Miami y marketing con IA.</span></a>'
             '<a class="card" href="/academia" style="text-decoration:none;color:inherit"><h2>Academia</h2>'
@@ -341,8 +341,10 @@ def dashboard(con, ctx, welcome=False):
         home_tiles(), novedades_card(ctx),
         first_week(done, len(steps), steps) if done < len(steps) else '<div class="notice">✓ Tu primera semana está completa. <a href="/nueva">Sube otra propiedad</a></div>',
         _leads_list(con, leads) if leads else '<p class="muted">Aún no tienes clientes. Cuando alguien te deje sus datos en tu sitio, aparece aquí.</p>',
+        '5 publicaciones listas para Instagram y Facebook.' if db.plan_has(a, 'ai') else 'Publicaciones para tus redes cada semana. Viene en el plan Pro + IA.',
         '' if db.is_unlimited(limit) else ' · +%s' % props(db.REFERRAL_BONUS_LISTINGS),
-        'Comparte tu enlace con otros asesores.' if db.is_unlimited(limit) else 'Por cada colega que publique con tu enlace.')
+        'Comparte tu enlace con otros asesores.' if db.is_unlimited(limit) else 'Por cada colega que publique con tu enlace.',
+        'Visitas, clientes y tu tiempo de respuesta.' if db.plan_has(a, 'tools') else 'Visitas, clientes y tu tiempo de respuesta. Viene en el plan Pro.')
     return layout('Inicio', body, ctx, 'inicio')
 
 

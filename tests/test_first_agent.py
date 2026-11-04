@@ -299,6 +299,21 @@ class FirstAgent(unittest.TestCase):
         self.assertEqual(s, 200)
         self.assertIn('1 foto lista.', page)
 
+    def test_inicio_cards_do_not_promise_what_the_plan_does_not_include(self):
+        gratis = self.agent()
+        page = self.web.req('/', cookie=gratis['cookie'])[1]
+        self.assertIn('Publicaciones para tus redes cada semana. Viene en el plan Pro + IA.', page)
+        self.assertIn('Visitas, clientes y tu tiempo de respuesta. Viene en el plan Pro.', page)
+        self.assertNotIn('5 publicaciones listas', page)
+        pro = self.agent(plan='pro')
+        page = self.web.req('/', cookie=pro['cookie'])[1]
+        self.assertIn('Visitas, clientes y tu tiempo de respuesta.</span>', page)
+        self.assertIn('Publicaciones para tus redes cada semana. Viene en el plan Pro + IA.', page)
+        ia = self.agent(plan='ia')
+        page = self.web.req('/', cookie=ia['cookie'])[1]
+        self.assertIn('5 publicaciones listas para Instagram y Facebook.', page)
+        self.assertNotIn('Viene en el plan', page)
+
 
 if __name__ == '__main__':
     unittest.main()
