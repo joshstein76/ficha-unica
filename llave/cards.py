@@ -859,7 +859,7 @@ def _stale(folder, listing_id, key):
 
 # ---------- who gets which card, and the WhatsApp text ----------
 def plans_v2():
-    return os.environ.get('LLAVE_PLANS_V2') == '1'
+    return db.plans_v2()
 
 
 def can_make(agency, kind):

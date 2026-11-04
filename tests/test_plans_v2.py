@@ -483,7 +483,8 @@ class BolsaGate(Base):
         s, page, _ = self.panel(gratis, '/que-publicar')
         self.assertIn('Ver el plan Pro + IA', page)
         lid = self.listing(gratis['aid'], 'g1')
-        self.assertEqual(self.site(gratis, '/propiedad/depa-g1/tarjeta-post.jpg')[0], 404)   # Instagram card is still a Pro tool
+        self.assertEqual(self.site(gratis, '/propiedad/depa-g1/tarjeta-post.jpg')[0], 200)   # the plain post card is the growth loop: Gratis gets it under V2
+        self.assertEqual(self.site(gratis, '/propiedad/depa-g1/tarjeta-historia.jpg')[0], 404)   # the story card is still a Pro tool
         self.assertEqual(self.site(gratis, '/propiedad/depa-g1/ficha')[0], 404)
         self.assertEqual(self.site(gratis, '/propiedad/depa-g1')[0], 200)
         self.assertEqual(lid, self.public(gratis['aid'])[0])
