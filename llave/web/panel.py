@@ -101,7 +101,7 @@ def signup(error='', values=None, ref=''):
             '<label>Nombre de tu inmobiliaria o marca<input name="agency" value="%s" placeholder="Ej. Casas Roma" required></label>'
             '<label>Tu WhatsApp<input name="whatsapp" value="%s" inputmode="tel" autocomplete="tel" placeholder="55 1234 5678" required></label>'
             '<label>Correo<input name="email" type="email" value="%s" autocomplete="email" required></label>'
-            '<label>Contraseña <span class="small muted" style="font-weight:500">(mínimo 8 caracteres)</span><input name="password" type="password" minlength="8" autocomplete="new-password" required></label>'
+            '<label><span>Contraseña <span class="small muted" style="font-weight:500">(mínimo 8 caracteres)</span></span><input name="password" type="password" minlength="8" autocomplete="new-password" required></label>'
             '<label class="check"><input type="checkbox" name="terms" value="1" required> <span>Acepto los <a href="/terminos" target="_blank" rel="noopener">términos</a> '
             'y el <a href="/privacidad" target="_blank" rel="noopener">aviso de privacidad</a> (borrador).</span></label>'
             '<button class="btn">Crear mi sitio gratis</button>'
