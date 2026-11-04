@@ -3,7 +3,7 @@ Pages are plain functions returning HTML; server.py handles routing, sessions an
 import json
 import os
 
-from .. import academia, billing, kit_home, calculadoras, db, domains, formatos, mailer, lia, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
+from .. import academia, billing, cards, kit_home, calculadoras, db, domains, formatos, mailer, lia, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS, DESIGN_KEYS)
 from .styles import BRAND_COLOR, FONTS, KIT_SHELL, PANEL, PRECONNECT, logo
@@ -335,6 +335,48 @@ def _opt(pairs, cur):
     return ''.join('<option value="%s"%s>%s</option>' % (e(k), ' selected' if k == cur else '', e(v)) for k, v in pairs)
 
 
+def share_box(con, ctx, v):
+    """'Compártela' on a listing: the WhatsApp share for groups and the cards, for a published listing; for a sold or rented one,
+    the ¡Vendida! / ¡Rentada! card (with the agent's choice to show the list price, off by default)."""
+    a, status, lid = ctx['agency'], v.get('status'), v.get('id')
+    if status in db.PUBLIC_STATUSES:
+        if lid not in db.public_listing_ids(con, a['id'], include_shared=False):  # over the plan's limit: not on the site, nothing to share
+            return ('<section class="card"><h2>Compártela</h2><p class="small muted">Esta propiedad no se ve en tu sitio porque tu plan '
+                    'muestra menos propiedades. <a href="/plan">Ver planes</a></p></section>')
+        url = db.listing_url(a, v)
+        btns = ['<a class="btn wa" href="%s" target="_blank" rel="noopener">Mándalo a tus grupos</a>' % e(whatsapp.wa_link('', cards.share_text(v, url)))]
+        post, story = cards.can_make(a, 'post'), cards.can_make(a, 'story')
+        if post:
+            btns.append('<a class="btn ghost" href="%s/tarjeta-post.jpg" target="_blank" rel="noopener">Tarjeta para publicar</a>' % e(url))
+        if story:
+            btns.append('<a class="btn ghost" href="%s/tarjeta-historia.jpg" target="_blank" rel="noopener">Tarjeta para historia</a>' % e(url))
+        if post:
+            hint = 'Se abre la imagen: tócala sostenido para guardarla o mandarla. Cada tarjeta lleva tu nombre y tu WhatsApp.'
+        else:
+            hint = 'Se abre WhatsApp con el mensaje listo y el enlace de tu propiedad.'
+        note = ''
+        if not post:
+            note = '<p class="small"><a href="/plan">Las tarjetas para Instagram y WhatsApp vienen en el plan Pro</a></p>'
+        elif not story:
+            note = '<p class="small"><a href="/plan">La tarjeta para historia viene en el plan Pro</a></p>'
+        return ('<section class="card"><h2>Compártela</h2><p class="small muted">%s</p><div class="grid2">%s</div>%s</section>'
+                % (e(hint), ''.join(btns), note))
+    if status in db.CLOSED_STATUSES:
+        word = 'Vendida' if status == 'vendida' else 'Rentada'
+        if not cards.can_make(a, 'cierre_post'):
+            return ('<section class="card"><h2>¡%s!</h2><p class="small muted">Presume tu cierre con una tarjeta lista para tus redes. '
+                    '<a href="/plan">Viene en el plan Pro</a>.</p></section>' % word)
+        return ('<section class="card"><h2>¡Presume tu cierre!</h2>'
+                '<p class="small muted">Una tarjeta de «¡%s!» para tus redes, con tu nombre y tu WhatsApp. Nunca lleva datos de tu cliente.</p>'
+                '<form class="stack" method="get" target="_blank">'
+                '<label class="check"><input type="checkbox" name="precio" value="1"> Mostrar el precio de lista en la tarjeta</label>'
+                '<p class="small muted" style="margin:0">Si no lo marcas, la tarjeta no lleva ningún precio.</p>'
+                '<div class="grid2"><button class="btn" formaction="/propiedades/%d/cierre-post.jpg">Tarjeta para publicar</button>'
+                '<button class="btn ghost" formaction="/propiedades/%d/cierre-historia.jpg">Tarjeta para historia</button></div></form></section>'
+                % (word, lid, lid))
+    return ''
+
+
 def listing_form(con, ctx, l=None, error='', ok='', suggestion=None):
     v = dict(l) if l else {}
     if suggestion:
@@ -366,13 +408,12 @@ def listing_form(con, ctx, l=None, error='', ok='', suggestion=None):
     if lid and v.get('status') in db.PUBLIC_STATUSES:
         if db.plan_has(ctx['agency'], 'tools'):
             site_link = ('<span class="row small"><a href="%s" target="_blank" rel="noopener">Ver en mi sitio ↗</a>'
-                         '<a href="%s/ficha" target="_blank" rel="noopener">Ficha para imprimir ↗</a>'
-                         '<a href="%s/tarjeta-post.jpg" target="_blank" rel="noopener">Tarjeta Instagram ↗</a>'
-                         '<a href="%s/tarjeta-historia.jpg" target="_blank" rel="noopener">Historia ↗</a></span>') % (
-                (e(db.listing_url(ctx['agency'], v)),) * 4)
+                         '<a href="%s/ficha" target="_blank" rel="noopener">Ficha para imprimir ↗</a></span>') % (
+                (e(db.listing_url(ctx['agency'], v)),) * 2)
         else:
             site_link = ('<span class="row small"><a href="%s" target="_blank" rel="noopener">Ver en mi sitio ↗</a>'
                          '<a href="/plan">Ficha para imprimir e imágenes para Instagram: plan Pro</a></span>') % e(db.listing_url(ctx['agency'], v))
+    share_html = share_box(con, ctx, v) if lid else ''
     rp_box = ('<label class="check"><input type="checkbox" name="rentapoliza_offer" value="1"%s> '
               'Ofrecer póliza jurídica RentaPóliza (rentas)</label>' % (' checked' if v.get('rentapoliza_offer') else ''))
     body = ('%s%s<div class="row" style="justify-content:space-between"><h1>%s</h1>%s</div>%s'
@@ -409,8 +450,8 @@ def listing_form(con, ctx, l=None, error='', ok='', suggestion=None):
             '<label>Nota interna (nunca se publica)<textarea name="internal_note" rows="2">%s</textarea></label></section>'
             '<button class="btn">%s</button></form>%s%s') % (
         notice(ok), notice(error, 'err'), 'Editar propiedad' if lid else 'Nueva propiedad', site_link,
-        ('<div class="notice warn"><b>Para que se vea mejor en portales:</b><br>%s</div>' % '<br>'.join(e(p) for p in problems))
-        if problems else '',
+        share_html + (('<div class="notice warn"><b>Para que se vea mejor en portales:</b><br>%s</div>' % '<br>'.join(e(p) for p in problems))
+                      if problems else ''),
         ('/propiedades/%d' % lid) if lid else '/propiedades/nueva', csrf_field(ctx),
         e(v.get('title')), _opt([('venta', 'Venta'), ('renta', 'Renta')], v.get('operation', 'venta')),
         _opt(TYPES, v.get('property_type', 'departamento')), e(price),
@@ -1179,15 +1220,15 @@ def wizard_3(ctx, l, error=''):
 
 def wizard_done(ctx, l):
     url = db.listing_url(ctx['agency'], l)
-    share = whatsapp.wa_link('', 'Mira esta propiedad: %s %s' % (l['title'], url))
+    share = whatsapp.wa_link('', cards.share_text(l, url))
     body = ('<div class="auth" style="text-align:center"><div style="font-size:48px">🎉</div><h1>¡Publicada!</h1>'
             '<p class="muted">Ya está en tu sitio. Compártela con tus clientes.</p>'
             '<a class="btn" href="%s" target="_blank" rel="noopener">Ver en mi sitio</a>'
-            '<a class="btn wa" href="%s" target="_blank" rel="noopener">Compartir por WhatsApp</a>'
+            '<a class="btn wa" href="%s" target="_blank" rel="noopener">Mándalo a tus grupos</a>'
             '%s'
             '<a class="btn ghost" href="/nueva">Subir otra</a></div>') % (e(url), e(share),
-        ('<a class="btn ghost" href="%s/tarjeta-post.jpg" target="_blank" rel="noopener">Tarjeta para Instagram</a>' % e(url))
-        if db.plan_has(ctx['agency'], 'tools') else '')
+        ('<a class="btn ghost" href="%s/tarjeta-post.jpg" target="_blank" rel="noopener">Tarjeta para publicar</a>' % e(url))
+        if cards.can_make(ctx['agency'], 'post') else '')
     return layout('¡Publicada!', body, ctx, 'propiedades')
 
 

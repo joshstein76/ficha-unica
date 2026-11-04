@@ -209,16 +209,27 @@ def listing(con, agency, c, shared_split=None, error=''):
         ('<a class="wa float" href="%s" rel="nofollow" aria-label="WhatsApp flotante: preguntar por esta propiedad">%s</a>'
          '<nav class="mbar" aria-label="Contacto rápido"><a class="wa" href="%s" rel="nofollow" aria-label="WhatsApp: contacto rápido">%s WhatsApp</a><a class="ask" href="#contacto">Me interesa</a></nav>'
          % (e(wa), WA_ICON, e(wa), WA_ICON)) if wa else '')
-    og = ''.join('<meta property="%s" content="%s">' % (k, e(v)) for k, v in (
-        ('og:title', c['title']), ('og:type', 'website'), ('og:url', canon),
-        ('og:image', photos[0]['url'] if photos else ''), ('og:description', c['description'][:200])))
+    # WhatsApp / Facebook link preview. The 800 px photo (a 1600 px one can be too heavy for WhatsApp to show); with no photo, the
+    # lotería link card (1200x630, the same on every plan) instead of an empty tag; a description from the facts when there is none.
+    where = ', '.join(x for x in (c['address']['colonia'], c['address']['municipio']) if x)
+    desc = c['description'].strip()[:200] or ' · '.join(x for x in (money(c['price'], c['currency']), facts_line(c), where) if x)
+    if photos:
+        og_img, og_dims = photos[0]['url_800'], _scaled(photos[0], 800)
+    else:
+        og_img, og_dims = c['url'] + '/tarjeta-enlace.jpg', (1200, 630)
+    og_pairs = [('og:title', c['title']), ('og:type', 'website'), ('og:url', canon), ('og:site_name', agency['name']),
+                ('og:locale', 'es_MX'), ('og:image', og_img)]
+    if og_dims:
+        og_pairs += [('og:image:width', str(og_dims[0])), ('og:image:height', str(og_dims[1]))]
+    og_pairs += [('og:image:alt', c['title']), ('og:description', desc)]
+    og = ''.join('<meta property="%s" content="%s">' % (k, e(v)) for k, v in og_pairs) + '<meta name="twitter:card" content="summary_large_image">'
     from ..ai import geo_seo
     ld = '<script type="application/ld+json">%s</script>' % json.dumps(listing_jsonld(c, canon), ensure_ascii=False)
     faqs = geo_seo.listing_faq(c)
     if faqs:
         ld += '<script type="application/ld+json">%s</script>' % json.dumps(geo_seo.faq_jsonld(faqs), ensure_ascii=False)
     title = '%s · %s' % (c['title'], money(c['price'], c['currency']))
-    return lia_ui.attach(con, agency, _page(agency, title, body, og + ld, canon, c['description']), c)
+    return lia_ui.attach(con, agency, _page(agency, title, body, og + ld, canon, desc), c)
 
 
 FICHA_CSS = r"""
