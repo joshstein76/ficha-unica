@@ -145,6 +145,23 @@ class FirstAgent(unittest.TestCase):
         self.assertIn('value="Condesa"', page)
         self.assertEqual(self.web.one('SELECT colonia FROM listings WHERE id=?', lid)['colonia'], 'Roma Norte')  # nothing was saved
 
+    # ---- the public site of a brand-new agent ----
+    def site_host(self, u):
+        return '%s.%s' % (self.web.one('SELECT slug FROM agencies WHERE id=?', u['aid'])['slug'], db.BASE_DOMAIN)
+
+    def test_new_agent_site_has_no_empty_sobre_nosotros_until_there_is_text(self):
+        u = self.agent(agency='Casa Vacía')
+        self.publish(u)
+        s, page, _ = self.web.req('/', host=self.site_host(u))
+        self.assertEqual(s, 200)
+        self.assertNotIn('Sobre nosotros', page)
+        con = db.connect()
+        con.execute("UPDATE agencies SET about='Somos un equipo de la Roma.' WHERE id=?", (u['aid'],))
+        con.commit()
+        con.close()
+        s, page, _ = self.web.req('/', host=self.site_host(u))
+        self.assertIn('<h2>Sobre nosotros</h2><p class="desc">Somos un equipo de la Roma.</p>', page)
+
 
 if __name__ == '__main__':
     unittest.main()

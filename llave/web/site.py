@@ -96,6 +96,14 @@ def pool_section(con, agency):
             '<div class="cards">%s</div></section>') % ''.join(_card(c) for c in cards)
 
 
+def about_section(con, agency):
+    """'Sobre nosotros' only when there is something under it: a new agent has no text and no team yet, and a bare heading reads unfinished."""
+    about, team = (agency['about'] or '').strip(), team_html(con, agency)
+    if not (about or team):
+        return ''
+    return '<section class="sec"><h2>Sobre nosotros</h2>%s%s</section>' % (('<p class="desc">%s</p>' % e(about)) if about else '', team)
+
+
 def home(con, agency):
     ids = db.public_listing_ids(con, agency['id'])
     cards = [db.canonical(con, i) for i in ids]
@@ -114,12 +122,12 @@ def home(con, agency):
             '<label class="vh" for="al-m">Presupuesto máximo</label><input id="al-m" name="max" inputmode="numeric" placeholder="Presupuesto máximo (MXN)">'
             '<label class="check"><input type="checkbox" name="consent" value="1" required> Acepto el <a href="/aviso-de-privacidad">aviso de privacidad</a>.</label>'
             '<button type="submit">Avísenme cuando salga algo así</button></form></section>'
-            '<section class="sec"><h2>Sobre nosotros</h2><p class="desc">%s</p>%s</section></div></main>') % (
+            '%s</div></main>') % (
         hero_img,
         e(agency['name']), e(agency['tagline'] or ''),
         ('<div class="cards">%s</div>' % ''.join(_card(c) for c in cards)) if cards
         else '<p class="muted">Pronto publicaremos propiedades aquí.</p>',
-        pool_section(con, agency), e(agency['about'] or ''), team_html(con, agency))
+        pool_section(con, agency), about_section(con, agency))
     ld = '<script type="application/ld+json">%s</script>' % json.dumps(org, ensure_ascii=False)
     return lia_ui.attach(con, agency, _page(agency, '%s · Bienes raíces' % agency['name'], body, ld, db.site_url(agency) + '/',
                                             agency['about'] or agency['tagline'] or agency['name']))
