@@ -492,6 +492,10 @@ class Handler(BaseHTTPRequestHandler):
                     if m.group(2) and not db.plan_has(a, 'tools'):
                         return self.send(site.not_found(a), 404)
                     return self.send(site.ficha(a, c) if m.group(2) else site.listing(con, a, c))
+            gone = con.execute("SELECT 1 FROM listings WHERE agency_id=? AND slug=? AND status IN ('vendida','rentada')",
+                               (a['id'], m.group(1))).fetchone()
+            if gone:  # sold or rented for good: 410 tells Google to drop it sooner than a 404; paused/draft/over-the-plan-cap stay 404 (they can come back)
+                return self.send(site.not_found(a), 410, headers={'X-Robots-Tag': 'noindex'})
             return self.send(site.not_found(a), 404)
         return self.send(site.not_found(a), 404)
 
