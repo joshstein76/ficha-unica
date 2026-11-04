@@ -19,7 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
 
 from .. import auth, billing, calculadoras, cards, db, domains, formatos, ghl, ghl_live, lia, operaciones, geo, importer, lead_watch, mailer, media, ml_oauth, novedades, password_reset, photo_fetch, photos, price_check, reply_link, replies, stats, whatsapp
-from ..feeds import build_feed, registry
+from ..feeds import build_feed, mercadolibre, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
 from .common import csrf_ok, to_cents, to_num, DESIGN_KEYS
@@ -521,6 +521,7 @@ class Handler(BaseHTTPRequestHandler):
             con.execute("UPDATE agencies SET plan='gratis'%s WHERE id=?" % (', stripe_subscription_id=NULL' if billing.is_paying(a) else ''), (a['id'],))
             db.audit(con, 'user:%d' % uid, 'plan_change_downgrade', '%s -> gratis (%s)' % (a['plan'], 'test subscription, paid plans closed' if billing.is_paying(a) else 'no subscription'))
             con.commit()
+            mercadolibre.sync_plan_limit_safe(con, a['id'])
             ghl_live.plan_changed(con, a['id'])
             ctx['agency'] = con.execute('SELECT * FROM agencies WHERE id=?', (a['id'],)).fetchone()
             return self.send(panel.plans(con, ctx, ok='Listo: ahora tienes el plan Gratis.'))
@@ -1010,6 +1011,7 @@ class Handler(BaseHTTPRequestHandler):
                 con.execute('UPDATE agencies SET plan=? WHERE id=?', (key, a['id']))
                 db.audit(con, actor, 'plan_change_test_mode', '%s -> %s (no payment)' % (a['plan'], key))
                 con.commit()
+                mercadolibre.sync_plan_limit_safe(con, a['id'])
                 ghl_live.plan_changed(con, a['id'])
                 ctx['agency'] = con.execute('SELECT * FROM agencies WHERE id=?', (a['id'],)).fetchone()
                 return self.send(panel.plans(con, ctx, ok='Listo: ahora tienes el plan %s (modo prueba, sin cobro).' % key))

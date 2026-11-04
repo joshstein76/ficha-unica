@@ -23,6 +23,7 @@ import urllib.request
 import uuid
 
 from . import db, ghl_live
+from .feeds import mercadolibre
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_FILE = os.path.join(ROOT, 'config', 'stripe.env')
@@ -281,7 +282,7 @@ def handle_event(con, raw_body, sig_header, now=None):
         raise BillingError('Evento inválido', 'json_invalido') from None
     if etype not in HANDLED_EVENTS:
         return {'status': 'ignored', 'outcome': 'tipo:' + etype}
-    before = _plans(con) if ghl_live.enabled() else None
+    before = _plans(con)  # who moved: the Mercado Libre pause/reactivate sync below, and the GHL job when that is live
     try:
         if not con.in_transaction:
             con.execute('BEGIN IMMEDIATE')  # take the write lock first: two deliveries of one event can't both apply
@@ -297,9 +298,10 @@ def handle_event(con, raw_body, sig_header, now=None):
     except Exception:
         con.rollback()
         raise
-    if before is not None:  # live GHL sync: one plan_change job per agency whose plan this event moved
-        for aid, plan in _plans(con).items():
-            if before.get(aid) != plan:
+    for aid, plan in _plans(con).items():  # after the commit: whatever happens below, the plan change and the event row stay
+        if before.get(aid) != plan:
+            mercadolibre.sync_plan_limit_safe(con, aid)  # dry run, never raises: a plan that hides or shows listings queues pause / reactivate
+            if ghl_live.enabled():  # live GHL sync: one plan_change job per agency whose plan this event moved
                 ghl_live.plan_changed(con, aid)
     return {'status': 'handled', 'outcome': outcome}
 
