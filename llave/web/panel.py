@@ -84,6 +84,11 @@ def notice(msg, kind=''):
     return ('<div class="notice %s" role="%s">%s</div>' % (kind, 'alert' if kind == 'err' else 'status', e(msg))) if msg else ''
 
 
+def limit_notice(msg):
+    """The plan-limit warning with a way out: 'cambia de plan' was plain text, a dead end exactly when an agent wants a second property."""
+    return '<div class="notice warn" role="status">%s <a href="/plan">Ver planes</a></div>' % e(msg)
+
+
 # ---------- auth ----------
 def signup(error='', values=None, ref=''):
     v = values or {}

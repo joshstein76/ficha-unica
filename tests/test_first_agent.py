@@ -162,6 +162,16 @@ class FirstAgent(unittest.TestCase):
         s, page, _ = self.web.req('/', host=self.site_host(u))
         self.assertIn('<h2>Sobre nosotros</h2><p class="desc">Somos un equipo de la Roma.</p>', page)
 
+    # ---- the second property on Gratis ----
+    def test_plan_limit_warning_links_to_the_plans_page(self):
+        u = self.agent()
+        self.publish(u)
+        for path in ('/nueva', '/propiedades/nueva'):
+            s, page, _ = self.web.req(path, cookie=u['cookie'])
+            self.assertEqual(s, 200, path)
+            self.assertIn('Llegaste al límite de tu plan (1 propiedad)', page, path)
+            self.assertIn('<a href="/plan">Ver planes</a>', page, path)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -709,7 +709,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/nueva':
             if method != 'POST':
                 if over_limit(con, a):
-                    return self.send(panel.listings(con, ctx, panel.notice('Llegaste al límite de tu plan. Marca alguna como vendida o cambia de plan.', 'warn')))
+                    return self.send(panel.listings(con, ctx, panel.limit_notice(limit_message(con, a))))
                 return self.send(panel.wizard_1(ctx, welcome=query.get('bienvenida') == '1'))
             if over_limit(con, a):
                 return self.redirect('/propiedades')
@@ -891,14 +891,14 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/propiedades/nueva':
             if method == 'POST':
                 if over_limit(con, a):  # the page already refuses; a direct POST must not get around it
-                    return self.send(panel.listings(con, ctx, panel.notice(limit_message(con, a), 'warn')), 403)
+                    return self.send(panel.listings(con, ctx, panel.limit_notice(limit_message(con, a))), 403)
                 try:
                     lid = save_listing(con, a, uid, f)
                 except ValueError as ex:
                     return self.send(panel.listing_form(con, ctx, None, str(ex), posted=f), 400)
                 return self.redirect('/propiedades/%d?ok=creada' % lid)
             if over_limit(con, a):
-                return self.send(panel.listings(con, ctx, panel.notice(limit_message(con, a), 'warn')))
+                return self.send(panel.listings(con, ctx, panel.limit_notice(limit_message(con, a))))
             return self.send(panel.listing_form(con, ctx))
         m = re.match(r'^/propiedades/(\d+)(/.*)?$', path)
         if m:
