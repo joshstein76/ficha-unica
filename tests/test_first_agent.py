@@ -235,6 +235,18 @@ class FirstAgent(unittest.TestCase):
         gratis = self.agent()
         self.assertNotIn('piloto gratis', self.web.req('/plan', cookie=gratis['cookie'])[1])
 
+    # ---- the first client ----
+    def test_lead_card_shows_the_phone_the_client_left(self):
+        u = self.agent(agency='Casa Cliente')
+        lid = self.publish(u)
+        s, _, h = self.web.req('/contacto', {'listing': lid, 'name': 'Carlos Cliente', 'phone': '55 0000 0002', 'consent': '1',
+                                             'message': 'Hola, me interesa.'}, host=self.site_host(u))
+        self.assertEqual(s, 303)
+        s, page, _ = self.web.req('/clientes', cookie=u['cookie'])
+        self.assertIn('<a href="tel:+525500000002">+52 55 0000 0002</a>', page)
+        s, page, _ = self.web.req('/', cookie=u['cookie'])
+        self.assertIn('<a href="tel:+525500000002">+52 55 0000 0002</a>', page)
+
 
 if __name__ == '__main__':
     unittest.main()

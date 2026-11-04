@@ -3,7 +3,7 @@ Pages are plain functions returning HTML; server.py handles routing, sessions an
 import json
 import os
 
-from .. import academia, billing, cards, kit_home, calculadoras, db, domains, formatos, mailer, lia, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
+from .. import academia, agent_mail, billing, cards, kit_home, calculadoras, db, domains, formatos, mailer, lia, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_date, facts_line, label, props, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS, DESIGN_KEYS)
 from .styles import BRAND_COLOR, FONTS, KIT_SHELL, PANEL, PRECONNECT, logo
@@ -595,10 +595,11 @@ def _leads_list(con, rows, ctx=None, today=None):
                                                                for d, t in FOLLOW_UP_CHOICES + ([(0, 'Quitar')] if fu else []))))
         lia_top, lia_talk = lia_block(con, r['id']) if r['source'] == 'lia' else ('', '')
         out.append('<div class="card%s" style="gap:6px"><div class="row" style="justify-content:space-between"><b>%s</b>'
-                   '<span class="row">%s<span class="pill %s">%s</span></span></div><span class="small muted">%s · %s · %s</span>%s'
+                   '<span class="row">%s<span class="pill %s">%s</span></span></div><span class="small muted">%s · %s · %s%s</span>%s'
                    '<p class="small" style="margin:0">%s</p>%s<div class="row">%s%s</div>%s</div>' % (
                        ' late' if late else '', e(r['name'] or 'Sin nombre'), badge, e(r['status']), e(label(LEAD_STATUSES, r['status'])),
                        e(nice_date(r['created_at'])), 'Lía' if r['source'] == 'lia' else e(r['source']), e(lst['ref'] if lst else 'general'),
+                       (' · <a href="tel:%s">%s</a>' % (e(r['phone']), e(agent_mail.fmt_phone(r['phone'])))) if r['phone'] else '',
                        ('<span class="small">%s</span>' % e(lst['title'])) if lst else '', lia_top or e(r['message']), lia_talk,
                        ('<a class="btn wa small" href="/clientes/%d/whatsapp" target="_blank" rel="noopener">Responder por WhatsApp</a>' % r['id'])
                        if r['phone'] else '',
