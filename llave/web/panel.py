@@ -311,8 +311,8 @@ def dashboard(con, ctx, welcome=False):
             '<a href="/clientes">Ver todos</a></div>%s</section>'
             '<a class="card" href="/que-publicar" style="text-decoration:none;color:inherit"><h2>Qué publicar esta semana</h2>'
             '<span class="small muted">5 publicaciones listas para Instagram y Facebook.</span></a>'
-            '<a class="card" href="/invitar" style="text-decoration:none;color:inherit"><h2>Invita a un colega · +%s</h2>'
-            '<span class="small muted">Por cada colega que publique con tu enlace.</span></a>'
+            '<a class="card" href="/invitar" style="text-decoration:none;color:inherit"><h2>Invita a un colega%s</h2>'
+            '<span class="small muted">%s</span></a>'
             '<section class="grid2"><a class="card" href="/estadisticas" style="text-decoration:none;color:inherit"><h2>Estadísticas</h2>'
             '<span class="small muted">Visitas, clientes y tu tiempo de respuesta.</span></a>'
             '<a class="card" href="/servicios" style="text-decoration:none;color:inherit"><h2>Servicios</h2>'
@@ -326,7 +326,9 @@ def dashboard(con, ctx, welcome=False):
         ('Usadas, sin límite, en plan %s · cambiar' if db.is_unlimited(limit) else 'Usadas en plan %s · cambiar') % e(a['plan']), n_new, n_feed,
         home_tiles(), novedades_card(ctx),
         first_week(done, len(steps), steps) if done < len(steps) else '<div class="notice">✓ Tu primera semana está completa. <a href="/nueva">Sube otra propiedad</a></div>',
-        _leads_list(con, leads) if leads else '<p class="muted">Aún no tienes clientes. Cuando alguien te deje sus datos en tu sitio, aparece aquí.</p>', props(db.REFERRAL_BONUS_LISTINGS))
+        _leads_list(con, leads) if leads else '<p class="muted">Aún no tienes clientes. Cuando alguien te deje sus datos en tu sitio, aparece aquí.</p>',
+        '' if db.is_unlimited(limit) else ' · +%s' % props(db.REFERRAL_BONUS_LISTINGS),
+        'Comparte tu enlace con otros asesores.' if db.is_unlimited(limit) else 'Por cada colega que publique con tu enlace.')
     return layout('Inicio', body, ctx, 'inicio')
 
 
@@ -969,10 +971,14 @@ LESSONS = [(t, d) for _slug, t, d, *_ in academia.LESSONS]  # social_kit keeps a
 def services(ctx, con=None, ok='', error=''):
     from .. import eco
     a = ctx['agency']
-    bal = eco.balance(con, a['id']) if con else 0
     cards = ''.join('<div class="card"><span class="small muted">%s</span><h2>%s</h2><p style="margin:0">%s</p>%s</div>' % (
         e(brand), e(t), e(d), ('<a class="btn small ghost" href="%s" target="_blank" rel="noopener">%s</a>' % (e(url), e(cta)))
         if url else '<span class="pill pendiente">%s</span>' % e(cta)) for t, brand, d, url, cta in SERVICES)
+    if not eco.live():  # LLAVE_ECO_LIVE off (default): no sister company can confirm anything yet, so no credits are promised or shown
+        body = ('%s%s<h1>Servicios</h1><p class="muted">Otras empresas de la familia de Ficha Única, por si te sirven.</p>'
+                '<div class="grid2 wide">%s</div>') % (notice(ok), notice(error, 'err'), cards)
+        return layout('Servicios', body, ctx, 'servicios')
+    bal = eco.balance(con, a['id']) if con else 0
     earn = ''.join('<li>%s: <b>+%d</b></li>' % (e(r['label']), r['credits']) for r in eco.RULES.values())
     mine = con.execute("SELECT id, title FROM listings WHERE agency_id=? AND status IN ('activa','apartada') ORDER BY title", (a['id'],)).fetchall() if con else []
     opts = ''.join('<option value="%d">%s</option>' % (r['id'], e(r['title'])) for r in mine)
@@ -1496,14 +1502,17 @@ def invite(con, ctx):
     lst = ''.join('<div class="item" style="grid-template-columns:1fr auto"><div><b>%s</b><br><span class="small muted">desde %s</span></div>'
                   '<span class="pill %s">%s</span></div>' % (e(r['name']), e(nice_date(r['created_at'])), 'ok' if r['pub'] else 'pendiente',
                                                             'publicó ✓' if r['pub'] else 'aún sin publicar') for r in rows)
-    body = ('<h1>Invita a un colega</h1><p class="muted">Por cada colega que cree su sitio con tu enlace y publique su primera propiedad, '
-            'te damos <b>%s más</b> en tu plan, para siempre.</p>'
+    unlimited = db.is_unlimited(db.listing_limit(con, a))  # a plan without a limit has nothing to add: keep the invitation, drop the listing promise
+    pitch = ('Pasa tu enlace a otros asesores. Cada colega arma su sitio gratis y aquí ves quién ya publicó.' if unlimited else
+             'Por cada colega que cree su sitio con tu enlace y publique su primera propiedad, te damos <b>%s más</b> en tu plan, para siempre.' % props(db.REFERRAL_BONUS_LISTINGS))
+    extra_stat = '' if unlimited else '<div class="stat"><b>+%d</b><small>Propiedades extra ganadas</small></div>' % (q * db.REFERRAL_BONUS_LISTINGS)
+    body = ('<h1>Invita a un colega</h1><p class="muted">%s</p>'
             '<section class="card"><label for="ref-link">Tu enlace<input id="ref-link" value="%s" readonly onclick="this.select()"></label>'
             '<div class="row"><a class="btn wa" href="%s" target="_blank" rel="noopener">Compartir por WhatsApp</a>'
             '<button class="btn ghost" type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById(\'ref-link\').value);this.textContent=\'Copiado ✓\'">Copiar enlace</button></div></section>'
             '<div class="stats"><div class="stat"><b>%d</b><small>Colegas invitados</small></div><div class="stat"><b>%d</b><small>Ya publicaron</small></div>'
-            '<div class="stat"><b>+%d</b><small>Propiedades extra ganadas</small></div></div><div class="list">%s</div>') % (
-        props(db.REFERRAL_BONUS_LISTINGS), e(link), e(whatsapp.wa_link('', msg)), len(rows), q, q * db.REFERRAL_BONUS_LISTINGS,
+            '%s</div><div class="list">%s</div>') % (
+        pitch, e(link), e(whatsapp.wa_link('', msg)), len(rows), q, extra_stat,
         lst or '<p class="muted">Aún no invitas a nadie. Comparte tu enlace en tus grupos de asesores.</p>')
     return layout('Invita a un colega', body, ctx, 'invitar')
 

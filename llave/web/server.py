@@ -797,6 +797,8 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r'^/servicios/canjear/([a-z0-9_]+)$', path)
         if m and method == 'POST':
             from .. import eco
+            if not eco.live():  # credits are off (LLAVE_ECO_LIVE): nothing to redeem, nothing is written
+                return self.send(panel.services(ctx, con, error='Por ahora no hay créditos para canjear.'), 400)
             try:
                 lid = int(f.get('listing') or 0) or None
                 if lid and not con.execute('SELECT 1 FROM listings WHERE id=? AND agency_id=?', (lid, a['id'])).fetchone():
