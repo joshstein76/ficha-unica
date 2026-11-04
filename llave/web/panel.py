@@ -1264,6 +1264,12 @@ COMING_SOON = set()  # Josh 10-19: Pro + IA is on sale from launch day
 
 STRIPE_NOTE = ('Pago seguro con tarjeta, procesado por Stripe para %s. Precios en pesos mexicanos (MXN), IVA incluido. '
                'Cancelas cuando quieras.')
+STRIPE_NOTE_MANAGED = ('Pago seguro con tarjeta. Lo cobra Link, de Stripe, para %s: así aparece en tu estado de cuenta y de ahí te llega el recibo. '
+                       'Precios en pesos mexicanos (MXN), IVA incluido. Cancelas cuando quieras.')
+
+
+def stripe_note():
+    return (STRIPE_NOTE_MANAGED if billing.managed() else STRIPE_NOTE) % e(db.OWNER)
 
 
 def plans(con, ctx, ok='', error=''):
@@ -1284,7 +1290,7 @@ def plans(con, ctx, ok='', error=''):
     if paid and billing.is_paying(a):  # `paid` is False while the test-key lock hides the Billing Portal
         manage = ('<form class="card" method="post" action="/plan/portal">%s<p class="small muted">Cambia de plan, actualiza tu tarjeta '
                   'o cancela desde tu pago.</p><button class="btn ghost">Administrar mi pago</button></form>') % csrf_field(ctx)
-    foot = (STRIPE_NOTE % e(db.OWNER)) if paid else 'Precios en pesos mexicanos con IVA. Sin plazo forzoso: cambias o cancelas cuando quieras.'
+    foot = stripe_note() if paid else 'Precios en pesos mexicanos con IVA. Sin plazo forzoso: cambias o cancelas cuando quieras.'
     limit = db.listing_limit(con, a)
     over = ('<p class="small">Tu sitio muestra %s. Las demás siguen guardadas y vuelven a verse al subir de plan.</p>'
             % ('solo la más reciente' if limit == 1 else 'solo las %d más recientes' % limit)) \

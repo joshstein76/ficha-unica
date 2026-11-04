@@ -32,7 +32,8 @@ TIMEOUT = 20                    # seconds per Stripe call
 TOLERANCE = 300                 # webhook timestamps older (or newer) than this are rejected
 MAX_WEBHOOK_BYTES = 1024 * 1024
 
-SETTING_KEYS = ('STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PRICE_PRO', 'STRIPE_PRICE_IA')
+SETTING_KEYS = ('STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PRICE_PRO', 'STRIPE_PRICE_IA', 'STRIPE_MANAGED_PAYMENTS')
+MANAGED_VERSION = '2025-03-31.basil'  # Stripe refuses Managed Payments on an older API version
 PAID_PLANS = ('pro', 'ia')
 HANDLED_EVENTS = ('checkout.session.completed', 'customer.subscription.updated', 'customer.subscription.deleted')
 ACTIVE_STATUSES = ('active', 'trialing')
@@ -76,6 +77,12 @@ def settings():
     Holds secrets: never print or log this dict."""
     f = _read_file()
     return {k: (os.environ.get(k) or f.get(k) or '').strip() for k in SETTING_KEYS}
+
+
+def managed():
+    """True when Stripe is the seller of record (Managed Payments): it collects and files the tax in supported countries, Mexico included,
+    and the receipt comes from Link. STRIPE_MANAGED_PAYMENTS=1 in stripe.env. Otherwise the seller is the owner, who answers for the tax."""
+    return settings().get('STRIPE_MANAGED_PAYMENTS') == '1'
 
 
 def key_mode(key):
@@ -172,7 +179,7 @@ def _post(path, params, idem_key=None):
     req = urllib.request.Request(API + path, data=body, method='POST', headers={
         'Authorization': 'Bearer ' + key,
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Stripe-Version': STRIPE_VERSION,
+        'Stripe-Version': MANAGED_VERSION if params.get('managed_payments[enabled]') == 'true' else STRIPE_VERSION,
         'Idempotency-Key': idem_key or uuid.uuid4().hex,
         'User-Agent': 'FichaUnica-LLAVE/1',
     })
@@ -216,6 +223,7 @@ def checkout_url(con, agency, user, plan):
         'subscription_data[metadata][agency_id]': a['id'],
         'subscription_data[metadata][plan]': plan,
         'allow_promotion_codes': 'true',
+        'managed_payments[enabled]': 'true' if managed() else 'false',  # always explicit: it's on by default on Ficha's account, and Stripe refuses a session without it
         'success_url': app + '/plan?pago=ok',
         'cancel_url': app + '/plan?pago=cancelado',
     }

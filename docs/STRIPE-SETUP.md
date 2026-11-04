@@ -2,7 +2,11 @@
 
 Stripe account: **Ficha Única**, its own account inside the Ciao Bella Marketing organization (Josh 10-29, like the other businesses); Ciao Bella Marketing, LLC stays the legal owner. Not the main Ciao Bella Marketing account. Plans: **Pro MXN 499/month** and **Pro + IA MXN 999/month**, IVA included. Gratis is MXN 0 and never touches Stripe.
 Code: `llave/billing.py` (written 2026-10-19, never run against the real Stripe: the first test-mode purchase is its first real test).
-Status: nothing here has been done. No Stripe account was created and no Stripe call was made while building this.
+Status (2026-11-04): test mode is set up on the Ficha Única account. Everything except typing a card on the hosted page was run against real Stripe test mode: account, prices, checkout session for both sellers, a test subscription, plan switch, portal, cancel, and real webhook delivery to production. Live mode isn't set up.
+
+**Shortcut:** `tools/stripe_setup.py` does Parts 2, 4 and 5 for whichever mode the key is in (dry run unless `--go`). The only click left is the key.
+
+**Who is the seller (decide before live):** Stripe's Managed Payments (`STRIPE_MANAGED_PAYMENTS=1`) makes Stripe the merchant of record: per its docs it calculates, collects, files and remits the tax in supported countries, Mexico among them, for 3.5% of each transaction on top of normal fees. The card statement says `LINK.COM*`, and receipts come from Link. It needs a tax code on each product (the tool sets `txcd_10103001`) and API version `2025-03-31.basil` or later (the app sends it for those sessions). Without it the owner is the seller and answers for the tax. A contador still confirms this; whether Link's receipt works as a CFDI isn't stated in Stripe's docs.
 
 **Do it in TEST mode first.** Nothing is charged in test mode. Live mode needs Josh's explicit yes (Part 8).
 **Never paste a key in chat.** Paste it into the file in Part 6 yourself, then just tell Claude "done".
@@ -27,7 +31,7 @@ To let the owner run his own test purchase against production, list his login em
 ## Part 2. The two products and prices
 1. **Product catalog** → **Add product**.
 2. Name: `Ficha Única Pro`. Pricing model: **Recurring**. Amount: `499.00`. Currency: **MXN**. Billing period: **Monthly**.
-3. Open **More pricing options** (or the tax section) and set **Tax behavior = Inclusive** (the price already includes IVA). Save the product.
+3. Open **More pricing options** (or the tax section) and set **Tax behavior = Inclusive** (the price already includes IVA). If it's left unspecified, Managed Payments adds the tax on top of 499. Set **Product tax code** to `txcd_10103001`. Save the product.
 4. Open the product → under **Pricing** copy the **Price ID** (starts with `price_`). It is **not** the product ID (`prod_`).
 5. Repeat for `Ficha Única Pro + IA`: **999.00 MXN**, monthly, tax behavior inclusive. Copy its `price_` ID.
 
