@@ -192,6 +192,16 @@ class FirstAgent(unittest.TestCase):
         s, page, _ = self.web.req('/', cookie=u['cookie'])
         self.assertNotIn('<h2>Sube tu primera propiedad</h2>', page)
 
+    # ---- sign-up ----
+    def test_signup_says_the_password_minimum_and_lets_you_read_the_terms(self):
+        s, page, _ = self.web.req('/registro')
+        self.assertEqual(s, 200)
+        self.assertIn('(mínimo 8 caracteres)', page)
+        self.assertIn('<a href="/terminos" target="_blank" rel="noopener">términos</a>', page)
+        self.assertIn('<a href="/privacidad" target="_blank" rel="noopener">aviso de privacidad</a> (borrador).', page)  # "(borrador)" stays until the lawyer
+        for path in ('/terminos', '/privacidad'):
+            self.assertEqual(self.web.req(path)[0], 200, path)
+
 
 if __name__ == '__main__':
     unittest.main()
