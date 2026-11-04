@@ -155,6 +155,34 @@ def reset_invalid():
     return layout('Enlace vencido', body)
 
 
+def _wa_page(title, inner):
+    """The two /w/<token> pages: the logged-out card look, never indexed, never sending the link on as a referrer."""
+    page = layout(title, '<div class="auth pub">%s</div>' % inner)
+    return page.replace('<title>', '<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>', 1)
+
+
+def wa_open(token, lead, listing_title=''):
+    """GET /w/<token>: one big button. Tapping it (a POST) records the reply and opens WhatsApp; opening the page records nothing."""
+    who = (lead['name'] or '').strip() or 'tu cliente'
+    again = lead['first_response_at'] if 'first_response_at' in lead.keys() else None
+    note = ('Ya lo habías marcado como contactado. Puedes escribirle otra vez.' if again else
+            'Se abre WhatsApp con tu mensaje listo y lo marcamos como contactado.')
+    inner = ('<div class="intro"><h1>Responde a %s</h1>%s</div>'
+             '<form class="stack card" method="post" action="/w/%s">'
+             '<button class="btn wa" style="min-height:64px;font-size:20px">Responder por WhatsApp</button>'
+             '<p class="small muted">%s</p><p class="small muted"><a href="/clientes">Ver mis clientes</a></p></form>') % (
+        e(who), ('<p class="muted">Preguntó por %s.</p>' % e(listing_title)) if listing_title else '', e(token), e(note))
+    return _wa_page('Responder a tu cliente', inner)
+
+
+def wa_invalid():
+    """Bad, forged, expired or orphaned link: the same page for all of them, with no name and no phone number."""
+    inner = ('<div class="intro"><h1>Este enlace ya no sirve</h1></div>%s'
+             '<a class="btn" href="/entrar">Entrar a mi cuenta</a>') % notice(
+        'Venció o no es válido. Entra a tu cuenta y responde desde Clientes: ahí siguen todos tus clientes.', 'err')
+    return _wa_page('Enlace vencido', inner)
+
+
 # ---------- dashboard ----------
 PILOT_WARN_DAYS = 7
 

@@ -18,8 +18,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import threading
 
-from .. import auth, billing, calculadoras, cards, db, domains, formatos, ghl, ghl_live, lia, operaciones, geo, importer, lead_watch, mailer, media, ml_oauth, novedades, password_reset, photo_fetch, photos, price_check, replies, stats, whatsapp
-from ..feeds import build_feed, registry
+from .. import auth, billing, calculadoras, cards, db, domains, formatos, ghl, ghl_live, lia, operaciones, geo, importer, lead_watch, mailer, media, ml_oauth, novedades, password_reset, photo_fetch, photos, price_check, reply_link, replies, stats, whatsapp
+from ..feeds import build_feed, mercadolibre, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
 from .common import csrf_ok, to_cents, to_num, DESIGN_KEYS
@@ -70,7 +70,7 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- plumbing ----------
     def log_message(self, fmt, *args):
-        line = re.sub(r'(/restablecer\?t=)[^\s&"]+', r'\1[REDACTED]', fmt % args)  # a reset link is a password: it never reaches our logs
+        line = re.sub(r'(/restablecer\?t=|/w/)[^\s&"]+', r'\1[REDACTED]', fmt % args)  # a reset link is a password and a /w/ link opens a client's WhatsApp: neither reaches our logs
         sys.stderr.write('[llave] %s %s\n' % (self.address_string(), line))
 
     def send(self, body, status=200, ctype='text/html; charset=utf-8', headers=None):
@@ -95,7 +95,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', ctype)
         self.send_header('Content-Length', str(len(data)))
         self.send_header('X-Content-Type-Options', 'nosniff')
-        self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
+        if 'Referrer-Policy' not in headers:  # a route may set a stricter one; never send two
+            self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
         if db.ENV == 'production':
             own = not (self.host() == db.BASE_DOMAIN or self.host().endswith('.' + db.BASE_DOMAIN))  # an agent's own domain: never pin its subdomains
             self.send_header('Strict-Transport-Security', 'max-age=31536000' + ('' if own else '; includeSubDomains'))
@@ -520,6 +521,7 @@ class Handler(BaseHTTPRequestHandler):
             con.execute("UPDATE agencies SET plan='gratis'%s WHERE id=?" % (', stripe_subscription_id=NULL' if billing.is_paying(a) else ''), (a['id'],))
             db.audit(con, 'user:%d' % uid, 'plan_change_downgrade', '%s -> gratis (%s)' % (a['plan'], 'test subscription, paid plans closed' if billing.is_paying(a) else 'no subscription'))
             con.commit()
+            mercadolibre.sync_plan_limit_safe(con, a['id'])
             ghl_live.plan_changed(con, a['id'])
             ctx['agency'] = con.execute('SELECT * FROM agencies WHERE id=?', (a['id'],)).fetchone()
             return self.send(panel.plans(con, ctx, ok='Listo: ahora tienes el plan Gratis.'))
@@ -595,6 +597,25 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(panel.reset_form(token, str(ex)), 400)
         return self.start_session(con, uid, '/')
 
+    def wa_open(self, con, method, token):
+        """/w/<token>: the "Responder por WhatsApp" button of an agent email (llave/reply_link.py). No login: the signed token is the key.
+        GET only shows a page, so a mail scanner or link preview that fetches the link changes nothing. POST (the big button) records
+        the first reply through lead_watch.whatsapp_reply, the panel's own code, and sends the agent to WhatsApp. HEAD never records."""
+        hdr = {'Referrer-Policy': 'no-referrer', 'X-Robots-Tag': 'noindex, nofollow'}
+        got = reply_link.resolve(con, token) if method in ('GET', 'POST') else None
+        if not got:
+            return self.send(panel.wa_invalid(), 404, headers=hdr)
+        if method == 'GET':
+            return self.send(panel.wa_open(token, got['lead'], got['listing_title']), headers=hdr)
+        try:
+            self.form()  # the body is empty; reading it keeps the connection tidy
+        except ValueError:
+            return self.send(panel.wa_invalid(), 413, headers=hdr)
+        link = lead_watch.whatsapp_reply(con, got['lead']['id'], got['agency'], got['agent_name'], via='correo', owner_ok=True)
+        if not link:
+            return self.send(panel.wa_invalid(), 404, headers=hdr)
+        return self.redirect(link, hdr)
+
     def panel(self, con, method, path, query):
         ctx = self.session(con)
         if path == '/registro':
@@ -628,6 +649,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.forgot_password(con, method)
         if path == '/restablecer':
             return self.reset_password(con, method, query)
+        m = re.match(r'^/w/([A-Za-z0-9._-]{20,140})$', path)
+        if m:
+            return self.wa_open(con, method, m.group(1))
         if path in ('/terminos', '/privacidad'):
             return self.send(panel.legal(path[1:]))
         m = re.match(r'^/api/eco/(rentapoliza)$', path)
@@ -943,14 +967,7 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             lid = int(m.group(1))
             if m.group(2) == 'whatsapp':
-                ld = con.execute('SELECT * FROM leads WHERE id=? AND agency_id=?', (lid, a['id'])).fetchone()
-                if not ld or not ld['phone']:
-                    return self.redirect('/clientes')
-                lead_watch.mark_responded(con, lid, a['id'])
-                con.commit()
-                lst = con.execute('SELECT title FROM listings WHERE id=?', (ld['listing_id'],)).fetchone() if ld['listing_id'] else None
-                text = replies.render(a, ld['name'], lst['title'] if lst else None, ctx['user']['name'])
-                return self.redirect(whatsapp.wa_link(ld['phone'], text))
+                return self.redirect(lead_watch.whatsapp_reply(con, lid, a, ctx['user']['name']) or '/clientes')
             if method == 'POST':
                 lead_watch.set_status(con, lid, a['id'], f.get('status', ''))
                 con.commit()
@@ -994,6 +1011,7 @@ class Handler(BaseHTTPRequestHandler):
                 con.execute('UPDATE agencies SET plan=? WHERE id=?', (key, a['id']))
                 db.audit(con, actor, 'plan_change_test_mode', '%s -> %s (no payment)' % (a['plan'], key))
                 con.commit()
+                mercadolibre.sync_plan_limit_safe(con, a['id'])
                 ghl_live.plan_changed(con, a['id'])
                 ctx['agency'] = con.execute('SELECT * FROM agencies WHERE id=?', (a['id'],)).fetchone()
                 return self.send(panel.plans(con, ctx, ok='Listo: ahora tienes el plan %s (modo prueba, sin cobro).' % key))

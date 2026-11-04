@@ -2,35 +2,42 @@
 and a buyer-alert match. Until now every one of those was only a dry-run outbox row, so no alert ever reached an agent.
 
 ⛔ Never to a client. The only addresses used are the agency's own account holders (owners / admins, else the agency email).
-The client's phone becomes a wa.me link the AGENT taps; nothing here messages, emails or calls the client.
-Short, big text, only the facts that matter (who, which property, what they said), one big "Responder por WhatsApp" button
-with the agency's approved first reply (replies.render) and a link to Clientes. Spanish, tú. Delivery is llave/mailer.py:
+The big "Responder por WhatsApp" button is a signed one-tap page on the app host (llave/reply_link.py, /w/<token>): the agent taps
+it, taps again, and WhatsApp opens with the agency's approved first reply (replies.render) while the lead is marked contactado, so
+the 5-minute reminder does not fire for a lead already answered. Nothing here messages, emails or calls the client.
+Short, big text, only the facts that matter (who, which property, what they said), that one button and a link to Clientes.
+(The buyer-alert email keeps a plain wa.me "Reenviar" link: there is no lead to mark.) Spanish, tú. Delivery is llave/mailer.py:
 without SMTP these become dry-run outbox rows; the WhatsApp dry-run rows stay exactly as they were (no WhatsApp sender yet).
 Called from the places that already dedupe (leads.create_lead, lead_watch.remind, lead_watch.follow_up_digest, alerts_buyers.run):
 the email goes out once, exactly when their row is queued."""
 import re
 import sys
 
-from . import db, emails, mail_html as h, mailer, replies, whatsapp
+from . import db, emails, mail_html as h, mailer, replies, reply_link
 
 NOTE_MAX = 300
 
 
 # ---------- who gets it ----------
-def recipients(con, agency_id):
-    """[(email, name)] — the agency's account holders (owners / admins); the agency email only if there are none."""
-    rows = con.execute("SELECT email, name FROM users WHERE agency_id=? AND role IN ('owner','admin') AND email<>'' ORDER BY id",
+def holders(con, agency_id):
+    """[(email, name, user id)] — the agency's account holders (owners / admins); the agency email only if there are none (user id 0)."""
+    rows = con.execute("SELECT id, email, name FROM users WHERE agency_id=? AND role IN ('owner','admin') AND email<>'' ORDER BY id",
                        (agency_id,)).fetchall()
     out, seen = [], set()
     for r in rows:
         if r['email'].lower() not in seen:
             seen.add(r['email'].lower())
-            out.append((r['email'], r['name'] or ''))
+            out.append((r['email'], r['name'] or '', r['id']))
     if not out:
         ag = con.execute('SELECT email FROM agencies WHERE id=?', (agency_id,)).fetchone()
         if ag and ag['email']:
-            out.append((ag['email'], ''))
+            out.append((ag['email'], '', 0))
     return out
+
+
+def recipients(con, agency_id):
+    """[(email, name)] — the same people as holders()."""
+    return [(email, name) for email, name, _uid in holders(con, agency_id)]
 
 
 # ---------- small helpers ----------
@@ -54,11 +61,13 @@ def _subject(text):
     return emails.transactional_subject(text)
 
 
-def _wa_reply(agency, lead, listing_title, agent_name):
-    """The existing first-reply link: wa.me/<client> with the agency's approved wording. None when the client left no phone."""
+def _wa_reply(agency, lead, user_id):
+    """The button's link: a signed one-tap page on the app host (llave/reply_link.py) that records the reply and then opens
+    wa.me/<client> with the agency's approved wording. Never a bare wa.me link: that would leave the lead "sin respuesta".
+    None when the client left no phone."""
     if not lead['phone']:
         return None
-    return whatsapp.wa_link(lead['phone'], replies.render(agency, lead['name'], listing_title, agent_name))
+    return reply_link.url(lead['id'], agency['id'], user_id)
 
 
 def _facts(lead, listing_title, listing_ref):
@@ -138,8 +147,8 @@ def new_lead_messages(con, lead_id):
     out = []
     for role, agency_id in targets:
         agency = con.execute('SELECT * FROM agencies WHERE id=?', (agency_id,)).fetchone()
-        for email, user_name in recipients(con, agency_id):
-            wa = _wa_reply(agency, lead, title, user_name)
+        for email, _name, user_id in holders(con, agency_id):
+            wa = _wa_reply(agency, lead, user_id)
             facts = _facts(lead, title, ref)
             text, html = _compose(subject, 'Nuevo cliente en Ficha Única', who, facts, wa, 'Responder por WhatsApp',
                                   _bolsa_note(con, lead, role), _clientes())
@@ -156,8 +165,8 @@ def reminder_messages(con, lead, minutes):
     who = (lead['name'] or '').strip() or 'Un cliente'
     title, ref = lead.get('listing_title'), lead.get('listing_ref')
     out = []
-    for email, user_name in recipients(con, lead['agency_id']):
-        wa = _wa_reply(agency, lead, title, user_name)
+    for email, _name, user_id in holders(con, lead['agency_id']):
+        wa = _wa_reply(agency, lead, user_id)
         text, html = _compose(subject, 'Sigue sin respuesta', who, _facts(lead, title, ref), wa, 'Responder por WhatsApp', '', _clientes(),
                               intro='Te escribió hace %d min%s y nadie le ha contestado.' % (minutes, ' por %s' % title if title else ''))
         out.append({'to': email, 'subject': subject, 'text': text, 'html': html, 'kind': 'lead_sin_respuesta',

@@ -12,7 +12,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from llave import agent_mail, alerts_buyers, auth, db, emails, lead_watch as lw, leads, mailer, replies, whatsapp  # noqa: E402
+from llave import agent_mail, alerts_buyers, auth, db, emails, lead_watch as lw, leads, mailer, replies, reply_link, whatsapp  # noqa: E402
 import web_harness  # noqa: E402
 
 SMTP = {'LLAVE_SMTP_HOST': 'smtp.ejemplo.test', 'LLAVE_SMTP_PORT': '587', 'LLAVE_SMTP_USER': 'avisos@ejemplo.test',
@@ -60,6 +60,16 @@ class Base(unittest.TestCase):
     def to(self):
         return [m['To'] for m in self.mails]
 
+    def tap(self, msg):
+        """What the big button does for this email: the /w/ link in it -> the wa.me link the agent ends up on (None for a dead link).
+        Exactly one signed link must be in the text part, and the same one in the HTML."""
+        link, = re.findall(r'%s/w/[A-Za-z0-9._-]+' % re.escape(db.origin('app')), body(msg))
+        self.assertIn('href="%s"' % link, body(msg, 'html'))
+        got = reply_link.resolve(self.con, link.rsplit('/', 1)[1])
+        if not got:
+            return None
+        return lw.whatsapp_reply(self.con, got['lead']['id'], got['agency'], got['agent_name'], owner_ok=True)
+
     def outbox(self, kind_prefix=''):
         return self.con.execute("SELECT * FROM outbox WHERE kind LIKE ? ORDER BY id", (kind_prefix + '%',)).fetchall()
 
@@ -85,10 +95,11 @@ class NewLead(Base):
             self.assertIn(s, t)
         wa = whatsapp.wa_link('+525512345678', replies.render(dict(self.con.execute('SELECT * FROM agencies WHERE id=1').fetchone()),
                                                               'Ana López', 'Depto con terraza en Roma Norte', 'Rosa Pérez'))
-        self.assertIn(wa, t)                                                        # the existing first-reply link, signed by the agent
+        self.assertNotIn('wa.me', t)                                                # the button is the signed one-tap page, never a bare wa.me link
+        self.assertEqual(self.tap(m), wa)                                           # which ends on the existing first-reply link, signed by the agent
         self.assertIn('Soy%20Rosa%20de%20Casa%20Rosa', wa)
         html = body(m, 'html')
-        self.assertIn('href="%s"' % wa.replace('&', '&amp;'), html)
+        self.assertNotIn('wa.me', html)
         self.assertIn('>Responder por WhatsApp<', html)
         self.assertIn('href="%s/clientes"' % db.origin('app'), html)
         self.assert_agents_only('ana@cliente.test')
@@ -100,7 +111,7 @@ class NewLead(Base):
         html = body(self.mails[0], 'html')
         for bad in ('<style', '<script', '<img', '<link', 'url(', '@import', 'fonts.googleapis'):
             self.assertNotIn(bad, html)
-        self.assertEqual(sorted(set(re.findall(r'href="(https?://[^"/]+)', html))), sorted({'https://wa.me', db.origin('app')}))
+        self.assertEqual(sorted(set(re.findall(r'href="(https?://[^"/]+)', html))), [db.origin('app')])   # the button and the footer link: app host only
         for token in ('#1B1236', '#0FB56D', '#FFF9EE', 'font-size:20px', 'font-size:30px'):   # tinta, nopal, papel, big button + big name
             self.assertIn(token, html)
         self.assertIn('Ficha Única', html)
@@ -171,7 +182,9 @@ class NewLead(Base):
         self.assertIn('Reparto 40/60', by['beto@otra.test'])
         self.assertIn('Llegó por la Bolsa', by['rosa@casa-rosa.test'])
         self.assertIn('Reparto 60/40', by['rosa@casa-rosa.test'])
-        self.assertIn('Soy%20Beto%20de%20Otra%20Inmobiliaria', by['beto@otra.test'])     # each agency's own first reply
+        msgs = {m['To']: m for m in self.mails}
+        self.assertIn('Soy%20Beto%20de%20Otra%20Inmobiliaria', self.tap(msgs['beto@otra.test']))     # each agency's own first reply
+        self.assertIn('Soy%20Rosa%20de%20Casa%20Rosa', self.tap(msgs['rosa@casa-rosa.test']))
         self.assert_agents_only('ana@cliente.test')
 
     def test_recipients_are_the_account_holders(self):
@@ -180,9 +193,9 @@ class NewLead(Base):
         self.con.commit()
         self.lead()
         self.assertEqual(sorted(self.to()), ['luis@casa-rosa.test', 'rosa@casa-rosa.test'])      # team members (role agent) are not emailed
-        by = {m['To']: body(m) for m in self.mails}
-        self.assertIn('Soy%20Luis%20de%20Casa%20Rosa', by['luis@casa-rosa.test'])
-        self.assertIn('Soy%20Rosa%20de%20Casa%20Rosa', by['rosa@casa-rosa.test'])
+        msgs = {m['To']: m for m in self.mails}
+        self.assertIn('Soy%20Luis%20de%20Casa%20Rosa', self.tap(msgs['luis@casa-rosa.test']))
+        self.assertIn('Soy%20Rosa%20de%20Casa%20Rosa', self.tap(msgs['rosa@casa-rosa.test']))
 
     def test_agency_email_is_the_fallback_and_no_address_means_no_email(self):
         self.con.execute('DELETE FROM users WHERE agency_id=1')
@@ -218,8 +231,10 @@ class Reminder(Base):
         self.assertEqual(m['Subject'], 'Sin respuesta: Marta, 7 min')
         self.assertEqual(emails.check(m['Subject']), '')
         t = body(m)
-        for s in ('Marta Pérez', 'hace 7 min', 'Depto con terraza en Roma Norte', 'wa.me/525511119999', 'Responder por WhatsApp'):
+        for s in ('Marta Pérez', 'hace 7 min', 'Depto con terraza en Roma Norte', 'Responder por WhatsApp'):
             self.assertIn(s, t)
+        self.assertNotIn('wa.me', t)
+        self.assertIn('wa.me/525511119999', self.tap(m))
         self.assertEqual(lw.remind(self.con, now=NOW), 0)
         self.assertEqual(lw.remind(self.con, now=NOW + datetime.timedelta(hours=2)), 0)
         self.assertEqual(len(self.mails), 1)
@@ -349,7 +364,11 @@ class ThroughTheWeb(unittest.TestCase):
         t = body(self.mails[0])
         self.assertIn('Carla Ruiz', t)
         self.assertIn('Depto en la Condesa', t)
-        self.assertIn('wa.me/525544445555', t)
+        self.assertNotIn('wa.me', t)
+        link = re.search(r'(/w/\S+)', t).group(1)
+        s2, _, h2 = self.web.req(link, {})                                              # the second tap, as a POST
+        self.assertEqual(s2, 303)
+        self.assertIn('https://wa.me/525544445555?text=', h2['Location'])
 
     def test_directory_request_emails_the_routed_agency(self):
         with mail_env():

@@ -16,7 +16,7 @@ Owner: Ciao Bella Marketing · Code: this repo · Deploy kit: `deploy/` (dry-run
 | 4 | `deploy/target.env` (from `.example`) + `$DATA_DIR/app.env` (from `deploy/app.env.example`, chmod 600) with a fresh `LLAVE_SECRET` | Claude | 📋 |
 | 5 | Caddy (with the DNS module for the wildcard) using `deploy/Caddyfile`; systemd unit `deploy/fichaunica.service` | Claude | 📋 |
 | 6 | Cron from `deploy/crontab.example` (daily backups, the 1-minute lead watch, the weekly price check) | Claude | 📋 |
-| 7 | Off-site copy of backups (e.g. `--offsite-cmd "rclone copy {file} remote:fichaunica-backups"` to a bucket or Drive) | Josh picks the destination | 📋 |
+| 7 | Off-site copy of backups. Today they live only on the server. Pull them to a Mac with `deploy/pull-backup.sh <carpeta>` (newest `.db.gz` only, checked with `gzip -t`, keeps 14, one log line per run; daily 5:00 a.m. with `deploy/com.fichaunica.pull-backup.plist.example`; needs the ssh alias `fichaunica-vps` working with no password prompt and `sudo -n` for the `deploy` user; deletes nothing on the server). The copies hold agents' and clients' personal data: a folder on the Mac's own disk with FileVault on, not a shared one. Or push from the server with `--offsite-cmd "rclone copy {file} remote:fichaunica-backups"` | Josh picks the destination | 📋 |
 | 8 | Error alerts: `LLAVE_ALERT_WEBHOOK` (a GHL inbound webhook → internal contact → WhatsApp to Samantha's alert line) and/or email | Samantha | 📋 |
 | 8b | Email to agents: a mailbox on the domain (e.g. `avisos@fichaunica.mx`) and its SMTP settings in `app.env` (`LLAVE_SMTP_HOST/PORT/USER/PASSWORD/FROM`). Turns on the new-lead email, the 5-minute and daily emails, buyer-alert emails and "¿Olvidaste tu contraseña?". Without it all of those are dry-run outbox rows and the forgot-password link stays hidden | Josh creates the mailbox, Claude fills `app.env` | 📋 |
 | 8c | While the Stripe key is a test key: `LLAVE_STRIPE_TEST_EMAILS=<Josh's login email>` in `app.env`, otherwise nobody (Josh included) can start a paid plan. See `docs/STRIPE-SETUP.md` | Claude | 📋 |
@@ -27,7 +27,7 @@ Owner: Ciao Bella Marketing · Code: this repo · Deploy kit: `deploy/` (dry-run
 ## Deploy (each time)
 1. `deploy/deploy.sh` (dry run). Read what it would do.
 2. `deploy/deploy.sh --go`: tests, then a server backup, upload of the release, symlink switch, restart, and a health check, with an automatic rollback if `/healthz` fails.
-3. Smoke test: sign up a test agency, run the 3-step wizard with one listing, check the public page, feed, card and ficha, send a test lead from our own phone, and confirm it shows in Clientes **and that the alert email reaches the agent's inbox** (check the outbox row `email.lead_nuevo` says `sent`, and that no email went to the test lead). Then "¿Olvidaste tu contraseña?" on `/entrar`: the link arrives, works once, and the old session is closed.
+3. Smoke test: sign up a test agency, run the 3-step wizard with one listing, check the public page, feed, card and ficha, send a test lead from our own phone, and confirm it shows in Clientes **and that the alert email reaches the agent's inbox** (check the outbox row `email.lead_nuevo` says `sent`, and that no email went to the test lead). Then tap the email's **Responder por WhatsApp** button on a phone that is logged out (the one-tap page opens, the big button opens WhatsApp) and confirm the lead is now *Contactado* in Clientes and no 5-minute reminder is sent for it. Then "¿Olvidaste tu contraseña?" on `/entrar`: the link arrives, works once, and the old session is closed.
 
 ## The app refuses to start in production if
 - `LLAVE_SECRET` is missing or the dev default (`check_production_config`).
@@ -38,6 +38,7 @@ Owner: Ciao Bella Marketing · Code: this repo · Deploy kit: `deploy/` (dry-run
 - `/healthz` (DB ok, free disk, hours since the last backup). Point an uptime monitor at `https://app.fichaunica.mx/healthz`.
 - Errors: rotating `errors.log`, plus at most one alert per error type every 15 min, with secrets/phones/emails redacted.
 - Admin view `/admin` (role admin: `python3 tools/make_admin.py <email>`): clients waiting >5 min across all agencies.
+- Funnel: `python3 tools/funnel.py` on the server (read-only, counts only) shows how many agencies reached each step. A daily `--json` log line is in `deploy/crontab.example`, commented out.
 
 ## Restore (drill once before the pilot)
 `python3 tools/backup.py --verify-latest`, then stop the service, gunzip the chosen `llave-*.db.gz` over `$LLAVE_DB`, untar the media archives in order, and start the service. Full steps: `llave.backup.restore_instructions()`.

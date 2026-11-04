@@ -8,6 +8,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from llave import db, ghl_live  # noqa: E402
+from llave.feeds import mercadolibre  # noqa: E402
 
 
 def opt(args, name):
@@ -48,6 +49,7 @@ def main(args, con=None):
     con.execute('UPDATE agencies SET plan=?, plan_until=? WHERE id=?', (plan, until, a['id']))
     db.audit(con, 'cli', 'plan_change', '%s: %s -> %s (hasta %s) motivo: %s' % (slug, a['plan'], plan, until or '-', reason))
     con.commit()
+    mercadolibre.sync_plan_limit_safe(con, a['id'])  # dry run: queues pause / reactivate for Mercado Libre items the new limit hides or shows
     ghl_live.plan_changed(con, a['id'])
     print('ok: %s ahora %s%s' % (slug, plan, ' hasta ' + until if until else ''))
     return 0

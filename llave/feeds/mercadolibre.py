@@ -1,5 +1,6 @@
 """Mercado Libre (site MLM) item payloads. DRY ONLY: nothing here touches the network."""
 import json
+import sys
 
 from .. import db
 from ..whatsapp import norm_phone
@@ -161,4 +162,40 @@ def sync_plan_limit(con, agency_id):
         elif lid in shown and paused:
             dry_run_update(con, lid, 'reactivate')
             out['reactivate'].append(lid)
+    return out
+
+
+def sync_plan_limit_safe(con, agency_id):
+    """What every place that changes a plan calls, AFTER it has committed the change: sync_plan_limit, but it never raises, so a problem
+    here can never undo or fail a plan change or a Stripe webhook. A failure is rolled back, written to stderr, reported through
+    llave.alerts (no personal data in it) and left for the next sweep (tools/ml_plan_sync_run.py), because sync_plan_limit is idempotent.
+    Still dry-run: the only effect is outbox rows. -> the sync_plan_limit result, or None when it failed."""
+    try:
+        return sync_plan_limit(con, agency_id)
+    except Exception as ex:
+        try:
+            con.rollback()
+        except Exception:
+            pass
+        sys.stderr.write('[llave] mercadolibre plan sync agency:%s: %s: %s\n' % (agency_id, type(ex).__name__, str(ex)[:200]))
+        try:
+            from .. import alerts
+            alerts.report(ex, {'path': 'mercadolibre.sync_plan_limit'})
+        except Exception:
+            pass
+        return None
+
+
+def sync_all(con):
+    """The sweep behind the cron: sync_plan_limit_safe for every agency that has a published Mercado Libre item, so a sync that failed once,
+    or a limit that moved without a plan change (referral bonus, RentaPóliza credit), is caught within the hour.
+    -> {agency_id: {'pause': [...], 'reactivate': [...]}} for the agencies where something was queued."""
+    ids = [r['agency_id'] for r in con.execute(
+        "SELECT DISTINCT l.agency_id FROM portal_publications pp JOIN listings l ON l.id=pp.listing_id "
+        "WHERE pp.portal='mercadolibre' AND pp.external_id IS NOT NULL AND pp.external_id<>'' ORDER BY l.agency_id")]
+    out = {}
+    for aid in ids:
+        r = sync_plan_limit_safe(con, aid)
+        if r and (r['pause'] or r['reactivate']):
+            out[aid] = r
     return out

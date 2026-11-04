@@ -13,5 +13,9 @@ SHELL=/bin/bash
 0 15 * * 1 set -a; . /srv/fichaunica-data/app.env; set +a; cd /srv/fichaunica/current && python3 tools/price_check_weekly.py >> /srv/fichaunica-data/logs/price_check.log 2>&1
 # own domains (Pro): DNS check every 10 minutes. Verifies pending domains, takes a verified one off after 3 failed checks in a row (30 min), warms the certificate. Sends nothing. Needs LLAVE_PUBLIC_IP in app.env.
 */10 * * * * set -a; . /srv/fichaunica-data/app.env; set +a; cd /srv/fichaunica/current && python3 tools/domain_check_run.py >> /srv/fichaunica-data/logs/domain_check.log 2>&1
+# Mercado Libre pause / reactivate safety net: hourly at :40. The plan changes already queue it; this repeats it for any that failed. DRY RUN: outbox rows only.
+40 * * * * set -a; . /srv/fichaunica-data/app.env; set +a; cd /srv/fichaunica/current && python3 tools/ml_plan_sync_run.py >> /srv/fichaunica-data/logs/ml_plan_sync.log 2>&1
+# OPTIONAL daily funnel snapshot (off by default): one JSON line per day, counts only, read-only. The database does not keep history for things like how many agencies pay, so this log is the only time series. 10:00 UTC (4 a.m. CDMX). Read it with: python3 tools/funnel.py
+# 0 10 * * * set -a; . /srv/fichaunica-data/app.env; set +a; cd /srv/fichaunica/current && python3 tools/funnel.py --json >> /srv/fichaunica-data/logs/funnel.jsonl 2>&1
 # Cloud plan only: watchdog
 # * * * * * DATA_DIR=$HOME/fichaunica-data $HOME/fichaunica/current/deploy/run-cloud.sh watch
