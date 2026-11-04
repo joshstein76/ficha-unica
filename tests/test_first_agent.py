@@ -349,6 +349,16 @@ class FirstAgent(unittest.TestCase):
         self.assertNotIn('href="/equipo"', page)
         self.assertEqual(self.web.req('/equipo', cookie=u['cookie'])[0], 200)   # the page itself is untouched
 
+    def test_too_heavy_upload_says_what_to_do_not_only_the_limit(self):
+        from llave.web import server
+
+        class Stub:
+            headers = {'Content-Type': 'multipart/form-data; boundary=x', 'Content-Length': str(41 * 1024 * 1024)}
+        with self.assertRaises(ValueError) as cm:
+            server.Handler.form(Stub())
+        self.assertEqual(str(cm.exception), 'Las fotos pesan demasiado juntas (máximo 40 MB por envío). '
+                                            'Elige menos fotos a la vez; el resto las agregas después en Propiedades.')
+
 
 if __name__ == '__main__':
     unittest.main()

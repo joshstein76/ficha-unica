@@ -143,7 +143,7 @@ class Handler(BaseHTTPRequestHandler):
         ctype = self.headers.get('Content-Type', '')
         length = int(self.headers.get('Content-Length') or 0)
         if length > MAX_UPLOAD:
-            raise ValueError('Archivo demasiado grande (máximo 40 MB por envío).')
+            raise ValueError('Las fotos pesan demasiado juntas (máximo 40 MB por envío). Elige menos fotos a la vez; el resto las agregas después en Propiedades.')
         if ctype.startswith('multipart/form-data'):
             fs = cgi.FieldStorage(fp=self.rfile, headers=self.headers,
                                   environ={'REQUEST_METHOD': 'POST', 'CONTENT_TYPE': ctype, 'CONTENT_LENGTH': str(length)})
