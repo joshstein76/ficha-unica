@@ -172,6 +172,15 @@ class FirstAgent(unittest.TestCase):
             self.assertIn('Llegaste al límite de tu plan (1 propiedad)', page, path)
             self.assertIn('<a href="/plan">Ver planes</a>', page, path)
 
+    # ---- Inicio on a phone ----
+    def test_first_week_rows_never_drop_the_text_under_the_tick(self):
+        from llave.web import panel, styles
+        h = panel.first_week(1, 2, [(True, 'Agrega tu WhatsApp para recibir clientes', '/perfil'), (False, 'Sube tu primera propiedad', '/nueva')])
+        self.assertEqual(h.count('class="row step"'), 2)
+        self.assertIn('<span class="pill ok">✓</span><span>Agrega tu WhatsApp para recibir clientes</span>', h)
+        self.assertIn('.row.step{flex-wrap:nowrap', styles.PANEL)
+        self.assertIn('.row.step .pill{flex:none}', styles.PANEL)
+
 
 if __name__ == '__main__':
     unittest.main()

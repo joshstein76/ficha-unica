@@ -136,6 +136,7 @@ textarea{min-height:120px}
 input[type=checkbox],input[type=radio]{width:24px;height:24px;min-height:0;padding:0;flex:none;accent-color:var(--jacaranda)}
 .check{display:flex;gap:10px;align-items:center;min-height:44px;font-weight:500;color:var(--tinta)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row.step{flex-wrap:nowrap;min-height:44px}.row.step .pill{flex:none}
 .list{display:grid;gap:12px}
 .item{display:grid;grid-template-columns:84px 1fr;gap:12px;align-items:center;background:var(--blanco);border:3px solid var(--tinta);border-radius:12px;box-shadow:3px 3px 0 var(--tinta);
 padding:10px;text-decoration:none;color:inherit;min-width:0;min-height:44px}
