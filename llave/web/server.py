@@ -170,7 +170,9 @@ class Handler(BaseHTTPRequestHandler):
         return self.send(data, ctype='image/webp' if name.endswith('.webp') else (mimetypes.guess_type(path)[0] or 'application/octet-stream'),
                          headers={'Cache-Control': 'public, max-age=86400'})
 
-    def media(self, rel):
+    def media(self, rel, cache=None):
+        """Serve a file under MEDIA_DIR. Files have content-hashed names, so by default they are cached for a year; a card is
+        served at a stable URL whose content changes with the listing, so its routes pass a short `cache` and rely on the ETag."""
         rel = posixpath.normpath(urllib.parse.unquote(rel)).lstrip('/')
         if rel.startswith('..') or '\\' in rel:
             return self.send('No encontrado', 404, 'text/plain; charset=utf-8')
@@ -178,7 +180,7 @@ class Handler(BaseHTTPRequestHandler):
         if not os.path.isfile(path):
             return self.send('No encontrado', 404, 'text/plain; charset=utf-8')
         etag = '"%s"' % hashlib.sha1(rel.encode('utf-8')).hexdigest()
-        cache = 'public, max-age=31536000, immutable'
+        cache = cache or 'public, max-age=31536000, immutable'
         inm = [x.strip() for x in (self.headers.get('If-None-Match') or '').split(',')]
         if etag in inm or '*' in inm:
             self.send_response(304)
@@ -468,16 +470,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send('Feed no disponible', 404, 'text/plain; charset=utf-8')
             con.commit()
             return self.send(body, ctype=ctype)
-        m = re.match(r'^/propiedad/([a-z0-9-]+)/tarjeta-(post|historia)\.jpg$', path)
+        m = re.match(r'^/propiedad/([a-z0-9-]+)/tarjeta-(post|historia|enlace)\.jpg$', path)
         if m:
-            if not db.plan_has(a, 'tools'):
+            kind = {'post': 'post', 'historia': 'story', 'enlace': 'enlace'}[m.group(2)]
+            if not cards.can_make(a, kind):  # Pro and up (and the plain post card for Gratis once LLAVE_PLANS_V2=1); the link preview is for everyone
                 return self.send('No encontrada', 404, 'text/plain; charset=utf-8')
             row = con.execute("SELECT id FROM listings WHERE agency_id=? AND slug=? AND status IN ('activa','apartada')",
                               (a['id'], m.group(1))).fetchone()
             if not row or row['id'] not in db.public_listing_ids(con, a['id'], include_shared=False):  # plan cap: hidden stays hidden
                 return self.send('No encontrada', 404, 'text/plain; charset=utf-8')
-            rel = cards.render_cached(con, row['id'], 'post' if m.group(2) == 'post' else 'story')
-            return self.media(rel)
+            rel = cards.render_cached(con, row['id'], kind)
+            return self.media(rel, cache='public, max-age=300')  # same URL, new picture when the listing changes: the ETag tells
         m = re.match(r'^/propiedad/([a-z0-9-]+)(/ficha)?/?$', path)
         if m:
             for lid in db.public_listing_ids(con, a['id'], include_pool=True):  # own, then Bolsa shares, then the site section (db.pool_listing_ids)
@@ -914,6 +917,15 @@ class Handler(BaseHTTPRequestHandler):
                 con.commit()
                 msg = '%d fotos listas.' % ok + ((' %d no se pudieron usar: %s' % (len(bad), bad[0])) if bad else '')
                 return self.send(panel.listing_form(con, ctx, l, ok=msg))
+            mm = re.match(r'^/cierre-(post|historia)\.jpg$', sub)
+            if mm and method == 'GET':  # the ¡Vendida! / ¡Rentada! card: only for sold or rented listings, only for the agency's own
+                if l['status'] not in db.CLOSED_STATUSES:
+                    return self.send('No encontrada', 404, 'text/plain; charset=utf-8')
+                if not cards.can_make(a, 'cierre_post'):
+                    return self.send(panel.upsell(ctx, 'tools', 'Tarjeta de cierre', 'propiedades'))
+                rel = cards.render_cached(con, l['id'], 'cierre_post' if mm.group(1) == 'post' else 'cierre_story',
+                                          show_price=query.get('precio') == '1')
+                return self.media(rel, cache='private, no-cache')
             if sub in ('/ia-texto', '/ordenar-fotos') and not db.plan_has(a, 'ai'):
                 return self.send(panel.upsell(ctx, 'ai', 'Ayuda inteligente', 'propiedades'))
             if sub == '/ia-texto' and method == 'POST':
