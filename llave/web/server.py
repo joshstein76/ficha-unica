@@ -22,7 +22,7 @@ from .. import auth, billing, calculadoras, cards, db, domains, formatos, ghl, g
 from ..feeds import build_feed, mercadolibre, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
-from .common import csrf_ok, to_cents, to_num, DESIGN_KEYS
+from .common import csrf_ok, to_cents, to_price_cents, to_num, DESIGN_KEYS
 from .styles import BRAND_COLOR
 
 MAX_UPLOAD = 40 * 1024 * 1024
@@ -1379,7 +1379,7 @@ def wizard_save_2(con, l, f):
     for k in ('colonia', 'municipio', 'estado'):
         if not (f.get(k) or '').strip():
             raise ValueError('Falta la colonia, el municipio o el estado.')
-    vals = (to_cents(f.get('price')), 'USD' if f.get('currency') == 'USD' else 'MXN', f['colonia'].strip(), f['municipio'].strip(),
+    vals = (to_price_cents(f.get('price')), 'USD' if f.get('currency') == 'USD' else 'MXN', f['colonia'].strip(), f['municipio'].strip(),
             f['estado'].strip(), to_num(f.get('m2_built')), to_num(f.get('bedrooms'), int), to_num(f.get('bathrooms')))
     con.execute("UPDATE listings SET price_cents=?, currency=?, colonia=?, municipio=?, estado=?, m2_built=?, bedrooms=?, bathrooms=?, "
                 "price_date=date('now'), updated_at=datetime('now') WHERE id=?", vals + (l['id'],))
@@ -1415,7 +1415,7 @@ def save_listing(con, a, uid, f, existing=None):
     price_date = (f.get('price_date') or '').strip() or datetime.date.today().isoformat()
     vals = dict(
         title=title[:100], description=(f.get('description') or '').strip()[:8000], operation=op, property_type=ptype,
-        status=status, price_cents=to_cents(f.get('price')), currency='USD' if f.get('currency') == 'USD' else 'MXN',
+        status=status, price_cents=to_price_cents(f.get('price')), currency='USD' if f.get('currency') == 'USD' else 'MXN',
         price_date=price_date, maintenance_cents=to_cents(f.get('maintenance')),
         m2_built=to_num(f.get('m2_built')), m2_land=to_num(f.get('m2_land')),
         bedrooms=to_num(f.get('bedrooms'), int), bathrooms=to_num(f.get('bathrooms')), parking=to_num(f.get('parking'), int),

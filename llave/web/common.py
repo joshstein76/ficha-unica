@@ -82,8 +82,22 @@ def to_cents(raw):
         return None
     try:
         return int(round(float(raw) * 100))
-    except ValueError:
+    except (ValueError, OverflowError):
         raise ValueError('El precio debe ser un número, por ejemplo 4500000')
+
+
+MAX_PRICE_CENTS = 10 ** 13  # 100 mil millones: a typo with too many zeros, never a real price (also keeps SQLite's 64-bit integer safe)
+
+
+def to_price_cents(raw):
+    """A listing price. Empty = no price yet (the site says 'Precio a consultar'); otherwise it must be a number above 0:
+    '$-5 MXN' or '$0 MXN' on a public page reads as a bug."""
+    c = to_cents(raw)
+    if c is None:
+        return None
+    if c <= 0 or c > MAX_PRICE_CENTS:
+        raise ValueError('Revisa el precio: escribe solo números, mayor que 0, por ejemplo 4500000.')
+    return c
 
 
 def to_num(raw, kind=float):
