@@ -493,7 +493,7 @@ def _foot(reg, local, home=False):
             '<div><h4>Producto</h4><a href="%s#funciones">Funciones</a><a href="%s#como">Cómo funciona</a><a href="%s">Planes</a><a href="/propiedades">Ver propiedades</a></div>'
             '<div><h4>Ayuda</h4><a href="%s#preguntas">Preguntas frecuentes</a><a href="%s/entrar">Entrar</a><a href="%s">Crear mi sitio</a></div>'
             '<div><h4>Legal</h4><a href="%s/terminos">Términos</a><a href="%s/privacidad">Aviso de privacidad</a></div>'
-            '</div><div class="legal"><span>© %d Ficha Única · Un producto de %s</span><span>Hecho en México</span></div>%s</div></footer>'
+            '</div><div class="legal"><span>© %d Ficha Única · Un producto de %s</span></div>%s</div></footer>'
             '<div class="sticky"><a class="btn" href="%s">Crear mi sitio gratis <svg><use href="#i-ar"/></svg></a></div>') % (
         logo('fu-foot'), e(db.OWNER), p, p, '#planes' if home else '/planes', p, e(app), e(reg), e(app), e(app),
         datetime.date.today().year, e(db.OWNER),
@@ -507,7 +507,7 @@ def _reg(ref=''):
 def landing(ref=''):
     reg = _reg(ref)
     local = db.ENV != 'production'
-    desc = 'Tu sitio inmobiliario gratis y tus clientes directo a tu WhatsApp. Sube cada propiedad una vez: sale en tu sitio y en Google, lista para la IA. Hecho en México.'
+    desc = 'Tu sitio inmobiliario gratis y tus clientes directo a tu WhatsApp. Sube cada propiedad una vez: sale en tu sitio y en Google, lista para la IA.'
     ld = json.dumps({'@context': 'https://schema.org', '@graph': [
         {'@type': 'Organization', 'name': db.BRAND, 'parentOrganization': {'@type': 'Organization', 'name': db.OWNER}},
         {'@type': 'FAQPage', 'mainEntity': [{'@type': 'Question', 'name': q, 'acceptedAnswer': {'@type': 'Answer', 'text': a}} for q, a in faq_items()]}]},
