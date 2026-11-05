@@ -707,10 +707,11 @@ class PanelCard(Base):
         self.assertIsNone(self.con.execute('SELECT custom_domain FROM agencies WHERE id=?', (self.aid,)).fetchone()[0])
         self.assertIn('Quitamos tu dominio', self.sitio('/sitio?d=quitado'))
 
-    def test_plans_no_longer_say_muy_pronto_for_the_domain(self):
-        text = json.dumps(panel.PLANS, ensure_ascii=False)
-        self.assertIn('Tu propio dominio', text)
-        self.assertNotIn('Tu propio dominio (muy pronto)', text)
+    def test_plans_say_muy_pronto_for_the_domain_until_it_is_proven_end_to_end(self):
+        # 2026-11-04 night: the marketing site says "muy pronto"; no real domain has been connected yet (TLS never exercised)
+        for plans in (panel.PLANS, panel.PLANS_V2):
+            text = json.dumps(plans, ensure_ascii=False)
+            self.assertIn('Tu propio dominio (muy pronto)', text)
 
 
 class Migration(unittest.TestCase):

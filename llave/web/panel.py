@@ -103,7 +103,7 @@ def signup(error='', values=None, ref=''):
             '<label>Correo<input name="email" type="email" value="%s" autocomplete="email" required></label>'
             '<label><span>Contraseña <span class="small muted" style="font-weight:500">(mínimo 8 caracteres)</span></span><input name="password" type="password" minlength="8" autocomplete="new-password" required></label>'
             '<label class="check"><input type="checkbox" name="terms" value="1" required> <span>Acepto los <a href="/terminos" target="_blank" rel="noopener">términos</a> '
-            'y el <a href="/privacidad" target="_blank" rel="noopener">aviso de privacidad</a> (borrador).</span></label>'
+            'y el <a href="/privacidad" target="_blank" rel="noopener">aviso de privacidad</a>.</span></label>'
             '<button class="btn">Crear mi sitio gratis</button>'
             '<p class="small muted">¿Ya tienes cuenta? <a href="/entrar">Entrar</a></p></form></div>') % (
         notice(error, 'err'), e(ref), e(v.get('name')), e(v.get('agency')), e(v.get('whatsapp')), e(v.get('email')))
@@ -1397,7 +1397,7 @@ def profile(ctx, ok='', error=''):
 # ---------- plans (TEST MODE until llave/billing.py is configured; then Stripe takes the payment) ----------
 PLANS = [
     ('gratis', 'Gratis', 0, ['Tu sitio en una dirección gratis', '1 propiedad', 'Clientes directo a tu WhatsApp']),
-    ('pro', 'Pro', 499, ['Todo lo de Gratis', '5 propiedades', 'Tu propio dominio', 'Imágenes para Instagram y ficha para imprimir',
+    ('pro', 'Pro', 499, ['Todo lo de Gratis', '5 propiedades', 'Tu propio dominio (muy pronto)', 'Imágenes para Instagram y ficha para imprimir',
                          'Importa tus propiedades desde Excel (archivo CSV)', 'Bolsa 50/50 con otros asesores', 'Estadísticas completas']),
     ('ia', 'Pro + IA', 999, ['Todo lo de Pro', '25 propiedades', 'Títulos y descripciones con IA, en español e inglés', 'Revisión y orden de tus fotos',
                              'Precio sugerido con propiedades parecidas', 'Qué publicar cada semana en tus redes']),
@@ -1418,7 +1418,7 @@ _L2 = db.PLAN_LIMITS_V2
 PLANS_V2 = [
     ('gratis', 'Gratis', 0, ['Tu sitio en una dirección gratis', _limit_feature(_L2['gratis']), 'Bolsa 50/50 con otros asesores',
                              'Clientes directo a tu WhatsApp']),
-    ('pro', 'Pro', 499, ['Todo lo de Gratis', _limit_feature(_L2['pro']), 'Tu propio dominio', 'Imágenes para Instagram y ficha para imprimir',
+    ('pro', 'Pro', 499, ['Todo lo de Gratis', _limit_feature(_L2['pro']), 'Tu propio dominio (muy pronto)', 'Imágenes para Instagram y ficha para imprimir',
                          'Importa tus propiedades desde Excel (archivo CSV)', 'Estadísticas completas']),
     ('ia', 'Pro + IA', 999, ['Todo lo de Pro', _limit_feature(_L2['ia'])] + _AI_FEATURES),
 ]

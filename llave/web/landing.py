@@ -288,7 +288,7 @@ def _faq(gratis_limit):
         ('¿Cómo me llegan los clientes?',
          'Cada persona que te escribe desde tu sitio te llega por WhatsApp, con su nombre y la propiedad que le interesó. Tú contestas como siempre.'),
         ('¿Puedo usar mi propio dominio?',
-         'Sí, con el plan Pro. El dominio lo compras tú con el proveedor que quieras y lo conectas desde tu panel. '
+         'Muy pronto, con el plan Pro. El dominio lo compras tú con el proveedor que quieras. '
          'Mientras, tu sitio funciona en tu dirección gratis de Ficha Única.'),
         ('¿Mis propiedades salen en los portales?',
          'Salen en tu sitio y en Google. Los portales los conectamos conforme cada uno nos da su acceso; en tu panel ves cuáles están activos y cuáles no. '
@@ -375,8 +375,8 @@ _PILLARS = r"""
       </article>
       <article class="pl">
         <span class="ic" style="background:var(--sky)"><svg><use href="#i-globe"/></svg></span>
-        <h3>¿Tu propio dominio? Con Pro</h3>
-        <p>Conecta tu dominio, como el de abajo, desde tu panel. El dominio lo compras aparte con tu proveedor.</p>
+        <h3>¿Tu propio dominio? Con Pro, muy pronto</h3>
+        <p>Muy pronto: con Pro conectarás tu dominio, como el de abajo. El dominio lo compras aparte con tu proveedor.</p>
         <div class="urlb sm2 dom"><svg><use href="#i-lock"/></svg><span>www.<b data-dom>casacoyoacan</b>.mx</span><em>Pro</em></div>
       </article>
       <article class="pl">
@@ -532,7 +532,7 @@ def public_plans(ref=''):
             '<h1 id="h1">Empieza gratis. Crece cuando quieras.</h1>'
             '<p class="lead">Precios en pesos mexicanos, con IVA incluido. Sin plazo forzoso: cambias o cancelas cuando quieras.</p></div>'
             '%s<div class="plans" id="plans" data-on="gratis">%s</div>'
-            '<p class="fine2">El dominio propio se compra aparte con tu proveedor y lo conectas desde tu panel.</p>'
+            '<p class="fine2">Tu propio dominio llega muy pronto; se compra aparte con tu proveedor.</p>'
             '<div class="cta-row"><a class="btn" href="%s">Crear mi sitio gratis</a><a class="btn alt" href="/">Volver al inicio</a></div>'
             '</div></section></main>') % (_plan_switch(), _plan_cards(reg), e(reg))
     return (_head('Planes · Ficha Única', 'Gratis con %s, Pro $499 MXN y Pro + IA $999 MXN al mes. Sin plazo forzoso.' % props(db.plan_limits()['gratis']))

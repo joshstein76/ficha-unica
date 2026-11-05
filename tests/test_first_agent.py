@@ -200,7 +200,8 @@ class FirstAgent(unittest.TestCase):
         self.assertEqual(s, 200)
         self.assertIn('(mínimo 8 caracteres)', page)
         self.assertIn('<a href="/terminos" target="_blank" rel="noopener">términos</a>', page)
-        self.assertIn('<a href="/privacidad" target="_blank" rel="noopener">aviso de privacidad</a> (borrador).', page)  # "(borrador)" stays until the lawyer
+        self.assertIn('<a href="/privacidad" target="_blank" rel="noopener">aviso de privacidad</a>.</span>', page)
+        self.assertNotIn('(borrador)', page)
         for path in ('/terminos', '/privacidad'):
             self.assertEqual(self.web.req(path)[0], 200, path)
 
