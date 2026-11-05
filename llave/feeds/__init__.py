@@ -13,9 +13,9 @@ def validate(c):
     p, a = [], c['address']
     n = len(c['photos'])
     if n < 5:
-        p.append('Tiene %d foto%s; los portales piden al menos 5.' % (n, '' if n == 1 else 's'))
+        p.append('Tiene %d foto%s; sube al menos 5.' % (n, '' if n == 1 else 's'))
     if c['price'] is None:
-        p.append('Sin precio: se publicará como "Precio a consultar" y rinde menos en portales.')
+        p.append('Sin precio: se publicará como "Precio a consultar".')
     t = len(c['title'] or '')
     if t < 20:
         p.append('El título es muy corto (%d caracteres); usa al menos 20.' % t)

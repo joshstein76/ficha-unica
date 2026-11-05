@@ -517,7 +517,7 @@ def listing_form(con, ctx, l=None, error='', ok='', suggestion=None, posted=None
             '<label>Nota interna (nunca se publica)<textarea name="internal_note" rows="2">%s</textarea></label></section>'
             '<button class="btn">%s</button></form>%s%s') % (
         notice(ok), notice(error, 'err'), 'Editar propiedad' if lid else 'Nueva propiedad', site_link,
-        share_html + (('<div class="notice warn"><b>Para que se vea mejor en portales:</b><br>%s</div>' % '<br>'.join(e(p) for p in problems))
+        share_html + (('<div class="notice warn"><b>Para que tu propiedad se vea mejor:</b><br>%s</div>' % '<br>'.join(e(p) for p in problems))
                       if problems else ''),
         ('/propiedades/%d' % lid) if lid else '/propiedades/nueva', csrf_field(ctx),
         e(v.get('title')), _opt([('venta', 'Venta'), ('renta', 'Renta')], v.get('operation', 'venta')),
