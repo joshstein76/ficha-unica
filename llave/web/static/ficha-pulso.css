@@ -1,0 +1,79 @@
+/* Ficha Única "Pulso" skin for the shared agent dashboard kit (AgentDashKit), used on Home only when LLAVE_LOOK=pulso.
+   agent-dash.css stays byte-identical to the master IDX Bloom uses; colors come from ficha-unica-brand-pulso.json, this file adds the rest.
+   Loaded AFTER agent-dash.css. Look: white, soft shadows, Instrument Serif titles, black pill buttons, one orange accent.
+   Bump kit_home.ESTUDIO_VERSION when this file changes. */
+
+.adk { --es-ink: #0B1020; --es-mut: #5B6478; --es-line: #E3E6EE; --es-acc: #2F5BEA; --es-serif: "Plus Jakarta Sans", system-ui, sans-serif;
+  --es-sh: 0 1px 2px rgba(13,13,15,.04), 0 10px 30px -14px rgba(13,13,15,.18); background: #F4F5F8; -webkit-font-smoothing: antialiased; }
+.adk a:focus-visible, .adk button:focus-visible, .adk [tabindex]:focus-visible { outline: 2px solid #2F5BEA; outline-offset: 3px; }
+
+/* header: white, frosted, one hairline */
+.adk .adk-top { background: rgba(255,255,255,.88); -webkit-backdrop-filter: saturate(1.6) blur(16px); backdrop-filter: saturate(1.6) blur(16px); border-bottom: 1px solid var(--es-line); }
+.adk .adk-logo { width: 22px; height: 22px; }
+.adk .adk-brand__name { font-weight: 600; font-size: 17px; letter-spacing: -.01em; }
+.adk .adk-search__box { border: 1px solid #D2D2D7; border-radius: 12px; background: #fff; }
+.adk .adk-iconbtn, .adk .adk-helpbtn { border: 1px solid var(--es-line); border-radius: 99px; background: #fff; box-shadow: none; }
+.adk .adk-dot { background: var(--es-acc); border: 2px solid #fff; }
+.adk .adk-avatar { background: #E8EEFF; color: #2F5BEA; border: 0; box-shadow: none; font-weight: 600; }
+.adk .adk-tab { border-radius: 99px; font-weight: 500; color: var(--es-mut); }
+.adk .adk-tab[aria-current="page"] { color: #2F5BEA; font-weight: 600; background: #E8EEFF; box-shadow: none; border-bottom-color: transparent; }
+.adk .adk-alerts__list > .adk-alert { border: 1px solid var(--es-line); border-left: 3px solid var(--es-acc); border-radius: 18px; background: #fff; }
+
+/* one nav on phones: Home shows the same bottom bar as every other page (panel.kit_page) */
+@media (max-width: 899.98px) {
+  .adk .adk-tabs { display: none; }
+  .adk .adk-top__row { padding-top: 10px; padding-bottom: 10px; }
+  .adk .adk-brand { flex: 1 1 auto; }
+  .adk .adk-actions { width: auto; margin-left: auto; }
+  .adk .adk-avatar { margin-left: 0; }
+  .adk .adk-toast { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* titles: the serif, big and calm */
+.adk .adk-h1 { font: 700 clamp(26px, 7vw, 34px)/1.1 var(--es-serif); letter-spacing: -.03em; color: var(--es-ink); }
+.adk .adk-sub { color: var(--es-mut); font-weight: 400; }
+.adk .adk-h2 { font: 700 21px/1.15 var(--es-serif); letter-spacing: -.02em; color: var(--es-ink); }
+.adk .adk-h3 { font: 700 19px/1.15 var(--es-serif); letter-spacing: -.02em; color: var(--es-ink); margin-bottom: 10px; }
+
+/* buttons: black pills */
+.adk .adk-btn { min-height: 48px; padding: 0 22px; border: 0; border-radius: 12px; font-weight: 600; box-shadow: none; }
+.adk .adk-btn--ghost { background: #fff; color: var(--es-ink); box-shadow: inset 0 0 0 1px #D2D2D7; }
+
+/* cards: white, hairline, soft shadow, generous radius */
+.adk .adk-stat, .adk .adk-tool, .adk .adk-check__item, .adk .adk-svc, .adk .adk-card {
+  border: 1px solid var(--es-line); border-radius: 20px; box-shadow: none; background: #fff; }
+/* the kit's list reset (.adk .adk-stats > li) outranks .adk .adk-stat, so padding needs the same weight here */
+.adk .adk-stats > .adk-stat { padding: 16px 18px; }
+.adk .adk-svcs > .adk-svc { padding: 18px; }
+.adk .adk-next { border: 0; border-radius: 22px; background: #E8EEFF; box-shadow: none; }
+.adk .adk-refer { border-radius: 22px; background: var(--es-ink); color: #fff; }
+.adk .adk-refer .adk-h3 { color: #fff; }
+.adk .adk-refer__body { color: #D2D2D7; }
+.adk .adk-stat__value { font: 700 32px/1 var(--es-serif); letter-spacing: -.03em; color: var(--es-ink); }
+.adk .adk-stat__label { color: var(--es-mut); font-weight: 500; }
+.adk .adk-tool__ico, .adk .adk-next__icon { border: 0; border-radius: 14px; background: #F5F5F7; color: var(--es-ink); }
+.adk .adk-tool:hover, .adk .adk-check__item:hover { box-shadow: var(--es-sh); transform: translateY(-1px); }
+
+/* phones */
+@media (max-width: 640px) {
+  .adk .adk-stat__value { font-size: 28px; }
+  .adk .adk-next { padding: 18px; }
+  .adk .adk-stats > .adk-stat { padding: 14px 16px; }
+  .adk .adk-stats { gap: 10px; }
+  .adk .adk-stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .adk .adk-top__row { flex-wrap: nowrap; gap: 8px; }
+  .adk .adk-brand { flex: 1 1 auto; flex-basis: auto; }
+  .adk .adk-brand__name { white-space: nowrap; }
+  .adk .adk-actions { flex: none; gap: 6px; }
+  .adk .adk-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .adk .adk-tool { flex-direction: column; align-items: flex-start; gap: 8px; height: 100%; padding: 14px; }
+}
+@media (max-width: 360px) {
+  .adk .adk-brand__name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .adk .adk-btn, .adk .adk-tool, .adk .adk-check__item { transition: transform .15s, box-shadow .15s; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .adk *, .adk *::before, .adk *::after { animation: none !important; transition: none !important; }
+}

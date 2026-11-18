@@ -25,6 +25,7 @@ from llave import db  # noqa: E402
 db.DB_PATH = os.environ['LLAVE_DB']
 db.MEDIA_DIR = os.environ['LLAVE_MEDIA']
 db.PORT = 8699
+from llave.web import styles  # noqa: E402
 from llave.web.server import Handler  # noqa: E402
 
 BASE = 'http://127.0.0.1:8699'
@@ -367,16 +368,18 @@ class WebFlow(unittest.TestCase):
             s, page, _ = req('app.fichaunica.localhost', '/academia', cookie=cookie)
             self.assertEqual(page.count('<nav class="tabs"'), 1)
             self.assertIn('aria-current="page"', page)
-            for name in ('agent-dash.js', 'agent-dash.css', 'ficha-loteria.css', 'ficha-unica-brand.json', 'fu-mark.svg'):
+            skin = {'estudio': 'ficha-estudio.css', 'pulso': 'ficha-pulso.css'}.get(styles.LOOK, 'ficha-loteria.css')
+            mark = {'estudio': 'fu-mark-estudio.svg', 'pulso': 'fu-mark-pulso.svg'}.get(styles.LOOK, 'fu-mark.svg')
+            for name in ('agent-dash.js', 'agent-dash.css', skin, 'ficha-unica-brand.json', 'ficha-unica-brand-estudio.json', mark):
                 s, _p, _ = req('app.fichaunica.localhost', '/_s/' + name)
                 self.assertEqual(s, 200, name)
             # kit 1.2.0 (logo) / 1.1.0: first week as a checklist, lesson 1 as the next step, no alerts on a fresh account
             self.assertIn('/_s/agent-dash.js?v=1.2.1', req('app.fichaunica.localhost', '/', cookie=cookie)[1])
-            self.assertIn('"logo": "/_s/fu-mark.svg"', req('app.fichaunica.localhost', '/', cookie=cookie)[1])
+            self.assertIn('"logo": "/_s/%s"' % mark, req('app.fichaunica.localhost', '/', cookie=cookie)[1])
             # Lotería skin + one nav on phones: Home gets the same 5-tab bottom bar as every other page, the kit's top tabs hide under 900 px
             home = req('app.fichaunica.localhost', '/', cookie=cookie)[1]
-            self.assertIn('/_s/ficha-loteria.css?v=', home)
-            self.assertLess(home.index('/_s/agent-dash.css'), home.index('/_s/ficha-loteria.css'))        # loaded after the kit's own css
+            self.assertIn('/_s/%s?v=' % skin, home)
+            self.assertLess(home.index('/_s/agent-dash.css'), home.index('/_s/' + skin))        # loaded after the kit's own css
             self.assertEqual(home.count('<nav class="tabs kitnav" aria-label="Secciones">'), 1)
             bar = home[home.index('<nav class="tabs kitnav"'):]
             bar = bar[:bar.index('</nav>')]

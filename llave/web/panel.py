@@ -6,7 +6,7 @@ import os
 from .. import academia, agent_mail, billing, cards, kit_home, calculadoras, db, domains, formatos, mailer, lia, operaciones, geo, lead_watch, novedades, ml_oauth, price_check, replies, whatsapp
 from ..feeds import registry, validate
 from .common import (e, money, nice_local_date, photos_ready, nice_date, facts_line, label, props, csrf_token, TYPES, STATUSES, LEAD_STATUSES, DESIGNS, DESIGN_KEYS)
-from .styles import BRAND_COLOR, FONTS, KIT_SHELL, PANEL, PRECONNECT, logo
+from .styles import KIT_SHELL, LOOK, PANEL, PANEL_BRAND_COLOR as BRAND_COLOR, PANEL_FONTS as FONTS, PRECONNECT, panel_logo as logo
 
 ICONS = {
     'inicio': '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -93,8 +93,13 @@ def limit_notice(msg):
 def signup(error='', values=None, ref=''):
     v = values or {}
     ref = v.get('ref') or ref
-    body = ('<div class="auth pub"><div class="intro"><h1>Crea tu sitio gratis.</h1>'
-            '<p class="muted">Sube cada propiedad una vez. Queda en tu sitio, lista para Google, y quien la ve te escribe a tu WhatsApp.</p>'
+    head = (('<h1>Tu página. <em>Gratis.</em></h1><p class="muted">Tu nombre, tus propiedades y tus clientes directo a tu WhatsApp.</p>')
+            if LOOK == 'pulso' else
+            ('<h1>Crea tu página. <em>Gratis.</em></h1><p class="muted">Tu nombre, tus propiedades y tu WhatsApp. Lista en 10 minutos.</p>')
+            if LOOK == 'estudio' else
+            ('<h1>Crea tu sitio gratis.</h1>'
+             '<p class="muted">Sube cada propiedad una vez. Queda en tu sitio, lista para Google, y quien la ve te escribe a tu WhatsApp.</p>'))
+    body = ('<div class="auth pub"><div class="intro">' + head.replace('%', '%%') +
             '<p class="micro"><span>Sin tarjeta</span><span>Sin plazo forzoso</span><span>Desde tu celular</span></p></div>%s'
             '<form class="stack card" method="post" action="/registro"><input type="hidden" name="ref" value="%s"><div aria-hidden="true" style="position:absolute;left:-9999px"><label>Sitio web<input name="website" tabindex="-1" autocomplete="off"></label></div>'
             '<label>Tu nombre<input name="name" value="%s" autocomplete="name" required></label>'
@@ -104,7 +109,7 @@ def signup(error='', values=None, ref=''):
             '<label><span>Contraseña <span class="small muted" style="font-weight:500">(mínimo 8 caracteres)</span></span><input name="password" type="password" minlength="8" autocomplete="new-password" required></label>'
             '<label class="check"><input type="checkbox" name="terms" value="1" required> <span>Acepto los <a href="/terminos" target="_blank" rel="noopener">términos</a> '
             'y el <a href="/privacidad" target="_blank" rel="noopener">aviso de privacidad</a>.</span></label>'
-            '<button class="btn">Crear mi sitio gratis</button>'
+            '<button class="btn">' + ('Crear mi página gratis' if LOOK in ('estudio', 'pulso') else 'Crear mi sitio gratis') + '</button>'
             '<p class="small muted">¿Ya tienes cuenta? <a href="/entrar">Entrar</a></p></form></div>') % (
         notice(error, 'err'), e(ref), e(v.get('name')), e(v.get('agency')), e(v.get('whatsapp')), e(v.get('email')))
     return layout('Crear cuenta', body)
@@ -260,13 +265,14 @@ def kit_page(con, ctx, steps, welcome=False):
     """Home on the shared agent dashboard kit (LLAVE_KIT_HOME=1). The kit draws its own header and, from 900 px up, its own top tabs;
     on phones the top tabs are hidden (ficha-loteria.css) and Home gets the same bottom bar as every other page."""
     data = kit_home.build(con, ctx, steps, SERVICES, welcome)
-    brand = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'ficha-unica-brand.json'), encoding='utf-8').read()
+    brand_file = {'estudio': 'ficha-unica-brand-estudio.json', 'pulso': 'ficha-unica-brand-pulso.json'}.get(LOOK, 'ficha-unica-brand.json')
+    brand = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', brand_file), encoding='utf-8').read()
     return ('<!doctype html><html lang="es-MX"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
             '<title>Inicio · Ficha Única</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="%s">'
             '<link rel="apple-touch-icon" href="/_s/apple-touch-icon.png">%s<link rel="stylesheet" href="%s">'
             '<link rel="stylesheet" href="/_s/agent-dash.css?v=%s">'
-            '<link rel="stylesheet" href="/_s/ficha-loteria.css?v=%s">'
+            '<link rel="stylesheet" href="/_s/%s?v=%s">'
             '<style>%s</style></head><body>'
             '<a class="skip" href="#dash">Saltar al contenido</a>%s%s<div id="dash"></div>%s'
             '<footer class="small muted" style="padding:16px;text-align:center">'
@@ -275,7 +281,8 @@ def kit_page(con, ctx, steps, welcome=False):
             '<script src="/_s/agent-dash.js?v=%s"></script>'
             '<script>AgentDashKit.mount(document.getElementById("dash"),{brand:%s,data:%s,onAction:function(){}});'
             'if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js").catch(function(){})</script></body></html>') % (
-        BRAND_COLOR, PRECONNECT, FONTS, kit_home.KIT_VERSION, kit_home.LOTERIA_VERSION, KIT_SHELL, pilot_notice(ctx['agency']),
+        BRAND_COLOR, PRECONNECT, FONTS, kit_home.KIT_VERSION, {'estudio': 'ficha-estudio.css', 'pulso': 'ficha-pulso.css'}.get(LOOK, 'ficha-loteria.css'),
+        kit_home.ESTUDIO_VERSION if LOOK in ('estudio', 'pulso') else kit_home.LOTERIA_VERSION, KIT_SHELL, pilot_notice(ctx['agency']),
         notice('¡Listo! Tu sitio ya existe. Ahora sube tu primera propiedad.') if welcome else '',
         _nav('inicio', True, ' kitnav'),
         csrf_field(ctx), kit_home.KIT_VERSION, kit_home.js(json.loads(brand)), kit_home.js(data))

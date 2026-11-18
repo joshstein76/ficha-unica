@@ -47,6 +47,13 @@ class Landing(unittest.TestCase):
         con.close()
         cls.srv = ThreadingHTTPServer(('127.0.0.1', PORT), Handler)
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+        from llave.web import landing
+        cls._closed = landing._public_paid_closed
+        landing._public_paid_closed = lambda: False   # these tests check the pages as they are once paid plans open
+        cls.closed_planes = None
+        landing._public_paid_closed = lambda: True
+        cls.closed_planes = main(get('/planes')[1].decode())
+        landing._public_paid_closed = lambda: False
         cls.land = main(get('/')[1].decode())
         cls.prec = main(get('/precios')[1].decode())
         cls.planes = main(get('/planes')[1].decode())
@@ -54,7 +61,16 @@ class Landing(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        from llave.web import landing
+        landing._public_paid_closed = cls._closed
         cls.srv.shutdown()
+
+    def test_no_prices_while_paid_plans_are_closed(self):
+        h = self.closed_planes
+        self.assertNotIn('$499', h)
+        self.assertNotIn('$999', h)
+        self.assertIn('Muy pronto', h)
+        self.assertIn('$0', h)
 
     def test_sections_present(self):
         h = self.land

@@ -5,7 +5,7 @@ import json
 
 from .. import db, geo, whatsapp
 from ..leads import rentapoliza_offer
-from . import lia_ui
+from . import ask_ui, lia_ui
 from .common import e, money, nice_date, facts_line, label, TYPES
 from .styles import (COIN_SVG, FONTS, PRECONNECT, fonts_url, loteria_on_accent, resolve_design, safe_accent, site_css,
                      site_fonts_url)
@@ -116,7 +116,7 @@ def home(con, agency):
     org = {'@context': 'https://schema.org', '@type': 'RealEstateAgent', 'name': agency['name'],
            'url': db.site_url(agency), 'telephone': agency['whatsapp'],
            'areaServed': agency['city'] or 'México', 'description': agency['about'] or ''}
-    body = ('<main id="main"><section class="hero">%s<div class="cap"><div class="in"><h1>%s</h1><p>%s</p></div></div></section>'
+    body = ('<main id="main"><section class="hero">%s<div class="cap"><div class="in"><h1>%s</h1><p>%s</p></div></div></section>%s'
             '<div class="in"><section class="sec"><h2>Propiedades</h2>%s</section>%s'
             '<section class="sec" id="alerta"><h2>¿Buscas algo en especial?</h2><form class="box alertf" method="post" action="/alerta" style="position:static">'
             '<input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">'
@@ -129,7 +129,7 @@ def home(con, agency):
             '<button type="submit">Avísenme cuando salga algo así</button></form></section>'
             '%s</div></main>') % (
         hero_img,
-        e(agency['name']), e(agency['tagline'] or ''),
+        e(agency['name']), e(agency['tagline'] or ''), ask_ui.bar(agency),
         ('<div class="cards">%s</div>' % ''.join(_card(c) for c in cards)) if cards
         else '<p class="muted">Pronto publicaremos propiedades aquí.</p>',
         pool_section(con, agency), about_section(con, agency))

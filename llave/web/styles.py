@@ -450,3 +450,151 @@ def site_css(design, accent, dark_mode=True):
     dark = DARK.replace('color-scheme:dark}', '--accent:%s;--on-accent:%s;--accent-text:%s;--field-border:#7d8a99;color-scheme:dark}' % (
         dark_accent, on_accent(dark_accent), accent_text(dark_accent, '#121212', dark=True)))
     return tokens + root + (dark if dark_mode else '') + SITE_BASE
+
+
+# ---------------------------------------------------------------- Estudio (2026-11-08): the new look, behind LLAVE_LOOK=estudio
+# Josh 2026-11-08 night: the lotería look is out for the website; new feel = affordable but desirable, high-tech and sleek.
+# Samantha picked direction B "Estudio" (white, editorial serif headlines, black pill buttons, one orange accent, soft shadows).
+# Only the panel, the sign-up/sign-in pages and the Home kit change; the agent sites, the app landing and the directory keep theirs.
+# OFF by default: production changes only when the server's app.env gets LLAVE_LOOK=estudio (Josh's yes on the full preview).
+import os as _os
+LOOK = _os.environ.get('LLAVE_LOOK') if _os.environ.get('LLAVE_LOOK') in ('estudio', 'pulso') else 'loteria'  # pulso = Josh's pick 2026-11-09 (direction C)
+ESTUDIO_FONTS = 'https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap'
+ESTUDIO_MARK = ('<svg class="mark" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle cx="50" cy="50" r="50" fill="#FF4F1F"/>'
+                '<circle cx="50" cy="50" r="17" fill="#FFFFFF"/></svg>')
+ESTUDIO_CSS = r"""
+:root{--tinta:#0d0d0f;--papel:#ffffff;--blanco:#ffffff;--cempa:#f5f5f7;--chile:#ff4f1f;--jacaranda:#2f5bea;--rosa:#fff1e8;--nopal:#1a9f55;--cielo:#eef2ff;--suave:#6e6e73;
+--line:#e5e5ea;--soft:#f5f5f7;--muted:#6e6e73;--ink:#0d0d0f;--o:#0d0d0f;--on-o:#ffffff;
+--titulo:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;--carta:"Instrument Serif",Georgia,serif;--texto:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+--sh:0 1px 2px rgba(13,13,15,.04),0 10px 30px -14px rgba(13,13,15,.18)}
+body{background:#fff;color:var(--tinta);letter-spacing:-.005em}
+body:has(.auth.pub){background:#f5f5f7}
+body:has(.auth.pub) footer.muted,body:has(.auth.pub) footer a{color:var(--suave)}
+h1,h2{font-family:var(--carta);font-weight:400;letter-spacing:-.015em;line-height:1}
+h1{font-size:40px}h2{font-size:30px}
+h1 em,h2 em{font-style:italic;color:var(--chile)}
+h3{font:600 17px/1.25 var(--titulo);letter-spacing:-.01em}
+a{color:var(--jacaranda)}
+:focus-visible{outline:2px solid var(--jacaranda);outline-offset:3px}
+.logo{font:600 17px/1 var(--titulo);letter-spacing:-.01em;gap:9px}
+.logo .mark,.top .logo .mark{width:20px;height:20px}
+.top{background:rgba(255,255,255,.86);-webkit-backdrop-filter:saturate(1.6) blur(16px);backdrop-filter:saturate(1.6) blur(16px);border-bottom:1px solid var(--line)}
+.top a:not(.btn):not(.logo){color:var(--suave);font-weight:500}
+.btn{border:0;border-radius:99px;background:var(--tinta);color:#fff;font:600 16px/1.1 var(--titulo);box-shadow:none;letter-spacing:-.005em;transition:transform .15s,background .15s}
+.btn:hover{transform:translateY(-1px);box-shadow:none;background:#26262b}
+.btn:active{transform:translateY(0);box-shadow:none}
+.btn.ghost{background:#fff;color:var(--tinta);box-shadow:inset 0 0 0 1px #d2d2d7}
+.btn.ghost:hover{background:#f5f5f7}
+.btn.small,.btn.small:hover,.btn.small:active{box-shadow:none;font-size:14px}
+.btn.ghost.small,.btn.ghost.small:hover{box-shadow:inset 0 0 0 1px #d2d2d7}
+.btn.wa{background:var(--nopal);color:#fff}
+.btn[disabled]{background:#f5f5f7;color:#a1a1a6}
+.notice{border:0;border-radius:16px;background:#e8f7ee;color:#0f5132;box-shadow:none;font-weight:500}
+.notice.err{background:#fff0ec;color:#9a2a0c}.notice.warn{background:#fff6e5;color:#7a4a00}
+.notice a,.notice .muted{color:inherit}
+nav.tabs{background:rgba(255,255,255,.92);-webkit-backdrop-filter:saturate(1.6) blur(16px);backdrop-filter:saturate(1.6) blur(16px);border-top:1px solid var(--line)}
+nav.tabs a{color:var(--suave);font-weight:500}
+nav.tabs a.on{background:transparent;color:var(--tinta);font-weight:600}
+nav.tabs a.on svg{color:var(--chile)}
+@media(min-width:900px){nav.tabs{border-bottom:1px solid var(--line)}nav.tabs a{border:0}nav.tabs a.on{background:#f5f5f7;box-shadow:none}}
+.wrap{gap:20px}
+.card{border:1px solid var(--line);border-radius:22px;box-shadow:var(--sh);padding:22px}
+.tile{border:1px solid var(--line);border-radius:20px;box-shadow:none;min-height:112px;transition:transform .15s,box-shadow .15s}
+.tile:hover{transform:translateY(-2px);box-shadow:var(--sh)}.tile:active{transform:none;box-shadow:none}
+.tile svg,.tile:nth-child(4n+2) svg,.tile:nth-child(4n+3) svg,.tile:nth-child(4n) svg{border:0;border-radius:14px;background:#f5f5f7;color:var(--tinta)}
+.tile:nth-child(4n+1) svg{background:#fff1e8;color:#c2410c}
+.tile b{font:600 15px/1.2 var(--titulo)}
+.tile small{border:0;background:#fff1e8;color:#c2410c;font-weight:600}
+.progress{border:0;background:#f0f0f3;height:10px}.progress i{background:var(--chile);border-radius:99px}
+.stat{border:1px solid var(--line);border-radius:20px;box-shadow:none}
+.stat b{font:400 40px/1 var(--carta);font-stretch:normal;letter-spacing:-.01em}
+.stat small{font-weight:500}
+label{font-weight:600;font-size:14.5px}
+input,select,textarea{border:1px solid #d2d2d7;border-radius:12px;background:#fff;transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--tinta);box-shadow:0 0 0 4px rgba(13,13,15,.06);outline:0}
+input[type=checkbox],input[type=radio]{accent-color:var(--tinta)}
+.item{border:1px solid var(--line);border-radius:18px;box-shadow:none}
+a.item:hover{transform:translateY(-1px);box-shadow:var(--sh)}
+.item img,.item .ph{border:0;border-radius:12px}
+.pill{border:0;border-radius:99px;background:#f5f5f7;color:var(--tinta);font-weight:600;letter-spacing:.02em;padding:5px 10px}
+.pill.activa,.pill.en_feed,.pill.publicada,.pill.ok{background:#e8f7ee;color:#0f5132}
+.pill.borrador,.pill.pausada,.pill.pendiente,.pill.dry_run{background:#fff6e5;color:#7a4a00}
+.pill.error,.pill.sin_convenio{background:#fff0ec;color:#9a2a0c}
+.thumbs img{border:0;border-radius:12px}
+th{border-bottom:1px solid var(--line);color:var(--suave);font-weight:600}
+.wsteps span{border:1px solid var(--line);background:#fff}
+.wsteps .on{background:var(--tinta);color:#fff;border-color:var(--tinta)}.wsteps .done{background:#e8f7ee;color:#0f5132;border-color:#e8f7ee}
+.bigpick{border:1.5px dashed #c7c7cc;border-radius:20px;background:#fafafa}
+.bigpick span{font:600 19px/1.2 var(--titulo)}
+.seg span,.chip span{border:1px solid #d2d2d7;border-radius:12px;box-shadow:none;font-weight:500}
+.seg input:checked+span,.chip input:checked+span{background:var(--tinta);color:#fff;transform:none;box-shadow:none;font-weight:600}
+.chip span{border-radius:99px}
+.map{border:1px solid var(--line);border-radius:20px;box-shadow:none}
+.card.late{box-shadow:inset 3px 0 0 var(--chile),var(--sh)}
+.bar span{border:0;background:var(--chile)}
+.plan.current{background:#f5f5f7}.plan.current .muted{color:var(--suave)}
+.price b{font:400 44px/1 var(--carta);font-stretch:normal}
+.auth{margin:7vh auto;gap:22px}
+.auth h1{font-size:clamp(48px,13vw,64px);line-height:.95}
+.auth p.muted{color:var(--suave);font-size:18px;font-weight:400}
+.auth .card{padding:24px}
+.micro{gap:6px 16px;font-weight:500;color:var(--suave)}
+.micro span::before{border:0;width:16px;height:16px;background-color:#e8f7ee;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.2 4.2L19 7' fill='none' stroke='%231a9f55' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+.fab{box-shadow:0 12px 30px -10px rgba(13,13,15,.5)}
+"""
+ESTUDIO_KIT_SHELL = ESTUDIO_CSS
+
+# ---------------------------------------------------------------- Pulso (Josh 2026-11-09: "I like C best… modern and trendy… easier to read… font smaller")
+# Built on the Estudio layer (same structure: hairlines, soft shadows, airy cards), then: Plus Jakarta Sans everywhere (no serif),
+# one blue accent, 12 px radius buttons, calmer headline sizes. LLAVE_LOOK=pulso.
+PULSO_FONTS = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap'
+PULSO_MARK = ('<svg class="mark" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><rect width="100" height="100" rx="28" fill="#2F5BEA"/>'
+              '<circle cx="50" cy="50" r="19" fill="none" stroke="#FFFFFF" stroke-width="10"/></svg>')
+PULSO_CSS = r"""
+:root{--tinta:#0b1020;--cempa:#f4f5f8;--chile:#2f5bea;--jacaranda:#2f5bea;--suave:#5b6478;--line:#e3e6ee;--soft:#f4f5f8;--muted:#5b6478;--ink:#0b1020;
+--titulo:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--carta:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+--texto:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--sh:0 1px 2px rgba(11,16,32,.04),0 12px 30px -16px rgba(11,16,32,.2)}
+body{font-size:16px}
+body:has(.auth.pub){background:#f4f5f8}
+h1,h2{font-family:var(--texto);font-weight:700;letter-spacing:-.03em;line-height:1.1}
+h1{font-size:28px}h2{font-size:21px}
+h1 em,h2 em{font-style:normal;color:#2f5bea}
+h3{font-weight:700}
+.logo .mark,.top .logo .mark{width:24px;height:24px}
+.logo{font-weight:700;letter-spacing:-.02em}
+.btn{border-radius:12px;background:#2f5bea;font-weight:600}
+.btn:hover{background:#244ad0}
+.btn.ghost{border-radius:12px;background:#fff;color:var(--tinta);box-shadow:inset 0 0 0 1px #cfd5e2}
+.btn.ghost:hover{background:#f4f5f8}
+.btn.ghost.small,.btn.ghost.small:hover{box-shadow:inset 0 0 0 1px #cfd5e2}
+nav.tabs a.on svg{color:#2f5bea}
+@media(min-width:900px){nav.tabs a.on{background:#e8eeff;color:#2f5bea}}
+.tile svg,.tile:nth-child(4n+2) svg,.tile:nth-child(4n+3) svg,.tile:nth-child(4n) svg{background:#f4f5f8}
+.tile:nth-child(4n+1) svg{background:#e8eeff;color:#2f5bea}
+.tile small{background:#e8eeff;color:#2f5bea}
+.stat b{font:700 30px/1.05 var(--texto);letter-spacing:-.03em}
+.price b{font:700 34px/1 var(--texto);letter-spacing:-.03em}
+.seg input:checked+span,.chip input:checked+span{background:#0b1020}
+.wsteps .on{background:#2f5bea;border-color:#2f5bea}
+.progress i,.bar span{background:#2f5bea}
+.card.late{box-shadow:inset 3px 0 0 #2f5bea,var(--sh)}
+.auth h1{font-size:clamp(32px,9vw,40px);line-height:1.08}
+.auth p.muted{font-size:16.5px}
+input:focus,select:focus,textarea:focus{border-color:#2f5bea;box-shadow:0 0 0 4px rgba(47,91,234,.12)}
+input[type=checkbox],input[type=radio]{accent-color:#2f5bea}
+.fab{box-shadow:0 12px 30px -10px rgba(47,91,234,.6)}
+"""
+PANEL_FONTS = FONTS
+PANEL_BRAND_COLOR = BRAND_COLOR
+if LOOK in ('estudio', 'pulso'):
+    PANEL = PANEL + ESTUDIO_CSS + (PULSO_CSS if LOOK == 'pulso' else '')
+    KIT_SHELL = KIT_SHELL + ESTUDIO_KIT_SHELL + (PULSO_CSS if LOOK == 'pulso' else '')
+    PANEL_FONTS = PULSO_FONTS if LOOK == 'pulso' else ESTUDIO_FONTS
+    PANEL_BRAND_COLOR = '#F4F5F8' if LOOK == 'pulso' else '#FFFFFF'
+
+
+def panel_logo(uid=''):
+    """Logo for the panel and the sign-up/sign-in pages: the new mark when a new look is on, else the coin."""
+    if LOOK == 'pulso':
+        return PULSO_MARK + 'Ficha Única'
+    return (ESTUDIO_MARK + 'Ficha Única') if LOOK == 'estudio' else logo(uid)

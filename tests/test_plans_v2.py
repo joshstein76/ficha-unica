@@ -40,6 +40,10 @@ class Base(unittest.TestCase):
         env.start()
         self.addCleanup(env.stop)
         os.environ.pop('LLAVE_PLANS_V2', None)
+        from llave.web import landing
+        opened = mock.patch.object(landing, '_public_paid_closed', lambda: False)  # pages as they are once paid plans open
+        opened.start()
+        self.addCleanup(opened.stop)
 
     def v2(self, on=True):
         if on:

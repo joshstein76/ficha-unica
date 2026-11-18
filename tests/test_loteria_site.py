@@ -51,6 +51,7 @@ class LoteriaSite(unittest.TestCase):
         return a, site.home(self.con, a), site.listing(self.con, a, db.canonical(self.con, 1))
 
     # ---- default for new agencies -------------------------------------------------------------------------------
+    @unittest.skipIf(styles.LOOK != 'loteria', 'a new look gives new agents the Ciudad site (test_estudio_look)')
     def test_new_signup_defaults_to_loteria_and_existing_keep_theirs(self):
         self.assertEqual(db.DEFAULT_DESIGN, 'loteria')
         self.assertEqual(styles.DEFAULT_DESIGN_FALLBACK, db.DEFAULT_DESIGN)
@@ -69,6 +70,7 @@ class LoteriaSite(unittest.TestCase):
         self.assertEqual([r[0] for r in con.execute("SELECT design FROM agencies WHERE slug IN ('nueva-agencia','vieja') ORDER BY slug")],
                          ['costa', 'ciudad'])
 
+    @unittest.skipIf(styles.LOOK != 'loteria', 'a new look gives new agents the Ciudad site (test_estudio_look)')
     def test_signup_sets_loteria_even_on_a_database_made_before_the_new_default(self):
         """SQLite cannot change a column default in place, so on an old database a row that does not name its design still
         gets 'ciudad'. The sign-up INSERT names the design itself, so new sign-ups get Lotería there too."""

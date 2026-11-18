@@ -97,6 +97,7 @@ class BrandV7(unittest.TestCase):
         for k in ('--papel:#FFF9EE', 'color-scheme:light'):
             self.assertIn(k, styles.BRAND_TOKENS)
 
+    @unittest.skipIf(styles.LOOK != 'loteria', 'Lotería guard; the new looks have their own tests (test_estudio_look)')
     def test_brand_tokens_everywhere(self):
         for name, h in self.brand_pages().items():
             if name == '/offline':
@@ -157,11 +158,13 @@ class BrandV7(unittest.TestCase):
         self.assertGreaterEqual(styles.contrast(tinta, papel), 3.0)                 # form-field border and focus ring
         self.assertGreaterEqual(styles.contrast(jac, papel), 3.0)
 
+    @unittest.skipIf(styles.LOOK != 'loteria', 'Lotería guard; the new looks have their own tests (test_estudio_look)')
     def test_every_hex_in_brand_css_is_a_brand_colour(self):
         allowed = {'#1B1236', '#FFF9EE', '#FFFFFF', '#FFB800', '#FF4F1F', '#5B2EE6', '#FF4FA3', '#0FB56D', '#37C5F2', '#5E5478'}   # the ten Lotería colours
         self.assertEqual(hexes(styles.PANEL) - allowed, set())
         self.assertEqual(hexes(styles.KIT_SHELL) - allowed, set())
 
+    @unittest.skipIf(styles.LOOK != 'loteria', 'Lotería guard; the new looks have their own tests (test_estudio_look)')
     def test_pwa_shell_in_brand(self):
         s, body, _ = req(APP, '/manifest.webmanifest')
         m = json.loads(body)
@@ -194,8 +197,9 @@ class BrandV7(unittest.TestCase):
                 card = [c for c in h.split('<div class="card plan') if re.match(r'(?: top)?" data-k="%s"' % key, c)][0]
                 for f in feats:
                     self.assertIn(f.replace('&', '&amp;'), card, (key, f))
-                if price:
-                    self.assertIn('<b>$%d</b>' % price, card)
+                if price:   # prices show only once paid plans open; while closed the card says "Muy pronto" (landing._public_paid_closed)
+                    from llave.web import landing
+                    self.assertIn(('<b>Muy pronto</b>' if landing._public_paid_closed() else '<b>$%d</b>' % price), card)
                 self.assertIn('%d propiedad' % db.PLAN_LIMITS[key], card)
         self.assertEqual({k: p for k, _n, p, _f in panel.PLANS}, {'gratis': 0, 'pro': 499, 'ia': 999})
         self.assertEqual(db.PLAN_LIMITS, {'gratis': 1, 'pro': 5, 'ia': 25})

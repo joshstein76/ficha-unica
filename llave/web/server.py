@@ -395,7 +395,21 @@ class Handler(BaseHTTPRequestHandler):
             return out({'ok': False, 'ask_contact': True}, 500)
 
     # ---------- agent site ----------
+    def ask_api(self, con, a):
+        """GET /buscar?q=..&ph=0|1 on an agent site (LLAVE_SITE_ASK=1): the site's search bar. JSON, never cached, 60 questions per IP per 10 minutes."""
+        from .. import site_ask
+        ip = self.client_ip()
+        if not rate_ok(con, 'site_ask', ip, ASK_PER_IP, ASK_WINDOW_MIN):
+            return self.send(json.dumps({'ok': False, 'error': 'Demasiadas preguntas. Intente en unos minutos.'}, ensure_ascii=False), 429, 'application/json',
+                             headers={'Cache-Control': 'no-store', 'Retry-After': str(ASK_WINDOW_MIN * 60)})
+        rate_hit(con, 'site_ask', ip)
+        q = {k: v[-1] for k, v in urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).items()}
+        out = site_ask.answer(con, a, q.get('q', ''), phone=q.get('ph') == '1')
+        return self.send(json.dumps(out, ensure_ascii=False), 200, 'application/json', headers={'Cache-Control': 'no-store'})
+
     def agency_site(self, con, a, method, path):
+        if method == 'GET' and path == '/buscar' and os.environ.get('LLAVE_SITE_ASK') == '1':
+            return self.ask_api(con, a)  # with the switch off /buscar falls through to the normal 404
         if method == 'POST' and path in LIA_PATHS and (lia.contact_enabled(a) if path == '/lia/contacto' else lia.enabled_for(con, a)):
             return self.lia_api(con, a, path)  # Lía's chat; with any gate off these paths fall through to the normal 404
         if method == 'POST' and path == '/contacto':
@@ -1208,6 +1222,7 @@ SIGNUP_PER_IP_DAY = _limit('LLAVE_SIGNUP_PER_IP_DAY', 3)
 LOGIN_FAILS_15MIN = _limit('LLAVE_LOGIN_FAILS_15MIN', 10)
 RESET_PER_IP_HOUR = _limit('LLAVE_RESET_PER_IP_HOUR', 5)        # reset links asked from one IP per hour
 RESET_PER_EMAIL_HOUR = _limit('LLAVE_RESET_PER_EMAIL_HOUR', 3)  # ...and for one email address per hour (so nobody can flood a mailbox)
+ASK_PER_IP, ASK_WINDOW_MIN = 60, 10  # site search bar (LLAVE_SITE_ASK): questions per IP per window
 SIGNUP_FULL_MSG = ('Hoy ya abrimos todos los lugares del día. Vuelve mañana o escríbenos por WhatsApp y te apartamos el tuyo.')
 
 
@@ -1234,6 +1249,13 @@ def signup_room_today(con):
     return con.execute("SELECT COUNT(*) FROM agencies WHERE created_at > datetime('now', '-1 day')").fetchone()[0] < SIGNUP_DAILY_CAP
 
 
+def signup_design():
+    """Site design + accent for a NEW agency. With the new look on (LLAVE_LOOK=estudio|pulso, 2026-11-09) new agents get the clean
+    "Ciudad" design in the Pulso blue; existing agencies keep theirs, and with the switch off nothing changes (Lotería, cempasúchil)."""
+    from .styles import LOOK
+    return ('ciudad', '#2F5BEA') if LOOK in ('estudio', 'pulso') else (db.DEFAULT_DESIGN, db.DEFAULT_ACCENT)
+
+
 def signup(con, f):
     name, agency = (f.get('name') or '').strip(), (f.get('agency') or '').strip()
     email = (f.get('email') or '').strip().lower()
@@ -1254,7 +1276,7 @@ def signup(con, f):
     slug = unique_slug(con, agency)
     ref = con.execute('SELECT id FROM agencies WHERE slug=?', ((f.get('ref') or '').strip().lower()[:60],)).fetchone()
     cur = con.execute('INSERT INTO agencies(slug, name, whatsapp, email, city, tagline, referred_by, design, accent) VALUES (?,?,?,?,?,?,?,?,?)',
-                      (slug, agency, wa, email, '', 'Bienes raíces', ref['id'] if ref else None, db.DEFAULT_DESIGN, db.DEFAULT_ACCENT))  # city: the agent's own, in Mi sitio; blank reads 'México'
+                      (slug, agency, wa, email, '', 'Bienes raíces', ref['id'] if ref else None, *signup_design()))  # city: the agent's own, in Mi sitio; blank reads 'México'
     aid = cur.lastrowid
     uid = con.execute('INSERT INTO users(agency_id, name, email, whatsapp, password_hash) VALUES (?,?,?,?,?)',
                       (aid, name, email, wa, auth.hash_password(pw))).lastrowid

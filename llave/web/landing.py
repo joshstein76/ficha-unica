@@ -441,6 +441,12 @@ def _plans():
     return panel.plan_list(), panel.COMING_SOON
 
 
+def _public_paid_closed():
+    """Paid plans are closed for a logged-out visitor: Stripe off, or a TEST key in production (billing's test-key lock)."""
+    from llave import billing
+    return billing.test_lock_active() or not billing.enabled()
+
+
 def _plan_cards(reg):
     """The three plan cards, straight from panel.plan_list() (one source for prices and features)."""
     plans, soon = _plans()
@@ -448,7 +454,10 @@ def _plan_cards(reg):
     out = []
     for k, name, price, feats in plans:
         badge = '<span class="badge soft">Próximamente</span>' if k in soon else badges.get(k, '')
-        pr = ('<b>$%d</b> <small>MXN al mes,<br>IVA incluido</small>' % price) if price else '<b>$0</b> <small>para siempre</small>'
+        if price and _public_paid_closed():  # no price promises while nobody can buy (Josh's rule, 11-08): same state as the server routes
+            pr = '<b>Muy pronto</b> <small>Hoy empiezas en Gratis</small>'
+        else:
+            pr = ('<b>$%d</b> <small>MXN al mes,<br>IVA incluido</small>' % price) if price else '<b>$0</b> <small>para siempre</small>'
         cta = '' if k in soon else '<a class="btn%s" href="%s">%s</a>' % (
             '' if k == 'gratis' else ' alt', e(reg), 'Crear mi sitio gratis' if k == 'gratis' else 'Empezar gratis')
         out.append('<div class="card plan%s" data-k="%s"><div class="nm">%s %s</div><div class="price">%s</div><ul>%s</ul>%s</div>' % (
@@ -535,5 +544,7 @@ def public_plans(ref=''):
             '<p class="fine2">Tu propio dominio llega muy pronto; se compra aparte con tu proveedor.</p>'
             '<div class="cta-row"><a class="btn" href="%s">Crear mi sitio gratis</a><a class="btn alt" href="/">Volver al inicio</a></div>'
             '</div></section></main>') % (_plan_switch(), _plan_cards(reg), e(reg))
-    return (_head('Planes · Ficha Única', 'Gratis con %s, Pro $499 MXN y Pro + IA $999 MXN al mes. Sin plazo forzoso.' % props(db.plan_limits()['gratis']))
+    desc = ('Gratis con %s, sin tarjeta. Pro y Pro + IA abren muy pronto.' if _public_paid_closed() else
+            'Gratis con %s, Pro $499 MXN y Pro + IA $999 MXN al mes. Sin plazo forzoso.') % props(db.plan_limits()['gratis'])
+    return (_head('Planes · Ficha Única', desc)
             + _top(reg) + main + _foot(reg, local) + _script(_JS_PLANS) + '</body></html>')
