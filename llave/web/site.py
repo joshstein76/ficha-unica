@@ -190,8 +190,8 @@ def listing(con, agency, c, shared_split=None, error=''):
                      (c['bedrooms'], 'Recámaras'), (('%g' % c['bathrooms']) if c['bathrooms'] else None, 'Baños'),
                      (c['parking'], 'Estacionamientos'),
                      (money(c['maintenance'], 'MXN') if c['maintenance'] else None, 'Mantenimiento')):
-        if val not in (None, '', 0):
-            facts.append('<div><b>%s</b><small>%s</small></div>' % (e(val), lab))
+        if val not in (None, '', 0):  # money is long ("$3,850,000 MXN"): its card takes two columns so it never breaks mid-number
+            facts.append('<div%s><b>%s</b><small>%s</small></div>' % (' class="wide"' if lab in ('Precio', 'Mantenimiento') else '', e(val), lab))
     where = ', '.join(x for x in (c['address']['colonia'], c['address']['municipio'], c['address']['estado']) if x)
     wa = whatsapp.wa_link(agency['whatsapp'], whatsapp.listing_message(c)) if agency['whatsapp'] else ''
     rp = rentapoliza_offer(c)
@@ -330,10 +330,19 @@ def ficha(agency, c):
 
 
 def thanks(agency, wa_link='', message=''):
+    # Honest: we can't promise the agent writes "en breve" (they may not open the panel), so a lead form points the buyer to WhatsApp,
+    # where the message already names the property (wa_link is built by the caller).
+    if message:
+        sub = ''
+    elif wa_link:
+        sub = 'Para que %s te conteste más rápido, mándale también un WhatsApp.%s' % (
+            agency['name'], ' El mensaje ya lleva la propiedad.' if 'folio' in wa_link else '')
+    else:
+        sub = '%s ya tiene tus datos y te contactará.' % agency['name']
     body = ('<main id="main" class="in sec" style="min-height:50vh"><h1>%s</h1>'
             '<p>%s</p>%s<p><a href="/">Ver más propiedades</a></p></main>') % (
-        e(message) if message else '¡Gracias! Ya recibimos tu mensaje.', '' if message else 'Te escribimos por WhatsApp en breve.',
-        ('<p><a class="wa" href="%s">%s Escribir ahora por WhatsApp</a></p>' % (e(wa_link), WA_ICON)) if wa_link else '')
+        e(message) if message else '¡Gracias! Ya recibimos tu mensaje.', e(sub),
+        ('<p><a class="wa" href="%s">%s Mandar WhatsApp</a></p>' % (e(wa_link), WA_ICON)) if wa_link else '')
     return _page(agency, 'Gracias · ' + agency['name'], body)
 
 
