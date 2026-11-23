@@ -462,6 +462,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(site.thanks(a, '', 'Listo. Guardamos tu búsqueda.'))
         if path == '/gracias':
             msg = 'Hola, acabo de dejar mis datos en su sitio.'
+            try:  # lead with the exact property: the WhatsApp message names it (only a public listing of this site)
+                lid = int(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('l', ['0'])[-1] or 0)
+            except ValueError:
+                lid = 0
+            if lid and lid in db.public_listing_ids(con, a['id'], include_pool=True):
+                c = db.canonical(con, lid)
+                if c:
+                    msg = 'Hola, acabo de dejar mis datos en su sitio por %s (folio %s). ¿Sigue disponible?' % (c['title'], c['ref'])
             return self.send(site.thanks(a, whatsapp.wa_link(a['whatsapp'], msg) if a['whatsapp'] else ''))
         if path == '/aviso-de-privacidad':
             return self.send(site.privacy(a))

@@ -223,6 +223,7 @@ text-decoration:none;font-weight:600;font-family:var(--body);font-size:15px;whit
 .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
 .facts div{background:var(--card);border:1px solid var(--line);border-radius:calc(var(--br)/2);padding:12px}
 .facts b{display:block;font-size:20px}.facts small{color:var(--muted)}
+.facts .wide{grid-column:span 2}.facts .wide b{overflow-wrap:normal}
 .box{background:var(--card);border:1px solid var(--line);border-radius:var(--br);padding:20px;display:grid;gap:12px;position:sticky;top:84px}
 .box form,.alertf{display:grid;gap:10px}.alertf input,.alertf select{font:16px var(--body);padding:11px;border:1px solid var(--line);border-radius:8px;width:100%;background:var(--bg);color:var(--fg)}.alertf button{min-height:46px;border:0;border-radius:var(--br);background:var(--accent);color:var(--on-accent);font:600 16px var(--body);cursor:pointer}.box input,.box textarea{font:16px var(--body);padding:11px;border:1px solid var(--field-border);border-radius:8px;width:100%;background:var(--bg);color:var(--fg)}
 .box button{min-height:46px;border:0;border-radius:var(--br);background:var(--accent);color:var(--on-accent);font:600 16px var(--body);cursor:pointer}
@@ -366,6 +367,7 @@ main>div>.tag{margin-bottom:12px}
 .facts{gap:12px}
 .facts div{padding:10px 12px;border:3px solid var(--fg);border-radius:12px;background:#fff;box-shadow:3px 3px 0 var(--fg)}
 .facts b{font:800 24px/1.05 var(--display);font-stretch:80%;letter-spacing:-.02em;overflow-wrap:anywhere}
+.facts .wide b{overflow-wrap:normal}
 .facts small{font-size:14px;font-weight:600}
 .am{gap:8px}.am li{padding:6px 12px;border:2.5px solid var(--fg);background:var(--papel);font-weight:700}
 .box{padding:18px;gap:14px;border:3px solid var(--fg);border-radius:16px;box-shadow:6px 6px 0 var(--fg)}
