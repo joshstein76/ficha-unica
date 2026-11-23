@@ -576,7 +576,7 @@ nav.tabs a.on svg{color:#2f5bea}
 .tile small{background:#e8eeff;color:#2f5bea}
 .stat b{font:700 30px/1.05 var(--texto);letter-spacing:-.03em}
 .price b{font:700 34px/1 var(--texto);letter-spacing:-.03em}
-.seg input:checked+span,.chip input:checked+span{background:#0b1020}
+.seg input:checked+span,.chip input:checked+span{background:#2f5bea}
 .wsteps .on{background:#2f5bea;border-color:#2f5bea}
 .progress i,.bar span{background:#2f5bea}
 .card.late{box-shadow:inset 3px 0 0 #2f5bea,var(--sh)}

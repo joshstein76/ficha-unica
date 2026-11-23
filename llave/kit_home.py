@@ -5,7 +5,7 @@ import os
 
 KIT_VERSION = '1.2.1'  # cache-buster for /_s/agent-dash.* (static files are cached a year)
 LOTERIA_VERSION = '3'
-ESTUDIO_VERSION = '1'  # cache-buster for /_s/ficha-estudio.css (the Estudio skin over the kit, LLAVE_LOOK=estudio)  # cache-buster for /_s/ficha-loteria.css (the Ficha Única skin over the kit; bump it with every change to that file)
+ESTUDIO_VERSION = '2'  # cache-buster for /_s/ficha-estudio.css (the Estudio skin over the kit, LLAVE_LOOK=estudio)  # cache-buster for /_s/ficha-loteria.css (the Ficha Única skin over the kit; bump it with every change to that file)
 
 from . import db, domains, lead_watch, novedades, price_check, replies
 
