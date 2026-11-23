@@ -62,7 +62,47 @@ class ThanksCarriesTheProperty(unittest.TestCase):
         s, page, _ = self.web.req('/propiedad/depto-narvarte', host=self.host)
         self.assertEqual(s, 200)
         self.assertIn('<div class="wide"><b>$3,850,000 MXN</b><small>Precio</small></div>', page)
+        header = page.split('<header', 1)[1].split('</header>', 1)[0]  # the header button names the property too
+        self.assertIn('folio%20T-7', header.replace('+', '%20'))
 
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class PhotoStepShowsThumbnails(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.web = web_harness.LocalServer('thumbs')
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.web.close()
+
+    def test_wizard_has_thumbnail_strip(self):
+        u = self.web.signup()
+        s, page, _ = self.web.req('/nueva', cookie=u['cookie'])
+        self.assertEqual(s, 200)
+        self.assertIn('class="thumbs"', page)
+        self.assertIn('URL.createObjectURL', page)
+
+
+class PulsoSitesStayLight(unittest.TestCase):
+    def test_light_only_follows_the_look(self):
+        from llave.web import site, styles
+        a = {'design': 'ciudad', 'accent': '#2F5BEA'}
+        old = styles.LOOK
+        try:
+            styles.LOOK = 'pulso'
+            self.assertTrue(site.light_only())
+            self.assertNotIn('prefers-color-scheme:dark', styles.site_css(a['design'], a['accent'], dark_mode=not site.light_only()))
+            styles.LOOK = 'loteria'
+            self.assertFalse(site.light_only())
+        finally:
+            styles.LOOK = old
+
+    def test_demo_agency_is_noindex_with_bar(self):
+        from llave.web import site
+        self.assertIn('noindex', site.demo_head({'is_demo': 1}))
+        self.assertEqual(site.demo_head({'is_demo': 0}), '')
+        self.assertIn('Sitio de ejemplo', site.demo_bar({'is_demo': 1, 'slug': 'casa-norte'}))

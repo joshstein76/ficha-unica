@@ -41,11 +41,11 @@ def picture(p, alt, sizes, base=800, loading='lazy', priority=False):
         webp, sizes, e(p['url'] if base == 1600 else p['url_800']), jpg, sizes, e(alt), attrs)
 
 
-def _page(agency, title, body, head_extra='', canonical=None, description=''):
+def _page(agency, title, body, head_extra='', canonical=None, description='', wa_text=''):
     a = agency
     brand = ('<img src="%s/media/%s" alt="%s">' % (e(db.site_url(a)), e(a['logo_path']), e(a['name']))
              if a['logo_path'] else e(a['name']))
-    wa = whatsapp.wa_link(a['whatsapp'], 'Hola, vi su sitio y me gustaría más información.') if a['whatsapp'] else ''
+    wa = whatsapp.wa_link(a['whatsapp'], wa_text or 'Hola, vi su sitio y me gustaría más información.') if a['whatsapp'] else ''  # a listing page names its property
     loteria = resolve_design(a['design']) == 'loteria'
     return ('<!doctype html><html lang="es-MX"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">%s'
@@ -56,11 +56,37 @@ def _page(agency, title, body, head_extra='', canonical=None, description=''):
             '%s'
             '<footer class="sf"><div class="in"><span>© %s · %s</span><span><a href="/aviso-de-privacidad">Aviso de privacidad</a></span>'
             '<span class="muted">%sSitio creado con <a href="%s" rel="nofollow">Ficha Única</a> · <a href="%s" rel="nofollow">Crea el tuyo gratis</a></span></div></footer></body></html>') % (
-        '<meta name="color-scheme" content="light">' if loteria else '', e(title), e(description[:160]),
+        '<meta name="color-scheme" content="light">' if loteria or light_only() else '', e(title), e(description[:160]),
         ('<link rel="canonical" href="%s">' % e(canonical)) if canonical else '',
-        PRECONNECT, site_fonts_url(a['design']), site_css(a['design'], a['accent']), head_extra, brand,
+        PRECONNECT, site_fonts_url(a['design']), site_css(a['design'], a['accent'], dark_mode=not light_only()), head_extra + demo_head(a), brand,
         ('<a class="wa" href="%s" rel="nofollow" aria-label="WhatsApp de %s">%s WhatsApp</a>' % (e(wa), e(a['name']), WA_ICON)) if wa else '',
-        body, e(a['name']), e(a['city'] or 'México'), COIN_SVG if loteria else '', e(brand_url('sitio-' + a['slug'])), e(signup_url(a['slug'])))
+        demo_bar(a) + body, e(a['name']), e(a['city'] or 'México'), COIN_SVG if loteria else '', e(brand_url('sitio-' + a['slug'])), e(signup_url(a['slug'])))
+
+
+def light_only():
+    """Pulso look (Josh 2026-11-09: light, one blue accent; 11-08: no heavy black boxes): agent sites stay light on dark-mode phones too."""
+    from . import styles as _st
+    return _st.LOOK == 'pulso'
+
+
+def _is_demo(a):
+    try:
+        return bool(a['is_demo'])
+    except (KeyError, IndexError):
+        return False
+
+
+def demo_head(a):
+    """A sample site ("Ver ejemplo" on fichaunica.mx) never ranks: it is a showroom, not a real agency."""
+    return '<meta name="robots" content="noindex, nofollow">' if _is_demo(a) else ''
+
+
+def demo_bar(a):
+    """Slim honest bar on a sample site: says it is an example and how to get your own."""
+    if not _is_demo(a):
+        return ''
+    return ('<div role="note" style="background:#EEF2FF;color:#1E2A5A;font:600 14px/1.4 system-ui,sans-serif;padding:10px 16px;text-align:center">'
+            'Sitio de ejemplo hecho con Ficha Única · <a href="%s" style="color:#2F5BEA">Crea el tuyo gratis</a></div>') % e(signup_url(a['slug']))
 
 
 def brand_url(source):
@@ -263,7 +289,7 @@ def listing(con, agency, c, shared_split=None, error=''):
     if faqs:
         ld += '<script type="application/ld+json">%s</script>' % json.dumps(geo_seo.faq_jsonld(faqs), ensure_ascii=False)
     title = '%s · %s' % (c['title'], money(c['price'], c['currency']))
-    return lia_ui.attach(con, agency, _page(agency, title, body, og + ld, canon, desc), c)
+    return lia_ui.attach(con, agency, _page(agency, title, body, og + ld, canon, desc, whatsapp.listing_message(c)), c)
 
 
 FICHA_CSS = r"""

@@ -143,10 +143,14 @@ class LoteriaSite(unittest.TestCase):
         for d in OLD_DESIGNS:
             a, home, lp = self.pages(d)
             for page in (home, lp):
-                self.assertIn('prefers-color-scheme:dark', page, d)
+                if styles.LOOK == 'pulso':  # Pulso keeps agent sites light on dark-mode phones (2026-11-23)
+                    self.assertNotIn('prefers-color-scheme:dark', page, d)
+                    self.assertIn('<meta name="color-scheme" content="light">', page, d)
+                else:
+                    self.assertIn('prefers-color-scheme:dark', page, d)
+                    self.assertNotIn('<meta name="color-scheme"', page, d)
                 self.assertNotIn('Bricolage', page, d)
                 self.assertNotIn('class="coin"', page, d)
-                self.assertNotIn('<meta name="color-scheme"', page, d)
                 self.assertNotIn('.hero picture+.cap', page, d)
                 self.assertIn('<span class="muted">Sitio creado con <a href="', page, d)
             self.assertIn(styles.SITE_BASE, home)
