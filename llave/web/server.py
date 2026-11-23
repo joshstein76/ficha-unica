@@ -22,6 +22,7 @@ from .. import auth, billing, calculadoras, cards, db, domains, formatos, ghl, g
 from ..feeds import build_feed, mercadolibre, registry
 from ..leads import create_lead
 from . import landing, panel, portal, site
+from . import preview
 from .common import csrf_ok, photos_ready, to_cents, to_price_cents, to_num, DESIGN_KEYS
 from .styles import BRAND_COLOR
 
@@ -647,6 +648,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def panel(self, con, method, path, query):
         ctx = self.session(con)
+        if path == '/vista-previa' and preview.enabled():  # 'Ve tu página' (2026-11-23): nothing stored, POST only
+            if method != 'POST':
+                return self.send(preview.form())
+            f, _ = self.form()
+            vals = {k: (f.get(k) or '')[:60] for k in ('name', 'agency', 'zona')}
+            if f.get('paso') == 'registro':  # the button on the preview: the real sign-up form, pre-filled, nothing created yet
+                return self.send(panel.signup(values={'name': vals['name'], 'agency': vals['agency']}, ref='vista-previa'))
+            html_ = preview.page(vals)
+            if not html_:
+                return self.send(preview.form('Escribe tu nombre y tu colonia o ciudad.', vals), 400)
+            return self.send(html_)
         if path == '/registro':
             if method == 'POST':
                 f, _ = self.form()

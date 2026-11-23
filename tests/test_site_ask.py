@@ -250,3 +250,15 @@ class Ui(Base):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class SpokenAmounts(unittest.TestCase):
+    """2026-11-23 cross-apply from IDX Bloom ("900 mil" read wrong there): spoken amounts and ranges never become search words."""
+    def test_words_and_ranges(self):
+        cases = {'hasta un millón': 1000000, 'medio millón': 500000, 'un millón y medio': 1500000, 'dos millones': 2000000,
+                 'entre 2 y 3 millones': 3000000, 'entre 2 millones y 3 millones': 3000000, 'entre 15 y 20 mil': 20000,
+                 'menos de 900 mil': 900000}
+        for q, n in cases.items():
+            f = site_ask.parse(q)
+            self.assertEqual(f['max_price'], n, q)
+            self.assertEqual(f['terms'], [], q)

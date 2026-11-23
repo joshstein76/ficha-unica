@@ -25,7 +25,7 @@ TYPE_PLURAL = {'departamento': ('departamento', 'departamentos'), 'casa': ('casa
                'oficina': ('oficina', 'oficinas'), 'local': ('local', 'locales'), 'bodega': ('bodega', 'bodegas')}
 NUMBER_WORDS = {'un': 1, 'una': 1, 'uno': 1, 'dos': 2, 'tres': 3, 'cuatro': 4, 'cinco': 5, 'seis': 6}
 STOP = set('''en de del la el los las un una unos unas con que busco buscando quiero quisiera necesito tiene tengan tienen hay para por
-hasta menos maximo max minimo mas o y a al mes cerca zona precio presupuesto desde como me mi su se es lo e ver mostrar muestre muestrame
+hasta menos maximo max minimo mas o y a al mes entre cerca zona precio presupuesto desde como me mi su se es lo e ver mostrar muestre muestrame
 dame favor propiedad propiedades inmueble inmuebles pesos peso mxn mdp nuevo bonito bonita barato barata'''.split())
 BEDS_RE = re.compile(r'\b(\d+|%s)\s*(?:recamaras?|recs?|habitaciones|habitacion|habs?|cuartos?|dormitorios?)\b' % '|'.join(NUMBER_WORDS))
 BATHS_RE = re.compile(r'\b(\d+(?:\.5)?|%s)\s*(?:banos?)\b' % '|'.join(NUMBER_WORDS))
@@ -84,9 +84,26 @@ def _colonia(text, colonias):
     return ' '.join(vocab[w] for w in hits), hits, ' '.join(w for w in text.split() if w not in hits)
 
 
+WORD_AMOUNTS = [  # spoken amounts -> digits the AMOUNT_RE understands (2026-11-23, from IDX Bloom's "900 mil" lesson)
+    (re.compile(r'\b(?:un|1) millon(?:es)? y medio\b'), ' 1.5 millones '),
+    (re.compile(r'\bmedio millon\b'), ' 0.5 millones '),
+    (re.compile(r'\b(%s) (millon(?:es)?|mil)\b' % '|'.join(NUMBER_WORDS)), lambda m: ' %d %s ' % (NUMBER_WORDS[m.group(1)], m.group(2))),
+]
+RANGE_RE = re.compile(r'\bentre\s+(\$?\s*\d[\d,.]*)\s*(millones|millon|mdp|mil)?\s+y\s+')
+
+
+def _spoken(t):
+    for rx, rep in WORD_AMOUNTS:
+        t = rx.sub(rep, t)
+    m = RANGE_RE.search(t)  # "entre 2 y 3 millones" / "entre 2 millones y 3 millones": the upper end is the ceiling
+    if m:
+        t = t[:m.start()] + ' ' + t[m.end():]
+    return t
+
+
 def parse(q, colonias=()):
     """Spanish free text -> {operation, type, beds, baths, max_price, colonia, colonia_tokens, terms}. Every key may be None/''/[]."""
-    t = ' ' + norm(str(q or '')[:MAX_Q]) + ' '
+    t = _spoken(' ' + norm(str(q or '')[:MAX_Q]) + ' ')
     f = {'operation': None, 'type': None, 'beds': None, 'baths': None, 'max_price': None, 'colonia': '', 'colonia_tokens': [], 'terms': []}
     m, t = _take(BEDS_RE, t)
     if m:
